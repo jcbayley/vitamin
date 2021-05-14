@@ -23,7 +23,7 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, FixedLocator
                                AutoMinorLocator)
 import matplotlib.ticker as ticker
 from lal import GreenwichMeanSiderealTime
-from vitamin_c_new import gen_samples, load_samples, convert_hour_angle_to_ra
+from load_data import load_samples, convert_hour_angle_to_ra
 
 def prune_samples(chain_file_loc,params):
     """ Function to remove bad likelihood emcee chains 
@@ -426,7 +426,7 @@ class make_plots:
                 y = np.expand_dims(sig_test[cnt,:], axis=0)
                  # The trained inverse model weights can then be used to infer a probability density of solutions 
 #given new measurements
-                samples = np.array(gen_samples(model, y, ramp=1, nsamples=params['n_samples']))
+                samples = np.array(model.gen_samples(y, ramp=1, nsamples=params['n_samples']))
                 
                 true_XS = np.zeros([samples.shape[0],len(inf_ol_idx)])
                 true_x = np.zeros([len(inf_ol_idx)])
@@ -875,7 +875,7 @@ class make_plots:
                             elif sampler1 == 'vitamin' and vi_pred_made == None:
                                 set1 = np.zeros((params['r'], params['n_samples'], len(params['bilby_pars'])))
                                 for sig_test_idx in range(params['r']):
-                                    samples = np.array(gen_samples(model, np.expand_dims(sig_test[sig_test_idx], axis=0), ramp=1, nsamples=params['n_samples'])) 
+                                    samples = np.array(model.gen_samples(np.expand_dims(sig_test[sig_test_idx], axis=0), ramp=1, nsamples=params['n_samples'])) 
                                     set1[sig_test_idx,:,:] = extract_correct_sample_idx(samples, inf_ol_idx)
                                 vi_pred_made = [set1]
                             if sampler2 != 'vitamin':
@@ -883,7 +883,7 @@ class make_plots:
                             elif sampler1 == 'vitamin' and vi_pred_made == None:
                                 set2 = np.zeros((params['r'], params['n_samples'], len(params['bilby_pars'])))
                                 for sig_test_idx in range(params['r']):
-                                    samples = np.array(gen_samples(model, np.expand_dims(sig_test[sig_test_idx], axis=0), ramp=1, nsamples=params['n_samples']))
+                                    samples = np.array(model.gen_samples(np.expand_dims(sig_test[sig_test_idx], axis=0), ramp=1, nsamples=params['n_samples']))
                                     set2[sig_test_idx,:,:] = extract_correct_sample_idx(samples, inf_ol_idx)
                                 vi_pred_made = [set2]
 

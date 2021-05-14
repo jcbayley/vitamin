@@ -39,10 +39,10 @@ fixed_vals = {'mass_1':50.0,
         'phi_jl':0.0,
         '__definition__phi_jl': 'phi_jl fixed value'}                                                
 
-# Prior bounds on source parameters
-bounds = {'mass_1_min':35.0, 'mass_1_max':80.0,
+# Prior bounds on source parameters, changed to match bilby default
+bounds = {'mass_1_min':5.0, 'mass_1_max':100.0,
         '__definition__mass_1': 'mass 1 range',
-        'mass_2_min':35.0, 'mass_2_max':80.0,
+        'mass_2_min':5.0, 'mass_2_max':100.0,
         '__definition__mass_2': 'mass 2 range',
         'M_min':70.0, 'M_max':160.0,
         '__definition__M': 'total mass range',
@@ -70,7 +70,7 @@ bounds = {'mass_1_min':35.0, 'mass_1_max':80.0,
         '__definition__phi12': 'phi12 range',
         'phi_jl_min':0.0, 'phi_jl_max':2.0*np.pi,
         '__definition_phijl': 'phijl range',
-        'luminosity_distance_min':1000.0, 'luminosity_distance_max':3000.0,
+        'luminosity_distance_min':100.0, 'luminosity_distance_max':5000.0,
         '__definition__luminosity_distance': 'luminosity distance range'}
 
 # arbitrary value for normalization of timeseries (Don't change this)
@@ -79,10 +79,10 @@ y_normscale = 16.638832624721797
 ##########################
 # Main tunable variables
 ##########################
-ndata = 1024                                                                     
-det=['H1','L1','V1']                                                            
+ndata = 256
+det=['H1','L1']                                                            
 #psd_files=['cuda_11_env/lib/python3.6/site-packages/bilby/gw/detector/noise_curves/aLIGO_O4_high_asd.txt'] 
-psd_files=[]
+psd_files=["/home/joseph.bayley/projects/o4_online_pe_mdc/data/asd_files/aLIGO_O4_high_asd.txt"]
 rand_pars = ['mass_1','mass_2','luminosity_distance','geocent_time','phase',
                  'theta_jn','psi','a_1','a_2','tilt_1','tilt_2','phi_12','phi_jl','ra','dec']                                   
 bilby_pars = ['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','psi','a_1','a_2',
@@ -94,7 +94,7 @@ inf_pars=['mass_1','mass_2','luminosity_distance','geocent_time','phase',
 #inf_pars = ["mass_1","mass_2","luminosity_distance","geocent_time","phase","theta_jn","psi","ra","dec","a_1","a_2","tilt_1","tilt_2","phi_12","phi_jl"]
 batch_size = int(512)                                                                 
 weight_init = 'xavier'                                                            
-n_modes=64; n_modes_q=1                                                                      
+n_modes=32; n_modes_q=1                                                                      
 initial_training_rate=1e-4                                                     
 batch_norm=False                                                                
 
@@ -131,29 +131,29 @@ n_weights_q = [n_fc,n_fc,n_fc]
 #############################
 # optional tunable variables
 #############################
-run_label = 'vitamin_c_run19'#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
-gpu_num = 0
+run_label = 'vitamin_c_run3_newload_vonmises'#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
+gpu_num = 6
 
 # 1024 Hz label
 #bilby_results_label = 'weichangfeng_theta_jn_issue'                                             
 # 256 Hz label
-bilby_results_label = '1024Hz_full_15par'
+bilby_results_label = '{}Hz_full_15par_{}det'.format(ndata,len(det))
 
 r = 2 # 251                                                         
 pe_test_num = 256                                                               
-tot_dataset_size = int(1e7)                                                     
+tot_dataset_size = int(1e6)    
 
 tset_split = int(1e3)                                                           
 save_interval = int(1000)
 plot_interval = int(1000)                                                        
 num_iterations=int(25000)+1 # 12500 for Green et al.                                                       
-ref_geocent_time=1126259642.5                                                   
+ref_geocent_time=1325029268 #1126259642.5                                                   
 load_chunk_size = int(2e4)                                                           
 samplers=['vitamin','dynesty']                                                  
 val_dataset_size = int(1e3)
 
 # Directory variables
-plot_dir='/home/hunter.gabbard/public_html/CBC/chris_dec2020_vitamin/%s' % run_label  
+plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/%s' % run_label  
 
 # Training/testing for 1024 Hz full par case
 #train_set_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/training_sets_3det_15par_1024Hz/tset_tot-10000000_split-1000_O4PSDH1L1_AdvVirgoPSD'
@@ -161,11 +161,13 @@ plot_dir='/home/hunter.gabbard/public_html/CBC/chris_dec2020_vitamin/%s' % run_l
 #test_set_dir = '/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/test_sets/1024_khz_spins_included_15par/test_waveforms'
 #pe_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/test_sets/1024_khz_spins_included_15par/test'
 
+numdet = len(det)
+
 # default training/testing directories
-train_set_dir='./training_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (len(det),len(rand_pars),ndata,tot_dataset_size,tset_split)
-val_set_dir='./validation_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (len(det),len(rand_pars),ndata,val_dataset_size,tset_split) 
-test_set_dir = './test_sets/%s/test_waveforms' % bilby_results_label
-pe_dir='./test_sets/%s/test' % bilby_results_label
+train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,tot_dataset_size,tset_split)
+val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,val_dataset_size,tset_split) 
+test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test_waveforms' % bilby_results_label
+pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test' % bilby_results_label
 
 #############################
 # optional tunable variables

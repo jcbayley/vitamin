@@ -313,12 +313,14 @@ def run(sampling_frequency=256.0,
         priors['a_2'] = fixed_vals['a_2']
 
     if np.any([r=='tilt_1' for r in rand_pars]):
-        priors['tilt_1'] = bilby.gw.prior.Uniform(name='tilt_1', minimum=bounds['tilt_1_min'], maximum=bounds['tilt_1_max'])
+        #priors['tilt_1'] = bilby.gw.prior.Uniform(name='tilt_1', minimum=bounds['tilt_1_min'], maximum=bounds['tilt_1_max'])
+        priors['tilt_1'] = bilby.core.prior.Sine(name='tilt_1', minimum=bounds['tilt_1_min'], maximum=bounds['tilt_1_max'])
     else:
         priors['tilt_1'] = fixed_vals['tilt_1']
 
     if np.any([r=='tilt_2' for r in rand_pars]):
-       priors['tilt_2'] = bilby.gw.prior.Uniform(name='tilt_2', minimum=bounds['tilt_2_min'], maximum=bounds['tilt_2_max'])
+        #priors['tilt_2'] = bilby.gw.prior.Uniform(name='tilt_2', minimum=bounds['tilt_2_min'], maximum=bounds['tilt_2_max'])
+        priors['tilt_2'] = bilby.core.prior.Sine(name='tilt_2', minimum=bounds['tilt_2_min'], maximum=bounds['tilt_2_max'])
     else:
         priors['tilt_2'] = fixed_vals['tilt_2']
 
