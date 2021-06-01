@@ -19,8 +19,8 @@ import natsort
 import plotting
 from tensorflow.keras import regularizers
 
-from vitamin_c_model import CVAE
-from load_data import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader
+from vitamin_c_model_fit import CVAE, PlotCallback, TrainCallback, TestCallback, TimeCallback
+from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader
 
 def get_param_index(all_pars,pars,sky_extra=None):
     """ 
@@ -516,7 +516,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     # load the training data
     if not make_paper_plots:
         train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40) 
-        validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2)
+        validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
     x_data_test, y_data_test_noisefree, y_data_test, snrs_test = load_data(params,bounds,fixed_vals,params['test_set_dir'],params['inf_pars'],test_data=True)
     y_data_test = y_data_test[:params['r'],:,:]; x_data_test = x_data_test[:params['r'],:]
@@ -565,7 +565,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     KL_samples = []
 
 
-    optimizer = tf.keras.optimizers.Adam(1e-4, decay = 3e-7)
+    optimizer = tf.keras.optimizers.Adam(3e-5, decay = 3e-7)
 
     # Keras hyperparameter optimization
     if hyper_par_tune:
@@ -576,11 +576,11 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # log params used for this run
     path = params['plot_dir']
-    shutil.copy('./vitamin_c_new.py',path)
-    shutil.copy('./vitamin_c_model.py',path)
-    shutil.copy('./load_data.py',path)
-    shutil.copy('./params_files/params.json',path)
-    shutil.copy('./params_files/bounds.json',path)
+    shutil.copy('./vitamin_c_fit.py',path)
+    shutil.copy('./vitamin_c_model_fit.py',path)
+    shutil.copy('./load_data_fit.py',path)
+    shutil.copy(os.path.join(params_dir,'params.json'),path)
+    shutil.copy(os.path.join(params_dir,'bounds.json'),path)
 
     print("Loading intitial data....")
     train_dataset.load_next_chunk()
@@ -589,128 +589,21 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     model.compile()
     batch_prev_epoch = 0
 
-    for epoch in range(1, epochs + 1):
+    model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
+    model.build((None, 256,2))
+    model.summary()
 
-        train_loss_kl_q = 0.0
-        train_loss_kl_r1 = 0.0
-        start_time_train = time.time()
-        if params['resume_training']:
-            ramp = tf.convert_to_tensor(1.0)
-            print('... Not using ramp.')
-        else:
-            ramp = tf.convert_to_tensor(ramp_func(epoch,ramp_start,ramp_length,ramp_cycles), dtype=tf.float32)
+    #model.build((batch_size, y_data_shape, num_channels))
+    print("numbatch",len(train_dataset))
 
-        batch_losses = np.zeros((len(train_dataset), 3))
-        gauss_von = np.zeros((len(train_dataset), 2))
-        mean_plot_ind = 0
-        for step in range(len(train_dataset)):
-            y_batch_train, x_batch_train = train_dataset[step]
-            if len(y_batch_train) == 0:
-                print("NO data: ", train_dataset.chunk_iter, np.shape(y_batch_train))
-            #print(step, np.shape(y_batch_train),np.shape(x_batch_train))
-            temp_train_r_loss, temp_train_kl_loss, temp_gauss_loss, temp_vonm_loss, mean_r2, scale_r2, truths, gcost = model.train_step(x_batch_train, y_batch_train, optimizer, ramp=ramp)
-            
-            # all for checking nans in training
-            batch_losses[step, 0] = temp_train_r_loss 
-            batch_losses[step, 1] = temp_train_kl_loss
-            batch_losses[step, 2] = temp_train_r_loss + ramp*temp_train_kl_loss
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer), TestCallback(test_dataset,plot_dir,bilby_samples), TimeCallback()]
+    model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
 
-            gauss_von[step, 0] = temp_gauss_loss 
-            gauss_von[step, 1] = temp_vonm_loss
+    # not happy with this re-wrapping of the dataset
+    #data_gen_wrap = tf.data.Dataset.from_generator(lambda : train_dataset,(tf.float32,tf.float32))
+    #valdata_gen_wrap = tf.data.Dataset.from_generator(lambda : validation_dataset,(tf.float32,tf.float32))
 
-            if np.all(np.isfinite(gcost)) == False:
-                index = np.where(np.isfinite(gcost) == False)
-                print(index)
-                print(np.array(mean_r2)[index], np.array(truths)[index])
-                fig, ax = plt.subplots(figsize = (20,10))
-                print(np.shape(y_batch_train[index]))
-                ax.plot(y_batch_train[index][0,:,0])
-                ax.plot(y_batch_train[index][0,:,1])
-                fig.savefig(os.path.join(plot_dir, "troublesome_waveform.png"))
-            if not np.isfinite(temp_train_r_loss) or np.isnan(temp_train_r_loss) or not np.isfinite(temp_train_kl_loss) or np.isnan(temp_train_kl_loss):
-                loc = np.where(np.isnan(gcost))
-                print(loc)
-                print("max mean offset",np.max(np.abs(mean_r2-truths)))
-                print("min scale",np.min(scale_r2))
-                fig, ax = plt.subplots()
-                for i in range(len(mean_r2)):
-                    ax.plot(np.ones(len(mean_r2[0]))*i, np.array(mean_r2)[i,:] - np.array(truths)[i,:], ".")
-                fig.savefig(os.path.join(plot_dir, "mean_truth_{}.png".format(mean_plot_ind)))
-                mean_plot_ind += 1
-                print("Training inf or nan, step: {}".format(step))
-                print("r_loss: {}, kl_loss: {}".format(temp_train_r_loss, temp_train_kl_loss))
-                print("gauss_loss: {}, vonm_loss: {}".format(temp_gauss_loss, temp_vonm_loss))
-                if step > 2:
-                    print("plotting: {}".format(plot_dir))
-                    temp_losses = np.append(batch_prev_epoch,batch_losses[:step + 1], axis = 0)
-                    plot_batch_losses(temp_losses, step, run=plot_dir)
-                    plot_gauss_von(gauss_von[:step + 2], step, run=plot_dir)
-                    sys.exit()
-
-            train_loss[epoch-1,0] += temp_train_r_loss
-            train_loss[epoch-1,1] += temp_train_kl_loss
-
-        batch_prev_epoch = batch_losses
-
-        train_loss[epoch-1,2] = train_loss[epoch-1,0] + ramp*train_loss[epoch-1,1]
-        train_loss[epoch-1,:] /= float(step+1)
-        end_time_train = time.time()
-        with train_summary_writer.as_default():
-            tf.summary.scalar('loss', train_loss_metric.result(), step=epoch)
-        train_loss_metric.reset_states()
-
-        start_time_val = time.time()
-        for step in range(len(validation_dataset)):
-            y_batch_val, x_batch_val = validation_dataset[step]
-            temp_val_r_loss, temp_val_kl_loss, _g, _v, _m2, _s2, _t,_c = model.compute_loss(x_batch_val, y_batch_val)
-            val_loss[epoch-1,0] += temp_val_r_loss
-            val_loss[epoch-1,1] += temp_val_kl_loss
-        val_loss[epoch-1,2] = val_loss[epoch-1,0] + ramp*val_loss[epoch-1,1]
-        val_loss[epoch-1,:] /= float(step+1)
-        end_time_val = time.time()
-
-        print('Epoch: {}, Run {}, Training RECON: {}, KL: {}, TOTAL: {}, time elapsed: {}'
-            .format(epoch, run, train_loss[epoch-1,0], train_loss[epoch-1,1], train_loss[epoch-1,2], end_time_train - start_time_train))
-        print('Epoch: {}, Run {}, Validation RECON: {}, KL: {}, TOTAL: {}, time elapsed {}'
-            .format(epoch, run, val_loss[epoch-1,0], val_loss[epoch-1,1], val_loss[epoch-1,2], end_time_val - start_time_val))
-
-        if epoch % params['save_interval'] == 0:
-            # Save the weights using the `checkpoint_path` format
-            model.save_weights(checkpoint_path)
-            print('... Saved model %s ' % checkpoint_path)
-
-        # update loss plot
-        plot_losses(train_loss, val_loss, epoch, run=plot_dir)
-        if epoch > ramp_start + ramp_length + 2:
-            plot_losses_zoom(train_loss, val_loss, epoch, run=plot_dir, ind_start = ramp_start + ramp_length)
-
-        # generate and plot posterior samples for the latent space and the parameter space 
-        if epoch % plot_cadence == 0:
-            for step, (x_batch_test, y_batch_test) in test_dataset.enumerate():             
-                mu_r1, z_r1, mu_q, z_q = model.gen_z_samples(x_batch_test, y_batch_test, nsamples=1000)
-                plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=plot_dir)
-                start_time_test = time.time()
-                samples = model.gen_samples(y_batch_test, ramp=ramp, nsamples=params['n_samples'])
-                end_time_test = time.time()
-                if np.any(np.isnan(samples)):
-                    print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
-                    for k,s in enumerate(samples):
-                        if np.any(np.isnan(s)):
-                            print(k,s)
-                    KL_est = [-1,-1,-1]
-                else:
-                    print('Epoch: {}, run {} Testing time elapsed for {} samples: {}'.format(epoch,run,params['n_samples'],end_time_test - start_time_test))
-                    KL_est = plot_posterior(samples,x_batch_test[0,:],epoch,step,all_other_samples=bilby_samples[:,step,:],run=plot_dir, params=params, bounds=bounds, masks=masks)
-                    _ = plot_posterior(samples,x_batch_test[0,:],epoch,step,run=plot_dir, params=params, bounds=bounds, masks=masks)
-                KL_samples.append(KL_est)
-
-            # plot KL evolution
-            #plot_KL(np.reshape(np.array(KL_samples),[-1,params['r'],len(params['samplers'])]),plot_cadence,run=plot_dir)
-
-        # iterate the chunk, i.e. load more noisefree data in
-        if epoch % 4 == 0:
-            print("Loading the next Chunk ...")
-            train_dataset.load_next_chunk()
+    #model.fit_generator(data_gen_wrap, use_multiprocessing = False, workers = 6,epochs = 10000, callbacks = callbacks, shuffle = False, validation_data = valdata_gen_wrap, max_queue_size = 100)
 
 
 

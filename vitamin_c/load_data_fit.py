@@ -10,7 +10,7 @@ from astropy import coordinates as coord
 
 class DataLoader(tf.keras.utils.Sequence):
 
-    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40):
+    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40, val_set = False):
         
         self.params = params
         self.bounds = bounds
@@ -18,6 +18,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.fixed_vals = fixed_vals
         self.input_dir = input_dir
         self.test_set = test_set
+        self.val_set = val_set
         self.silent = silent
         self.shuffle = False
         self.batch_size = batch_size
@@ -34,6 +35,8 @@ class DataLoader(tf.keras.utils.Sequence):
         self.chunk_iter = 0
         self.max_chunk_num = int(np.floor((self.num_data/self.chunk_size)))
         
+        self.num_epoch_load = 4
+        self.epoch_iter = 0
         # will addthis to init files eventually
         self.params["noiseamp"] = 1
 
@@ -45,7 +48,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
     def load_next_chunk(self):
         """
-        Loads in one chink of data where the size if set by chunk_size
+        Loads in one chunk of data where the size if set by chunk_size
         """
         if self.test_set:
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs = self.load_waveforms(self.filenames, None)
@@ -101,25 +104,21 @@ class DataLoader(tf.keras.utils.Sequence):
 
             start_index = index*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
-            #print(self.X.shape, self.Y_noisefree.shape, index, start_index, end_index, self.chunk_size, self.chunk_iter)
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
-            
         return np.array(Y_noisefree), np.array(X)
 
 
     def on_epoch_end(self):
         """Updates indices after each epoch
         """
-        self.indices = np.arange(self.num_data)
-        self.chunk_iter = 0
+        self.epoch_iter += 1
+        if self.epoch_iter > self.num_epoch_load and not self.test_set and not self.val_set:
+            self.load_next_chunk()
+            self.epoch_iter = 0
 
         if self.shuffle == True:
             np.random.shuffle(self.indices)
 
-    def on_epoch_begin(self):
-        """Updates indices after each epoch
-        """
-        self.chunk_iter = 0
 
     def get_all_filenames(self):
         """

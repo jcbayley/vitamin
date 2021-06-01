@@ -3,6 +3,8 @@ from tensorflow.keras import regularizers
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 import numpy as np
+import time 
+
 
 class CVAE(tf.keras.Model):
     """Convolutional variational autoencoder."""
@@ -20,14 +22,15 @@ class CVAE(tf.keras.Model):
         self.bounds = bounds
         self.masks = masks
         self.EPS = 1e-3
-        self.train_loss_metric = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
+        self.ramp = tf.Variable(0.0, trainable=False)
 
-        """
-        # Add this to get rid of regularizer
-        a2 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes)(a2)
-        self.encoder_r1 = tf.keras.Model(inputs=r1_input_y, outputs=a2)
-        print(self.encoder_r1.summary())
-        """
+        self.total_loss_metric = tf.keras.metrics.Mean('total_loss', dtype=tf.float32)
+        self.recon_loss_metric = tf.keras.metrics.Mean('recon_loss', dtype=tf.float32)
+        self.kl_loss_metric = tf.keras.metrics.Mean('KL_loss', dtype=tf.float32)
+        self.val_total_loss_metric = tf.keras.metrics.Mean('val_total_loss', dtype=tf.float32)
+        self.val_recon_loss_metric = tf.keras.metrics.Mean('val_recon_loss', dtype=tf.float32)
+        self.val_kl_loss_metric = tf.keras.metrics.Mean('val_KL_loss', dtype=tf.float32)
+
         # the convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
         conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
@@ -92,24 +95,66 @@ class CVAE(tf.keras.Model):
         mean, logvar, weight = tf.split(self.decoder_r2([y,z]), num_or_size_splits=[self.x_dim*self.x_modes, self.x_dim*self.x_modes,self.x_modes], axis=1)
         return tf.reshape(mean,[-1,self.x_modes,self.x_dim]), tf.reshape(logvar,[-1,self.x_modes,self.x_dim]), tf.reshape(weight,[-1,self.x_modes])
 
+    @property
+    def metrics(self):
+        return [
+            self.total_loss_metric,
+            self.recon_loss_metric,
+            self.kl_loss_metric,
+            self.val_total_loss_metric,
+            self.val_recon_loss_metric,
+            self.val_kl_loss_metric,
+
+        ]
+
+
     @tf.function
-    def train_step(self, x, y, optimizer, ramp=1.0):
+    def train_step(self, data):
         """Executes one training step and returns the loss.
         This function computes the loss and gradients, and uses the latter to
         update the model's parameters.
         """
+        
         with tf.GradientTape() as tape:
-            r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(x, y, ramp)
-            loss = r_loss + ramp*kl_loss
+            r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(data[1], data[0], self.ramp)
+            loss = r_loss + self.ramp*kl_loss
             gradients = tape.gradient(loss, self.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-            self.train_loss_metric(loss)
+            self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        self.total_loss_metric.update_state(loss)
+        self.recon_loss_metric.update_state(r_loss)
+        self.kl_loss_metric.update_state(kl_loss)
+
+        #return r_loss, kl_loss
+        return {"total_loss":self.total_loss_metric.result(),
+                "recon_loss":self.recon_loss_metric.result(),
+                "kl_loss":self.kl_loss_metric.result()}
+
         """
         if np.isfinite(loss):
         else:
             print("Inf train loss: rerunning train_step")
         """
         return r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost
+
+    def test_step(self, data):
+        """Executes one test step and returns the loss.                                                        
+        This function computes the loss and gradients (used for validation data)
+        """
+        
+        #self.ramp = 0.0
+        r_loss, kl_loss,g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(data[1], data[0])
+        #print("test_loss", self.ramp, r_loss, kl_loss)
+        loss = r_loss + self.ramp*kl_loss
+
+        self.val_total_loss_metric.update_state(loss)
+        self.val_recon_loss_metric.update_state(r_loss)
+        self.val_kl_loss_metric.update_state(kl_loss)
+
+        #return r_loss, kl_loss
+        return {"total_loss":self.val_total_loss_metric.result(),
+                "recon_loss":self.val_recon_loss_metric.result(),
+                "kl_loss":self.val_kl_loss_metric.result()}
 
 
     def compute_loss(self, x, y, noiseamp=1.0, ramp = 1.0):
@@ -138,7 +183,6 @@ class CVAE(tf.keras.Model):
         scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
         
 
-        #print("means",tf.reduce_mean(mean_r2))
         """
         extra_width = 10.0
         tmvn_r2 = tfp.distributions.TruncatedNormal(
@@ -161,11 +205,6 @@ class CVAE(tf.keras.Model):
         )
         vm_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tf.math.log(2.0*np.pi) + vm_r2.log_prob(2.0*np.pi*tf.boolean_mask(x,self.masks["periodic_mask"],axis=1)),axis=1),axis=0)
         simple_cost_recon = tmvn_r2_cost_recon + vm_r2_cost_recon
-        #print("cost", tmvn_r2_cost_recon , vm_r2_cost_recon)
-        #if np.isnan(simple_cost_recon):
-        #    print(tmvn_r2_cost_recon, vm_r2_cost_recon)
-        #    print(mean_r2)
-        #    sys.exit()
 
         # all Gaussian
         """
@@ -181,6 +220,7 @@ class CVAE(tf.keras.Model):
         selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
         log_r1_q = gm_r1.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
         cost_KL = selfent_q - tf.reduce_mean(log_r1_q)
+
         return simple_cost_recon, cost_KL, tmvn_r2_cost_recon, vm_r2_cost_recon, tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1), tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1), tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1), tmvn_r2_cost
         
     def gen_samples(self, y, ramp=1.0, nsamples=1000, max_samples=1000):
@@ -254,3 +294,147 @@ class CVAE(tf.keras.Model):
             scale_diag=scale_q)
         z_samp_q = mvn_q.sample()    
         return mean_r1, z_samp_r1, mean_q, z_samp_q
+
+    def call(self, inputs):
+        '''
+        call the function generates one sample of output (only here for the build section)
+        '''
+        print("this is running")
+        # encode through r1 network                          
+        mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
+        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+        gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
+                                      components_distribution=tfd.MultivariateNormalDiag(
+                                          loc=mean_r1,
+                                          scale_diag=scale_r1))
+
+        z_samp = gm_r1.sample()
+        mean_r2, logvar_r2, logweight_r2 = self.decode_r2(z=z_samp,y=inputs)
+        scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
+        gm_r2 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r2),
+                                      components_distribution=tfd.MultivariateNormalDiag(
+                                          loc=mean_r2,
+                                          scale_diag=scale_r2))
+
+        x_sample = gm_r2.sample()
+
+        return x_sample
+
+
+
+
+
+class PlotCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, plot_dir, epoch_plot = 2):
+        from vitamin_c_fit import plot_losses, plot_losses_zoom
+        self.plot_losses = plot_losses
+        self.plot_losses_zoom = plot_losses_zoom
+        self.plot_dir = plot_dir
+        self.epoch_plot = epoch_plot
+        self.train_losses = [[],[],[]]
+        self.val_losses = [[],[],[]]
+    def on_epoch_end(self, epoch, logs = None):
+        self.train_losses[2].append(logs["total_loss"])
+        self.train_losses[0].append(logs["recon_loss"])
+        self.train_losses[1].append(logs["kl_loss"])
+
+        self.val_losses[2].append(logs["val_total_loss"])
+        self.val_losses[0].append(logs["val_recon_loss"])
+        self.val_losses[1].append(logs["val_kl_loss"])
+
+        if epoch % self.epoch_plot == 0 and epoch > 3:
+            self.plot_losses(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir)
+            self.plot_losses_zoom(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir, ind_start=500)
+
+
+class TrainCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, checkpoint_path, optimizer):
+        super(TrainCallback, self).__init__()
+        self.ramp_start = 400
+        self.ramp_length = 600
+        self.n_cycles = 1
+        self.checkpoint_path = checkpoint_path
+        self.optimizer = optimizer
+        
+    def ramp_func(self,epoch):
+        ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
+        #print(epoch,ramp)
+        if ramp<0:
+            return 0.0
+        if ramp>=self.n_cycles:
+            return 1.0
+        tf.keras.backend.set_value(self.model.ramp, min(1.0,2.0*np.remainder(ramp,1.0)))
+        #self.model.compile(run_eagerly = False, optimizer = self.optimizer)
+
+    def on_epoch_begin(self, epoch, logs = None):
+
+        if epoch > self.ramp_start:
+            self.ramp_func(epoch)
+            
+        #print("mr",self.model.ramp)
+        
+    def on_epoch_end(self,epoch, logs = None):
+
+        if epoch % self.model.params['save_interval'] == 0:
+            # Save the weights using the `checkpoint_path` format
+            self.model.save_weights(self.checkpoint_path)
+            print('... Saved model %s ' % self.checkpoint_path)
+
+
+class TestCallback(tf.keras.callbacks.Callback):
+
+
+    def __init__(self,test_dataset, plot_dir, bilby_samples):
+        from vitamin_c_fit import plot_latent, plot_posterior
+        self.plot_latent = plot_latent
+        self.plot_posterior = plot_posterior
+        self.test_dataset = test_dataset
+        self.plot_dir = plot_dir
+        self.bilby_samples = bilby_samples
+
+    def on_epoch_end(self, epoch, logs = None):
+        
+        if epoch % 500 == 0:
+            for step, (x_batch_test, y_batch_test) in self.test_dataset.enumerate():             
+                mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples( x_batch_test, y_batch_test, nsamples=1000)
+                self.plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.plot_dir)
+                start_time_test = time.time()
+                samples = self.model.gen_samples(y_batch_test, nsamples=self.model.params['n_samples'])
+                end_time_test = time.time()
+                if np.any(np.isnan(samples)):
+                    print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
+                    for k,s in enumerate(samples):
+                        if np.any(np.isnan(s)):
+                            print(k,s)
+                    KL_est = [-1,-1,-1]
+                else:
+                    print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.model.params['n_samples'],end_time_test - start_time_test))
+                    KL_est = self.plot_posterior(samples,x_batch_test[0,:],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
+                    _ = self.plot_posterior(samples,x_batch_test[0,:],epoch,step,run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
+                #KL_samples.append(KL_est)
+
+
+class TimeCallback(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.times = []
+
+    def on_epoch_begin(self, batch, logs={}):
+        self.epoch_time_start = time.time()
+
+    def on_epoch_end(self, batch, logs={}):
+        temp_time = time.time() - self.epoch_time_start
+        self.times.append(temp_time)
+        print(temp_time)
+
+
+
+
+
+
+
+
+
+
+

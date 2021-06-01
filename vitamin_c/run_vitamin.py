@@ -45,12 +45,12 @@ from skopt.utils import use_named_args
 try:
     from .gen_benchmark_pe import run, gen_real_noise
     from . import plotting
-    from . import vitamin_c_new as vitamin_c
+    from . import vitamin_c_fit as vitamin_c
     from .plotting import prune_samples
 except (ModuleNotFoundError, ImportError):
     from gen_benchmark_pe import run, gen_real_noise
     import plotting
-    import vitamin_c_new as vitamin_c
+    import vitamin_c_fit as vitamin_c
     from plotting import prune_samples
 
 # Check for optional basemap installation
@@ -94,14 +94,17 @@ parser.add_argument("--gen_samples", default=False, help="If True, generate samp
 parser.add_argument("--num_samples", type=int, default=10000, help="number of posterior samples to generate")
 parser.add_argument("--use_gpu", default=False, help="if True, use gpu")
 parser.add_argument("--importance_sampling", default=False, help="Apply importance sampling to VItamin posterior samples")
+parser.add_argument("--params_dir", type=str, default="./params_files", help="directory containing params files")
 args = parser.parse_args()
 
 global params; global bounds; global fixed_vals
 
+params_dir = args.params_dir
+
 # Define default location of the parameters files
-params = os.path.join(os.getcwd(), 'params_files', 'params.json')
-bounds = os.path.join(os.getcwd(), 'params_files', 'bounds.json')
-fixed_vals = os.path.join(os.getcwd(), 'params_files', 'fixed_vals.json')
+params = os.path.join(os.getcwd(), params_dir, 'params.json')
+bounds = os.path.join(os.getcwd(), params_dir, 'bounds.json')
+fixed_vals = os.path.join(os.getcwd(), params_dir, 'fixed_vals.json')
 
 # Load parameters files
 if args.params_file != None:

@@ -135,7 +135,7 @@ def gen_template(duration,
         phi_12=pars['phi_12'], phi_jl=pars['phi_jl'], luminosity_distance=pars['luminosity_distance'], theta_jn=pars['theta_jn'], psi=pars['psi'],
         phase=pars['phase'], geocent_time=pars['geocent_time'], ra=pars['ra'], dec=pars['dec'])
 
-    # Fixed arguments passed into the source model
+    # Fixed arguments passed into the source model 
     waveform_arguments = dict(waveform_approximant='IMRPhenomPv2',
                               reference_frequency=20., minimum_frequency=20.)
 

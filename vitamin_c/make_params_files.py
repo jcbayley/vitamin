@@ -131,7 +131,7 @@ n_weights_q = [n_fc,n_fc,n_fc]
 #############################
 # optional tunable variables
 #############################
-run_label = 'vitamin_c_run3_newload_vonmises'#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
+run_label = 'vitamin_fit_c_run2_256'#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
 gpu_num = 6
 
 # 1024 Hz label
@@ -211,6 +211,8 @@ def get_params():
         __definition__convert_to_hour_angle='If True, convert RA to hour angle during trianing and testing',
         make_corner_plots = True,                                               
         __definition__make_corner_plots='if True, make corner plots',
+        make_paper_plots = False,                                               
+        __definition__make_paper_plots='if True, make paper plots',
         make_kl_plot = False,                                                    
         __definition__make_kl_plot='If True, go through kl plotting function',
         make_pp_plot = False,                                                    
@@ -394,31 +396,35 @@ def get_params():
     return params
 
 
-# Save training/test parameters of run if files do not already exist
-params=get_params()
 
-# Make directory containing params files
-try:
-    os.mkdir('params_files')
-except FileExistsError:
-    print("directory 'params_files' already exists")
-    print("Overwriting .json files in directory ...")
+if __name__ == "__main__":
+    # Save training/test parameters of run if files do not already exist
+    params=get_params()
 
-# Generate params files
-#if not os.path.isfile('./params_files/params.json'):
+    out_dir = "./params_files_256"
     
-# save params json file
-with open('params_files/params.json', 'w') as fp:
-    json.dump(params, fp, sort_keys=False, indent=4)
-
-#if not os.path.isfile('./params_files/bounds.json'):
-
-# save bounds json file
-with open('params_files/bounds.json', 'w') as fp:
-    json.dump(bounds, fp, sort_keys=False, indent=4)
-
-#if not os.path.isfile('./params_files/fixed_vals.json'):
-
-# save fixed vals json file
-with open('params_files/fixed_vals.json', 'w') as fp:
-    json.dump(fixed_vals, fp, sort_keys=False, indent=4)
+    # Make directory containing params files
+    try:
+        os.mkdir(out_dir)
+    except FileExistsError:
+        print("directory 'params_files' already exists")
+        print("Overwriting .json files in directory ...")
+        
+    # Generate params files
+    #if not os.path.isfile('./params_files/params.json'):
+    
+    # save params json file
+    with open('{}/params.json'.format(out_dir), 'w') as fp:
+        json.dump(params, fp, sort_keys=False, indent=4)
+        
+    #if not os.path.isfile('./params_files/bounds.json'):
+    
+    # save bounds json file
+    with open('{}/bounds.json'.format(out_dir), 'w') as fp:
+        json.dump(bounds, fp, sort_keys=False, indent=4)
+        
+    #if not os.path.isfile('./params_files/fixed_vals.json'):
+    
+    # save fixed vals json file
+    with open('{}/fixed_vals.json'.format(out_dir), 'w') as fp:
+        json.dump(fixed_vals, fp, sort_keys=False, indent=4)
