@@ -530,8 +530,6 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
     test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, test_set = True)
-    #x_data_test, y_data_test_noisefree, y_data_test, snrs_test = load_data(params,bounds,fixed_vals,params['test_set_dir'],params['inf_pars'],test_data=True)
-    #y_data_test = y_data_test[:params['r'],:,:]; x_data_test = x_data_test[:params['r'],:]
 
     print("Loading intitial data...")
     train_dataset.load_next_chunk()
@@ -544,8 +542,6 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         bilby_samples.append(load_samples(params,sampler, bounds = bounds))
     bilby_samples = np.array(bilby_samples)
     #bilby_samples = np.array([load_samples(params,'dynesty'),load_samples(params,'ptemcee'),load_samples(params,'cpnest')])
-
-    #test_dataset = (tf.data.Dataset.from_tensor_slices((x_data_test,y_data_test).batch(1))
 
     train_loss_metric = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
@@ -599,16 +595,11 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     shutil.copy(os.path.join(params_dir,'params.json'),path)
     shutil.copy(os.path.join(params_dir,'bounds.json'),path)
 
-    
-    model.compile()
-    batch_prev_epoch = 0
-
+    # compile and build the model (hardcoded values will change soon)
     model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
     model.build((None, 256,2))
     model.summary()
 
-    #model.build((batch_size, y_data_shape, num_channels))
-    print("numbatch",len(train_dataset))
 
     callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir), TestCallback(test_dataset,plot_dir,bilby_samples), TimeCallback()]
     model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
