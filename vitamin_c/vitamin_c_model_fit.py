@@ -477,7 +477,6 @@ class TestCallback(tf.keras.callbacks.Callback):
         
         if epoch % 500 == 0:
             for step in range(len(self.test_dataset)):             
-                print("data_sizes", self.test_dataset.X.shape, self.test_dataset.Y_noisefree.shape, self.test_dataset.Y_noisy.shape)
                 mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
                 self.plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.plot_dir)
                 start_time_test = time.time()
