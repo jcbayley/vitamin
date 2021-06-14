@@ -4,7 +4,9 @@ import tensorflow_probability as tfp
 tfd = tfp.distributions
 import numpy as np
 import time 
-
+import matplotlib.pyplot as plt
+import os
+import sys
 
 class CVAE(tf.keras.Model):
     """Convolutional variational autoencoder."""
@@ -18,6 +20,7 @@ class CVAE(tf.keras.Model):
         self.y_dim = y_dim
         self.n_channels = n_channels
         self.act = tf.keras.layers.LeakyReLU(alpha=0.3)
+        self.act_relu = tf.keras.layers.ReLU()
         self.params = params
         self.bounds = bounds
         self.masks = masks
@@ -27,22 +30,27 @@ class CVAE(tf.keras.Model):
         self.total_loss_metric = tf.keras.metrics.Mean('total_loss', dtype=tf.float32)
         self.recon_loss_metric = tf.keras.metrics.Mean('recon_loss', dtype=tf.float32)
         self.kl_loss_metric = tf.keras.metrics.Mean('KL_loss', dtype=tf.float32)
+        self.gauss_loss_metric = tf.keras.metrics.Mean('gauss_loss', dtype=tf.float32)
+        self.vm_loss_metric = tf.keras.metrics.Mean('vm_loss', dtype=tf.float32)
+
         self.val_total_loss_metric = tf.keras.metrics.Mean('val_total_loss', dtype=tf.float32)
         self.val_recon_loss_metric = tf.keras.metrics.Mean('val_recon_loss', dtype=tf.float32)
         self.val_kl_loss_metric = tf.keras.metrics.Mean('val_KL_loss', dtype=tf.float32)
 
         # the convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
 
+        conv = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
         #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-
-        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-
-        #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
         #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
 
         conv = tf.keras.layers.Flatten()(conv)
@@ -50,9 +58,11 @@ class CVAE(tf.keras.Model):
         lin1, lin2, lin3 = 4096, 2048, 1024
         # r1 encoder
         r1_in = tf.keras.layers.Dense(lin1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        r1 = tf.keras.layers.Dropout(.5)(r1_in)
-        r1 = tf.keras.layers.Dense(lin2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)
-        r1 = tf.keras.layers.Dropout(.5)(r1)
+        #r1 = tf.keras.layers.BatchNormalization()(r1_in)
+        #r1 = tf.keras.layers.Dropout(.5)(r1_in)
+        r1 = tf.keras.layers.Dense(lin2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1_in)
+        #r1 = tf.keras.layers.BatchNormalization()(r1)
+        #r1 = tf.keras.layers.Dropout(.5)(r1)
         r1 = tf.keras.layers.Dense(lin3, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)
         r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes)(r1)
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
@@ -63,9 +73,11 @@ class CVAE(tf.keras.Model):
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q_in = tf.keras.layers.concatenate([conv,q_inx])        
         q = tf.keras.layers.Dense(lin1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q_in)
-        q = tf.keras.layers.Dropout(.5)(q)
+        #q = tf.keras.layers.BatchNormalization()(q)
+        #q = tf.keras.layers.Dropout(.5)(q)
         q = tf.keras.layers.Dense(lin2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)
-        q = tf.keras.layers.Dropout(.5)(q)
+        #q = tf.keras.layers.BatchNormalization()(q)
+        #q = tf.keras.layers.Dropout(.5)(q)
         q = tf.keras.layers.Dense(lin3, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)
         q = tf.keras.layers.Dense(2*self.z_dim)(q)
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
@@ -76,11 +88,18 @@ class CVAE(tf.keras.Model):
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2_in = tf.keras.layers.concatenate([conv,r2_inz])
         r2 = tf.keras.layers.Dense(lin1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2_in)
-        r2 = tf.keras.layers.Dropout(.5)(r2)
+        #r2 = tf.keras.layers.BatchNormalization()(r2)
+        #r2 = tf.keras.layers.Dropout(.5)(r2)
         r2 = tf.keras.layers.Dense(lin2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)
-        r2 = tf.keras.layers.Dropout(.5)(r2)
+        #r2 = tf.keras.layers.BatchNormalization()(r2)
+        #r2 = tf.keras.layers.Dropout(.5)(r2)
         r2 = tf.keras.layers.Dense(lin3, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)
-        r2 = tf.keras.layers.Dense(2*self.x_dim*self.x_modes + self.x_modes)(r2)
+
+        r2w = tf.keras.layers.Dense(self.x_modes,use_bias=True,bias_initializer='Zeros')(r2)
+        r2mu = tf.keras.layers.Dense(self.x_dim*self.x_modes,activation='sigmoid')(r2)
+        r2logvar = -1.0*tf.keras.layers.Dense(self.x_dim*self.x_modes,activation=self.act_relu,use_bias=True,bias_initializer=tf.keras.initializers.Constant(value=2.0))(r2)
+        r2 = tf.keras.layers.concatenate([r2mu,r2logvar,r2w])
+        #r2 = tf.keras.layers.Dense(2*self.x_dim*self.x_modes + self.x_modes)(r2)
         self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2)
         print(self.decoder_r2.summary())
 
@@ -101,6 +120,8 @@ class CVAE(tf.keras.Model):
             self.total_loss_metric,
             self.recon_loss_metric,
             self.kl_loss_metric,
+            self.gauss_loss_metric,
+            self.vm_loss_metric,
             self.val_total_loss_metric,
             self.val_recon_loss_metric,
             self.val_kl_loss_metric,
@@ -108,7 +129,7 @@ class CVAE(tf.keras.Model):
         ]
 
 
-    @tf.function
+    #@tf.function
     def train_step(self, data):
         """Executes one training step and returns the loss.
         This function computes the loss and gradients, and uses the latter to
@@ -118,17 +139,21 @@ class CVAE(tf.keras.Model):
         with tf.GradientTape() as tape:
             r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(data[1], data[0], self.ramp)
             loss = r_loss + self.ramp*kl_loss
-            gradients = tape.gradient(loss, self.trainable_variables)
-            self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        gradients = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         self.total_loss_metric.update_state(loss)
         self.recon_loss_metric.update_state(r_loss)
         self.kl_loss_metric.update_state(kl_loss)
+        self.gauss_loss_metric.update_state(g_loss)
+        self.vm_loss_metric.update_state(vm_loss)
 
         #return r_loss, kl_loss
         return {"total_loss":self.total_loss_metric.result(),
                 "recon_loss":self.recon_loss_metric.result(),
-                "kl_loss":self.kl_loss_metric.result()}
+                "kl_loss":self.kl_loss_metric.result(),
+                "gauss_loss":self.gauss_loss_metric.result(),
+                "vm_loss":self.vm_loss_metric.result()}
 
         """
         if np.isfinite(loss):
@@ -163,6 +188,7 @@ class CVAE(tf.keras.Model):
         noiseamp = tf.cast(noiseamp, dtype=tf.float32)
 
         y = tf.cast(y, dtype=tf.float32)
+        y = tf.keras.activations.tanh(y)
         x = tf.cast(x, dtype=tf.float32)
         
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
@@ -183,21 +209,21 @@ class CVAE(tf.keras.Model):
         scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
         
 
-        """
+        
         extra_width = 10.0
         tmvn_r2 = tfp.distributions.TruncatedNormal(
             loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
             scale=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1),
             low=-extra_width + ramp*extra_width, high=1.0 + extra_width - ramp*extra_width)
-
-        tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_r2.log_prob(tf.boolean_mask(x,self.masks["nonperiodic_mask"],axis=1)),axis=1),axis=0)
+        tmvn_r2_cost = tmvn_r2.log_prob(tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1))
+        tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_r2_cost,axis=1),axis=0)
         """
         tmvn_r2 = tfd.MultivariateNormalDiag(
             loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
             scale_diag=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1))
         tmvn_r2_cost = tmvn_r2.log_prob(tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1))
         tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tmvn_r2_cost)
-        
+        """
         
         vm_r2 = tfp.distributions.VonMises(
             loc=2.0*np.pi*tf.boolean_mask(tf.squeeze(mean_r2),self.masks["periodic_mask"],axis=1),
@@ -225,7 +251,8 @@ class CVAE(tf.keras.Model):
         
     def gen_samples(self, y, ramp=1.0, nsamples=1000, max_samples=1000):
         
-        y = y/self.params['y_normscale']
+        #y = y/self.params['y_normscale']
+        y = tf.keras.activations.tanh(y)
         y = tf.tile(y,(max_samples,1,1))
         samp_iterations = int(nsamples/max_samples)
         for i in range(samp_iterations):
@@ -239,7 +266,7 @@ class CVAE(tf.keras.Model):
 
             mean_r2, logvar_r2, logweight_r2 = self.decode_r2(z=z_samp,y=y)
             scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
-            
+            """
             tmvn_r2 = tfd.MultivariateNormalDiag(
                 loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
                 scale_diag=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1))
@@ -250,7 +277,7 @@ class CVAE(tf.keras.Model):
                 loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
                 scale=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1),
                 low=-extra_width + ramp*extra_width, high=1.0 + extra_width - ramp*extra_width)
-            """
+            
             vm_r2 = tfp.distributions.VonMises(
                 loc=2.0*np.pi*tf.boolean_mask(tf.squeeze(mean_r2),self.masks["periodic_mask"],axis=1),
                 concentration=tf.math.reciprocal(tf.math.square(tf.boolean_mask(tf.squeeze(2.0*np.pi*scale_r2),self.masks["periodic_mask"],axis=1)))
@@ -277,7 +304,8 @@ class CVAE(tf.keras.Model):
 
 
     def gen_z_samples(self, x, y, nsamples=1000):
-        y = y/self.params['y_normscale']
+        #y = y/self.params['y_normscale']
+        y = tf.keras.activations.tanh(y)
         y = tf.tile(y,(nsamples,1,1))
         x = tf.tile(x,(nsamples,1))
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
@@ -299,7 +327,6 @@ class CVAE(tf.keras.Model):
         '''
         call the function generates one sample of output (only here for the build section)
         '''
-        print("this is running")
         # encode through r1 network                          
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
         scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
@@ -350,13 +377,42 @@ class PlotCallback(tf.keras.callbacks.Callback):
 
 class TrainCallback(tf.keras.callbacks.Callback):
 
-    def __init__(self, checkpoint_path, optimizer):
+    def __init__(self, checkpoint_path, optimizer, plot_dir):
         super(TrainCallback, self).__init__()
         self.ramp_start = 400
         self.ramp_length = 600
         self.n_cycles = 1
         self.checkpoint_path = checkpoint_path
+        self.plot_dir = plot_dir
         self.optimizer = optimizer
+        self.recon_losses = []
+        self.kl_losses = []
+        self.gauss_losses = []
+        self.vm_losses = []
+        self.old_recon_losses = []
+        self.old_kl_losses = []
+        self.old_gauss_losses = []
+        self.old_vm_losses = []
+
+    def nan_plots(self):
+
+        total_r_losses = np.append(self.old_recon_losses, self.recon_losses)
+        total_kl_losses = np.append(self.old_kl_losses, self.kl_losses)
+        total_gauss_losses = np.append(self.old_gauss_losses, self.gauss_losses)
+        total_vm_losses = np.append(self.old_vm_losses, self.vm_losses)
+        
+        fig, ax = plt.subplots(nrows = 2, figsize = (16,10))
+        ax[0].plot(total_r_losses, label = "recon")
+        ax[0].plot(total_kl_losses, label = "kl")
+        ax[0].set_yscale("symlog")
+        ax[0].legend()
+        ax[1].plot(total_gauss_losses, label = "gauss")
+        ax[1].plot(total_vm_losses, label = "von mises")
+        ax[1].set_yscale("symlog")
+        ax[1].legend()
+        
+        fig.savefig(os.path.join(self.plot_dir, "batch_inf_plot.png"))
+        sys.exit()
         
     def ramp_func(self,epoch):
         ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
@@ -372,16 +428,39 @@ class TrainCallback(tf.keras.callbacks.Callback):
 
         if epoch > self.ramp_start:
             self.ramp_func(epoch)
-            
+
+    def on_batch_end(self, batch, logs=None):
+        self.recon_losses.append(self.model.recon_loss_metric.result())
+        self.kl_losses.append(self.model.kl_loss_metric.result())
+        self.gauss_losses.append(self.model.gauss_loss_metric.result())
+        self.vm_losses.append(self.model.vm_loss_metric.result())
+
+        if not np.isfinite(self.recon_losses[-1]):
+            print("recon loss inf \n")
+            if not np.isfinite(self.gauss_losses[-1]):
+                print("gauss inf \n")
+            self.nan_plots()
+        if not np.isfinite(self.kl_losses[-1]):
+            print("kl loss inf")
+            self.nan_plots()
+
         #print("mr",self.model.ramp)
         
     def on_epoch_end(self,epoch, logs = None):
+        self.old_recon_losses = self.recon_losses
+        self.old_kl_losses = self.kl_losses
+        self.old_gauss_losses = self.gauss_losses
+        self.old_vm_losses = self.vm_losses
+
+        self.recon_losses = []
+        self.kl_losses = []
+        self.gauss_losses = []
+        self.vm_losses = []
 
         if epoch % self.model.params['save_interval'] == 0:
             # Save the weights using the `checkpoint_path` format
             self.model.save_weights(self.checkpoint_path)
             print('... Saved model %s ' % self.checkpoint_path)
-
 
 class TestCallback(tf.keras.callbacks.Callback):
 
@@ -397,11 +476,12 @@ class TestCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs = None):
         
         if epoch % 500 == 0:
-            for step, (x_batch_test, y_batch_test) in self.test_dataset.enumerate():             
-                mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples( x_batch_test, y_batch_test, nsamples=1000)
+            for step in range(len(self.test_dataset)):             
+                print("data_sizes", self.test_dataset.X.shape, self.test_dataset.Y_noisefree.shape, self.test_dataset.Y_noisy.shape)
+                mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
                 self.plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.plot_dir)
                 start_time_test = time.time()
-                samples = self.model.gen_samples(y_batch_test, nsamples=self.model.params['n_samples'])
+                samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.model.params['n_samples'])
                 end_time_test = time.time()
                 if np.any(np.isnan(samples)):
                     print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
@@ -411,8 +491,8 @@ class TestCallback(tf.keras.callbacks.Callback):
                     KL_est = [-1,-1,-1]
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.model.params['n_samples'],end_time_test - start_time_test))
-                    KL_est = self.plot_posterior(samples,x_batch_test[0,:],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
-                    _ = self.plot_posterior(samples,x_batch_test[0,:],epoch,step,run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
+                    KL_est = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
+                    _ = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,run=self.plot_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
                 #KL_samples.append(KL_est)
 
 

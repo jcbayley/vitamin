@@ -754,7 +754,7 @@ def gen_test(params=params,bounds=bounds,fixed_vals=fixed_vals):
         hf.close()
     return
 
-def train(params=params,bounds=bounds,fixed_vals=fixed_vals,resume_training=False):
+def train(resume_training=False, params_dir = params_dir):
     """ Train neural network given pre-made training/testing samples
 
     Parameters
@@ -773,16 +773,16 @@ def train(params=params,bounds=bounds,fixed_vals=fixed_vals,resume_training=Fals
     global snrs_test
 
     # Check for requried parameters files
-    if params == None or bounds == None or fixed_vals == None:
-        print('Missing either params file, bounds file or fixed vals file')
-        exit()
+    #if params == None or bounds == None or fixed_vals == None:
+    #    print('Missing either params file, bounds file or fixed vals file')
+    #    exit()
 
     # Load parameters files
-    with open(params, 'r') as fp:
+    with open(os.path.join(params_dir, "./params.json"), 'r') as fp:
         params = json.load(fp)
-    with open(bounds, 'r') as fp:
+    with open(os.path.join(params_dir, "./bounds.json"), 'r') as fp:
         bounds = json.load(fp)
-    with open(fixed_vals, 'r') as fp:
+    with open(os.path.join(params_dir, "./fixed_vals.json"), 'r') as fp:
         fixed_vals = json.load(fp)
 
 
@@ -945,7 +945,7 @@ def train(params=params,bounds=bounds,fixed_vals=fixed_vals,resume_training=Fals
                            x_data_test, y_data_test, y_data_test_noisefree,
                            "inverse_model_dir_%s/inverse_model.ckpt" % params['run_label'],
                            x_data_test, bounds, fixed_vals,
-                           XS_all,snrs_test)
+                           XS_all,snrs_test, params_dir = params_dir)
 
     print('... completed training') 
     return
@@ -1523,7 +1523,7 @@ if args.gen_val:
 if args.gen_test:
     gen_test(params,bounds,fixed_vals)
 if args.train:
-    train(params,bounds,fixed_vals)
+    train(params_dir = params_dir)
 if args.test:
     test(params,bounds,fixed_vals,use_gpu=bool(args.use_gpu))
 if args.gen_samples:

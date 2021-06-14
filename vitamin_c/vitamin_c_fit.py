@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import tensorflow_addons as tfa
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 import time
@@ -20,7 +21,7 @@ import plotting
 from tensorflow.keras import regularizers
 
 from vitamin_c_model_fit import CVAE, PlotCallback, TrainCallback, TestCallback, TimeCallback
-from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader
+from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader, psiphi_to_psiX, psiX_to_psiphi
 
 def get_param_index(all_pars,pars,sky_extra=None):
     """ 
@@ -180,6 +181,16 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
     if samples.shape[0]<100:
         print('... Bad run, not doing posterior plotting.')
         return [-1.0] * len(params['samplers'][1:])
+
+    
+    # randonly convert from reduced psi-phi space to full space
+    _, psi_idx, _ = get_param_index(params['inf_pars'],['psi'])
+    _, phi_idx, _ = get_param_index(params['inf_pars'],['phase'])
+    psi_idx = psi_idx[0]
+    phi_idx = phi_idx[0]
+    samples = samples.numpy()
+    samples[:,psi_idx], samples[:,phi_idx] = psiX_to_psiphi(samples[:,psi_idx], samples[:,phi_idx])
+
 
     # define general plotting arguments
     defaults_kwargs = dict(
@@ -475,7 +486,7 @@ def paper_plots(test_dataset, y_data_test, x_data_test, model, params, plot_dir,
 def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_test, y_data_test, y_data_test_noisefree, save_dir, truth_test, bounds, fixed_vals, bilby_samples, snrs_test=None, params_dir = "./params_files"):
 
     #params, bounds, masks, fixed_vals = get_params(params_dir = params_dir)
-    params, bounds, masks, fixed_vals = get_params(params, bounds, fixed_vals)
+    params, bounds, masks, fixed_vals = get_params(params, bounds, fixed_vals, params_dir = params_dir)
     run = time.strftime('%y-%m-%d-%X-%Z')
 
     # define which gpu to use during training
@@ -518,8 +529,14 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40) 
         validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
-    x_data_test, y_data_test_noisefree, y_data_test, snrs_test = load_data(params,bounds,fixed_vals,params['test_set_dir'],params['inf_pars'],test_data=True)
-    y_data_test = y_data_test[:params['r'],:,:]; x_data_test = x_data_test[:params['r'],:]
+    test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, test_set = True)
+    #x_data_test, y_data_test_noisefree, y_data_test, snrs_test = load_data(params,bounds,fixed_vals,params['test_set_dir'],params['inf_pars'],test_data=True)
+    #y_data_test = y_data_test[:params['r'],:,:]; x_data_test = x_data_test[:params['r'],:]
+
+    print("Loading intitial data...")
+    train_dataset.load_next_chunk()
+    validation_dataset.load_next_chunk()
+    test_dataset.load_next_chunk()
 
     # load precomputed samples
     bilby_samples = []
@@ -528,8 +545,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     bilby_samples = np.array(bilby_samples)
     #bilby_samples = np.array([load_samples(params,'dynesty'),load_samples(params,'ptemcee'),load_samples(params,'cpnest')])
 
-    test_dataset = (tf.data.Dataset.from_tensor_slices((x_data_test,y_data_test))
-                    .batch(1))
+    #test_dataset = (tf.data.Dataset.from_tensor_slices((x_data_test,y_data_test).batch(1))
 
     train_loss_metric = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
@@ -542,8 +558,8 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         model.load_weights(latest)
         print('... loading in previous model %s' % checkpoint_path)
     else:
-        model = CVAE(x_data_test.shape[1], params['ndata'],
-                     y_data_test.shape[2], params['z_dimension'], params['n_modes'], params, bounds, masks)
+        model = CVAE(test_dataset.X.shape[1], params['ndata'],
+                     test_dataset.Y_noisefree.shape[2], params['z_dimension'], params['n_modes'], params, bounds, masks)
 
 
     # Make publication plots
@@ -564,9 +580,10 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     ramp_cycles = 1
     KL_samples = []
 
-
-    optimizer = tf.keras.optimizers.Adam(3e-5, decay = 3e-7)
-
+    #tf.keras.mixed_precision.set_global_policy('float32')
+    #optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
+    optimizer = tf.keras.optimizers.Adam(1e-4, decay = 3e-11)
+    #optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
     # Keras hyperparameter optimization
     if hyper_par_tune:
         import keras_hyper_optim
@@ -582,9 +599,6 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     shutil.copy(os.path.join(params_dir,'params.json'),path)
     shutil.copy(os.path.join(params_dir,'bounds.json'),path)
 
-    print("Loading intitial data....")
-    train_dataset.load_next_chunk()
-    validation_dataset.load_next_chunk()
     
     model.compile()
     batch_prev_epoch = 0
@@ -596,7 +610,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     #model.build((batch_size, y_data_shape, num_channels))
     print("numbatch",len(train_dataset))
 
-    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer), TestCallback(test_dataset,plot_dir,bilby_samples), TimeCallback()]
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir), TestCallback(test_dataset,plot_dir,bilby_samples), TimeCallback()]
     model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
 
     # not happy with this re-wrapping of the dataset

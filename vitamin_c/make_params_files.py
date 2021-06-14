@@ -74,7 +74,7 @@ bounds = {'mass_1_min':5.0, 'mass_1_max':100.0,
         '__definition__luminosity_distance': 'luminosity distance range'}
 
 # arbitrary value for normalization of timeseries (Don't change this)
-y_normscale = 16.638832624721797
+y_normscale = 32#16.638832624721797
 
 ##########################
 # Main tunable variables
@@ -131,16 +131,16 @@ n_weights_q = [n_fc,n_fc,n_fc]
 #############################
 # optional tunable variables
 #############################
-run_label = 'vitamin_fit_c_run2_256'#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
-gpu_num = 6
+run_label = 'vitamin_fit_c_run4_{}_gauss_vonmises_tanhdata'.format(ndata)#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
+gpu_num = 7
 
 # 1024 Hz label
 #bilby_results_label = 'weichangfeng_theta_jn_issue'                                             
 # 256 Hz label
-bilby_results_label = '{}Hz_full_15par_{}det'.format(ndata,len(det))
+bilby_results_label = '{}Hz_full_15par_{}det_rr'.format(ndata,len(det))
 
-r = 2 # 251                                                         
-pe_test_num = 256                                                               
+r = 10 # 251                                                         
+pe_test_num = 10                                                               
 tot_dataset_size = int(1e6)    
 
 tset_split = int(1e3)                                                           
@@ -164,8 +164,8 @@ plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/%s' % run_label
 numdet = len(det)
 
 # default training/testing directories
-train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,tot_dataset_size,tset_split)
-val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,val_dataset_size,tset_split) 
+train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_rr/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,tot_dataset_size,tset_split)
+val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_rr/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,val_dataset_size,tset_split) 
 test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test_waveforms' % bilby_results_label
 pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test' % bilby_results_label
 
@@ -401,7 +401,7 @@ if __name__ == "__main__":
     # Save training/test parameters of run if files do not already exist
     params=get_params()
 
-    out_dir = "./params_files_256"
+    out_dir = "./params_files_256_rr"
     
     # Make directory containing params files
     try:

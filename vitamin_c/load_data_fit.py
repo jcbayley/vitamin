@@ -153,6 +153,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 if self.test_set:
                     data['x_data'].append(h5py_file['x_data'])
                     data['y_data_noisefree'].append([h5py_file['y_data_noisefree']])
+                    data['y_data_noisy'].append([h5py_file['y_data_noisy']])
                     data['rand_pars'] = h5py_file['rand_pars']
                     data['snrs'].append(h5py_file['snrs'])
                 else:
@@ -170,10 +171,17 @@ class DataLoader(tf.keras.utils.Sequence):
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
         # concatenate, then transpose the dimensions for keras, from (num_templates, num_dets, num_samples) to (num_templates, num_samples, num_dets)
         data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+        if self.test_set:
+            data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
         data['snrs'] = np.concatenate(np.array(data['snrs']), axis=0)
 
         # convert the parameters from right ascencsion to hour angle
         data['x_data'] = convert_ra_to_hour_angle(data['x_data'], self.params, self.params['rand_pars'])
+
+        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
+        psi_idx = np.where(data["rand_pars"] == "psi")[0]
+        phi_idx = np.where(data["rand_pars"] == "phi")[0]
+        data['x_data'][:,psi_idx], data['x_data'][:,phi_idx] = psiphi_to_psiX(data['x_data'][:,psi_idx],data['x_data'][:,phi_idx])
 
         decoded_rand_pars, par_idx = self.get_infer_pars(data)
 
@@ -183,10 +191,14 @@ class DataLoader(tf.keras.utils.Sequence):
 
             # Ensure that psi is between 0 and pi
             if par_min == 'psi_min':
-                data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
-
-            # normalize each parameter by its bounds
-            data['x_data'][:,i] = (data['x_data'][:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
+                data['x_data'][:,i] = data['x_data'][:,i]/(np.pi/2.0)
+                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+            elif par_min=='phase_min':
+                data['x_data'][:,i] = data['x_data'][:,i]/np.pi
+            else:
+                data['x_data'][:,i]=(data['x_data'][:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
+                # normalize each parameter by its bounds
+                #data['x_data'][:,i] = (data['x_data'][:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
 
         if not self.silent:
             print('...... {} will be inferred'.format(infparlist))
@@ -197,19 +209,22 @@ class DataLoader(tf.keras.utils.Sequence):
         data["y_data_noisy"] = tf.cast(data['y_data_noisy'],dtype=tf.float32)
 
         # randomise phase, time and distance
-        
-        data["x_data"], time_correction = self.randomise_time(data["x_data"])
-        data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
-        data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
-        
-        # apply phase, time and distance corrections
-        y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
-        data["y_data_noisefree"] = tf.transpose(tf.signal.irfft(y_temp_fft),[0,2,1])*distance_correction
-        del y_temp_fft
-        
-        # add noise to the noisefree waveforms and normalise and normalise
         y_normscale = tf.cast(self.params['y_normscale'], dtype=tf.float32)
-        data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
+        if not self.test_set:
+            data["x_data"], time_correction = self.randomise_time(data["x_data"])
+            data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+            data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        
+            # apply phase, time and distance corrections
+            y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
+            data["y_data_noisefree"] = tf.transpose(tf.signal.irfft(y_temp_fft),[0,2,1])*distance_correction
+            del y_temp_fft
+        
+            # add noise to the noisefree waveforms and normalise and normalise
+
+            data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
+        else:
+            data["y_data_noisy"] = data["y_data_noisy"]/y_normscale 
         
         return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
 
@@ -275,9 +290,27 @@ class DataLoader(tf.keras.utils.Sequence):
 
         return x, dist_scale
 
-
-
-
+def psiphi_to_psiX(psi,phi):
+    """
+    Rescales the psi,phi parameters to a different space
+    Input and Output in radians
+    """
+    X = np.remainder(psi+phi,np.pi)
+    psi = np.remainder(psi,np.pi/2.0)
+    return psi,X
+    
+def psiX_to_psiphi(psi,X):
+    """     
+    Rescales the psi,X parameters back to psi, phi
+    Input and Output innormalised units [0,1]
+    """
+    r = np.random.randint(0,2,size=(psi.shape[0],2))
+    psi *= np.pi/2.0   # convert to radians                                                                                                                             
+    X *= np.pi         # convert to radians                                                                                                                             
+    phi = np.remainder(X-psi + np.pi*r[:,0] + r[:,1]*np.pi/2.0,2.0*np.pi).flatten()
+    psi = np.remainder(psi + np.pi*r[:,1]/2.0, np.pi).flatten()
+    return psi/np.pi,phi/(np.pi*2.0)  # convert back to normalised [0,1] 
+    
 
 
 
