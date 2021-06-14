@@ -578,7 +578,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     #tf.keras.mixed_precision.set_global_policy('float32')
     #optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
-    optimizer = tf.keras.optimizers.Adam(1e-4, decay = 3e-11)
+    optimizer = tf.keras.optimizers.Adam(1e-4)
     #optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
     # Keras hyperparameter optimization
     if hyper_par_tune:

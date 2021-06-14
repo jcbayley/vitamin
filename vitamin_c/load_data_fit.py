@@ -179,8 +179,12 @@ class DataLoader(tf.keras.utils.Sequence):
         data['x_data'] = convert_ra_to_hour_angle(data['x_data'], self.params, self.params['rand_pars'])
 
         # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
-        psi_idx = np.where(data["rand_pars"] == "psi")[0]
-        phi_idx = np.where(data["rand_pars"] == "phi")[0]
+        for i,k in enumerate(data['rand_pars']):
+            if k.decode('utf-8')=='psi':
+                psi_idx = i
+            if k.decode('utf-8')=='phase':
+                phi_idx = i
+
         data['x_data'][:,psi_idx], data['x_data'][:,phi_idx] = psiphi_to_psiX(data['x_data'][:,psi_idx],data['x_data'][:,phi_idx])
 
         decoded_rand_pars, par_idx = self.get_infer_pars(data)

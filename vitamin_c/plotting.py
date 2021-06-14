@@ -23,7 +23,7 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, FixedLocator
                                AutoMinorLocator)
 import matplotlib.ticker as ticker
 from lal import GreenwichMeanSiderealTime
-from load_data import load_samples, convert_hour_angle_to_ra
+from load_data_fit import load_samples, convert_hour_angle_to_ra
 
 def prune_samples(chain_file_loc,params):
     """ Function to remove bad likelihood emcee chains 
