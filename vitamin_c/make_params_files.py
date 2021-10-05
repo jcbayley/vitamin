@@ -39,47 +39,16 @@ fixed_vals = {'mass_1':50.0,
         'phi_jl':0.0,
         '__definition__phi_jl': 'phi_jl fixed value'}                                                
 
-# Prior bounds on source parameters, changed to match bilby default
-bounds = {'mass_1_min':5.0, 'mass_1_max':100.0,
-        '__definition__mass_1': 'mass 1 range',
-        'mass_2_min':5.0, 'mass_2_max':100.0,
-        '__definition__mass_2': 'mass 2 range',
-        'M_min':70.0, 'M_max':160.0,
-        '__definition__M': 'total mass range',
-        'geocent_time_min':0.15,'geocent_time_max':0.35,
-        '__definition__geocent_time': 'time of coalescence range',
-        'phase_min':0.0, 'phase_max':2.0*np.pi,
-        '__definition__phase': 'phase range',
-        'ra_min':0.0, 'ra_max':2.0*np.pi,
-        '__definition__ra': 'right ascension range',
-        'dec_min':-0.5*np.pi, 'dec_max':0.5*np.pi,
-        '__definition__dec': 'declination range',
-        'psi_min':0.0, 'psi_max':np.pi,
-        '__definition__psi': 'psi range',
-        'theta_jn_min':0.0, 'theta_jn_max':np.pi,
-        '__definition__theta_jn': 'inclination angle range',
-        'a_1_min':0.0, 'a_1_max':0.8,
-        '__definition__a_1': 'a1 range',
-        'a_2_min':0.0, 'a_2_max':0.8,
-        '__definition__a_2': 'a2 range',
-        'tilt_1_min':0.0, 'tilt_1_max':np.pi,
-        '__definition__tilt1': 'tilt1 range',
-        'tilt_2_min':0.0, 'tilt_2_max':np.pi,
-        '__definition__tilt2': 'tilt2 range',
-        'phi_12_min':0.0, 'phi_12_max':2.0*np.pi,
-        '__definition__phi12': 'phi12 range',
-        'phi_jl_min':0.0, 'phi_jl_max':2.0*np.pi,
-        '__definition_phijl': 'phijl range',
-        'luminosity_distance_min':100.0, 'luminosity_distance_max':5000.0,
-        '__definition__luminosity_distance': 'luminosity distance range'}
 
 # arbitrary value for normalization of timeseries (Don't change this)
-y_normscale = 32#16.638832624721797
+y_normscale = 16#16.638832624721797
 
 ##########################
 # Main tunable variables
 ##########################
-ndata = 256
+sampling_rate = 1024
+duration = 1
+ndata = int(sampling_rate*duration)
 det=['H1','L1']                                                            
 #psd_files=['cuda_11_env/lib/python3.6/site-packages/bilby/gw/detector/noise_curves/aLIGO_O4_high_asd.txt'] 
 psd_files=["/home/joseph.bayley/projects/o4_online_pe_mdc/data/asd_files/aLIGO_O4_high_asd.txt"]
@@ -131,17 +100,17 @@ n_weights_q = [n_fc,n_fc,n_fc]
 #############################
 # optional tunable variables
 #############################
-run_label = 'vitamin_fit_c_run4_{}_gauss_vonmises_tanhdata'.format(ndata)#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
-gpu_num = 7
+run_label = 'vitamin_c_run4_{}Hz_{}s'.format(sampling_rate, duration)#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
+gpu_num = 1
 
 # 1024 Hz label
 #bilby_results_label = 'weichangfeng_theta_jn_issue'                                             
 # 256 Hz label
-bilby_results_label = '{}Hz_full_15par_{}det_rr'.format(ndata,len(det))
+bilby_results_label = '{}Hz_{}s_full_15par_{}det_fullparam'.format(sampling_rate,duration, len(det))
 
 r = 10 # 251                                                         
 pe_test_num = 10                                                               
-tot_dataset_size = int(1e6)    
+tot_dataset_size = int(1e7)    
 
 tset_split = int(1e3)                                                           
 save_interval = int(1000)
@@ -153,7 +122,7 @@ samplers=['vitamin','dynesty']
 val_dataset_size = int(1e3)
 
 # Directory variables
-plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/%s' % run_label  
+plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/BBH_{}Hz_{}s_fullparam/{}'.format(sampling_rate, duration, run_label)  
 
 # Training/testing for 1024 Hz full par case
 #train_set_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/training_sets_3det_15par_1024Hz/tset_tot-10000000_split-1000_O4PSDH1L1_AdvVirgoPSD'
@@ -164,10 +133,49 @@ plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/%s' % run_label
 numdet = len(det)
 
 # default training/testing directories
-train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_rr/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,tot_dataset_size,tset_split)
-val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_rr/tset_tot-%d_split-%d' % (numdet,len(rand_pars),ndata,val_dataset_size,tset_split) 
+train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
 test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test_waveforms' % bilby_results_label
 pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test' % bilby_results_label
+
+
+# Prior bounds on source parameters, changed to match bilby default
+bounds = {'mass_1_min':10.0, 'mass_1_max':100.0,
+        '__definition__mass_1': 'mass 1 range',
+        'mass_2_min':10.0, 'mass_2_max':100.0,
+        '__definition__mass_2': 'mass 2 range',
+        'M_min':70.0, 'M_max':160.0,
+        '__definition__M': 'total mass range',
+        'geocent_time_min':duration - 0.35,'geocent_time_max':duration - 0.15,
+        '__definition__geocent_time': 'time of coalescence range',
+        'phase_min':0.0, 'phase_max':2.0*np.pi,
+        '__definition__phase': 'phase range',
+        'ra_min':0.0, 'ra_max':2.0*np.pi,
+        '__definition__ra': 'right ascension range',
+        'dec_min':-0.5*np.pi, 'dec_max':0.5*np.pi,
+        '__definition__dec': 'declination range',
+        'psi_min':0.0, 'psi_max':np.pi,
+        '__definition__psi': 'psi range',
+        'theta_jn_min':0.0, 'theta_jn_max':np.pi,
+        '__definition__theta_jn': 'inclination angle range',
+        'a_1_min':0.0, 'a_1_max':0.99,
+        '__definition__a_1': 'a1 range',
+        'a_2_min':0.0, 'a_2_max':0.99,
+        '__definition__a_2': 'a2 range',
+        'tilt_1_min':0.0, 'tilt_1_max':np.pi,
+        '__definition__tilt1': 'tilt1 range',
+        'tilt_2_min':0.0, 'tilt_2_max':np.pi,
+        '__definition__tilt2': 'tilt2 range',
+        'phi_12_min':0.0, 'phi_12_max':2.0*np.pi,
+        '__definition__phi12': 'phi12 range',
+        'phi_jl_min':0.0, 'phi_jl_max':2.0*np.pi,
+        '__definition_phijl': 'phijl range',
+        'luminosity_distance_min':100.0, 'luminosity_distance_max':5000.0,
+        '__definition__luminosity_distance': 'luminosity distance range'}
+
+
+
+
 
 #############################
 # optional tunable variables
@@ -240,7 +248,9 @@ def get_params():
         gpu_num=gpu_num,                                                              
         __definition__gpu_num='gpu number run is running on',
         ndata = ndata,                                                          
-        __definition__ndata='sampling frequency',
+        __definition__ndata='number of data points (number of data points, = to sampling frequency if 1s duration)',
+        sample_rate = sample_rate,                                                          
+        __definition__sample_rate='sampling frequency (number of data points, = to sampling frequency if 1s duration)',
         run_label=run_label,                                                    
         __definition__run_label='label of run',
         bilby_results_label=bilby_results_label,                                
@@ -329,7 +339,7 @@ def get_params():
         __definition__n_weights_r2='number fully-connected neurons in layers of encoders and decoders in the r2 model',                                         
         n_weights_q = n_weights_q,                                           
         __definition__n_weights_q='number fully-connected neurons in layers of encoders and decoders in the q model',
-        duration = 1.0,                                                         
+        duration = duration,                                                         
         __definition__duration='length of training/validation/test sample time series in seconds',
         r = r,     
         __definition__r='number of GW timeseries to use for testing.',                                                             
@@ -401,7 +411,7 @@ if __name__ == "__main__":
     # Save training/test parameters of run if files do not already exist
     params=get_params()
 
-    out_dir = "./params_files_256_rr"
+    out_dir = "./params_files_{}_{}s_widespin".format(params["ndata"], params["duration"])
     
     # Make directory containing params files
     try:

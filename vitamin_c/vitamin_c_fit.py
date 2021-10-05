@@ -116,23 +116,29 @@ def plot_gauss_von(train_loss, epoch, run='testing'):
     plt.close(fig)
 
 
-def plot_losses_zoom(train_loss, val_loss, epoch, ind_start, run='testing'):
+def plot_losses_zoom(train_loss, val_loss, epoch, ind_start, run='testing',label="TOTAL"):
     """
     plots the losses
     """
     plt.figure()
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,0],'b',label='RECON')
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,1],'r',label='KL')
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,2],'g',label='TOTAL')
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,0],'--b',alpha=0.5)
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,1],'--r',alpha=0.5)
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,2],'--g',alpha=0.5)
+    if label == "TOTAL":
+        ind = 2
+    elif label == "RECON":
+        ind = 0
+    elif label == "KL":
+        ind = 1
+    #plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,0],'b',label='RECON')
+    #plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,1],'r',label='KL')
+    plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,ind],'g',label="{}".format(label))
+    #plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,0],'--b',alpha=0.5)
+    #plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,1],'--r',alpha=0.5)
+    plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,ind],'--g',alpha=0.5)
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend()
     plt.grid()
     #plt.ylim([np.min(1.1*train_loss[int(0.1*epoch):epoch,:]),np.max(1.1*train_loss[int(0.1*epoch):epoch,:])])
-    plt.savefig('%s/loss_zoom.png' % (run))
+    plt.savefig('{}/loss_zoom_{}.png'.format(run,label))
     plt.close()
 
 
@@ -163,7 +169,7 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.close()
 
 
-def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=None, params = None, masks= None, bounds = None):
+def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=None, params = None, masks= None, bounds = None, scale_other_samples = True):
     """
     plots the posteriors
     """
@@ -218,14 +224,26 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
                 inf_par = params['inf_pars'][inf_idx]
                 bilby_par = params['bilby_pars'][bilby_idx]
                 true_XS[:,cnt] = (samples[:,inf_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par+'_min']
-                true_post[:,cnt] = (other_samples[:,bilby_idx] * (bounds[bilby_par+'_max'] - bounds[bilby_par+'_min'])) + bounds[bilby_par + '_min']
+                if scale_other_samples:
+                    true_post[:,cnt] = (other_samples[:,bilby_idx] * (bounds[bilby_par+'_max'] - bounds[bilby_par+'_min'])) + bounds[bilby_par + '_min']
+                else:
+                    true_post[:,cnt] = other_samples[:,bilby_idx]
                 #if inf_par == "geocent_time":
                 #    true_XS[:,inf_idx] += params["ref_geocent_time"]
 
                 if x_truth is not None:
-                    true_x[cnt] = (x_truth[inf_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
+                    if scale_other_samples:
+                        true_x[cnt] = (x_truth[inf_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
+                    else:
+                        true_x[cnt] = x_truth[inf_idx]
                 else:
                     true_x = None
+
+                if inf_par == "geocent_time":
+                    if true_x[cnt] > 10:
+                        true_x[cnt] -= params["ref_geocent_time"]
+                        true_post[:,cnt] -= params["ref_geocent_time"]
+
                 ol_pars.append(inf_par)
                 cnt += 1
             parnames = []
@@ -285,7 +303,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
 
         corner.corner(true_XS,**defaults_kwargs,
                            color='tab:red',
-                           fill_contours=True, truths=true_x,
+                           fill_contours=False, truths=true_x,
                            show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
             print('Saved output to %s/comp_posterior_%s_event_%d.png' % (run,epoch,idx))
@@ -313,6 +331,8 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
                 full_true_x = None
         new_samples = convert_hour_angle_to_ra(new_samples,params,params['inf_pars'])
         if full_true_x is not None:
+            print(np.shape(full_true_x))
+            print(samples.shape)
             full_true_x = convert_hour_angle_to_ra(np.reshape(full_true_x,[1,samples.shape[1]]),params,params['inf_pars']).flatten()       
 
         figure = corner.corner(new_samples,**defaults_kwargs,labels=parnames,
@@ -399,8 +419,12 @@ def get_params(params, bounds, fixed_vals, params_dir = "./params_files", print_
     masks["dec_mask"], masks["dec_idx_mask"], masks["dec_len"] = get_param_index(params['inf_pars'],['dec'])
     masks["m1_mask"], masks["m1_idx_mask"], masks["m1_len"] = get_param_index(params['inf_pars'],['mass_1'])
     masks["m2_mask"], masks["m2_idx_mask"], masks["m2_len"] = get_param_index(params['inf_pars'],['mass_2'])
+    #masks["q_mask"], masks["q_idx_mask"], masks["q_len"] = get_param_index(params['inf_pars'],['mass_ratio'])
+    #masks["M_mask"], masks["M_idx_mask"], masks["M_len"] = get_param_index(params['inf_pars'],['chirp_mass'])
+
     #idx_mask = np.argsort(gauss_idx_mask + vonmise_idx_mask + m1_idx_mask + m2_idx_mask + sky_idx_mask) # + dist_idx_mask)                                                  
-    masks["idx_mask"] = np.argsort(masks["m1_idx_mask"] + masks["m2_idx_mask"] + masks["gauss_idx_mask"] + masks["vonmise_idx_mask"]) # + sky_idx_mask)                      
+    masks["idx_mask"] = np.argsort(masks["m1_idx_mask"] + masks["m2_idx_mask"] + masks["gauss_idx_mask"] + masks["vonmise_idx_mask"]) # + sky_idx_mask)                 
+    #masks["idx_mask"] = np.argsort(masks["q_idx_mask"] + masks["M_idx_mask"] + masks["gauss_idx_mask"] + masks["vonmise_idx_mask"]) # + sky_idx_mask)                      
     masks["dist_mask"], masks["dist_idx_mask"], masks["dis_len"] = get_param_index(params['inf_pars'],['luminosity_distance'])
     masks["not_dist_mask"], masks["not_dist_idx_mask"], masks["not_dist_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2','psi','phase','geocent_time','theta_jn','ra','dec','a_1','a_2','tilt_1','tilt_2','phi_12','phi_jl'])
 
@@ -413,14 +437,14 @@ def get_params(params, bounds, fixed_vals, params_dir = "./params_files", print_
     masks["xyz_mask"], masks["xyz_idx_mask"], masks["xyz_len"] = get_param_index(params['inf_pars'],['luminosity_distance','ra','dec'])
     masks["not_xyz_mask"], masks["not_xyz_idx_mask"], masks["not_xyz_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2','psi','phase','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2','phi_12','phi_jl'])
 
-    masks["periodic_mask"], masks["periodic_idx_mask"], masks["periodic_len"] = get_param_index(params['inf_pars'],['ra','phase','psi','phi_12','phi_jl'])
-    masks["nonperiodic_mask"], masks["nonperiodic_idx_mask"], masks["nonperiodic_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','dec','a_1','a_2','tilt_1','tilt_2'])
+    masks["periodic_mask"], masks["periodic_idx_mask"], masks["periodic_len"] = get_param_index(params['inf_pars'],['phase','psi','phi_12','phi_jl'])
+    masks["nonperiodic_mask"], masks["nonperiodic_idx_mask"], masks["nonperiodic_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2'])
 
     masks["idx_xyz_mask"] = np.argsort(masks["xyz_idx_mask"] + masks["not_xyz_idx_mask"])
     masks["idx_dist_mask"] = np.argsort(masks["not_dist_idx_mask"] + masks["dist_idx_mask"])
     masks["idx_phase_mask"] = np.argsort(masks["not_phase_idx_mask"] + masks["phase_idx_mask"])
     masks["idx_geocent_mask"] = np.argsort(masks["not_geocent_idx_mask"] + masks["geocent_idx_mask"])
-    masks["idx_periodic_mask"] = np.argsort(masks["nonperiodic_idx_mask"] + masks["periodic_idx_mask"])
+    masks["idx_periodic_mask"] = np.argsort(masks["nonperiodic_idx_mask"] + masks["periodic_idx_mask"] + masks["ra_idx_mask"] + masks["dec_idx_mask"])
     if print_masks:
         print(masks["xyz_mask"])
         print(masks["not_xyz_mask"])
@@ -513,8 +537,14 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     # Include the epoch in the file name (uses `str.format`)
     checkpoint_path = os.path.join(plot_dir,"checkpoint","model.ckpt")
     checkpoint_dir = os.path.dirname(checkpoint_path)
-    if not os.path.isdir(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+    comp_post_dir = os.path.join(plot_dir, "comp_posterior")
+    full_post_dir = os.path.join(plot_dir, "full_posterior")
+    post_samp_dir = os.path.join(plot_dir, "posterior_samples")
+    latent_dir = os.path.join(plot_dir, "latent_plot")
+    dirs = [checkpoint_dir, comp_post_dir, full_post_dir, post_samp_dir, latent_dir]
+    for direc in dirs:
+        if not os.path.isdir(direc):
+            os.makedirs(direc)
 
     make_paper_plots = params['make_paper_plots']
     hyper_par_tune = False
@@ -529,7 +559,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40) 
         validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
-    test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, test_set = True)
+    test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = test_size, test_set = True)
 
     print("Loading intitial data...")
     train_dataset.load_next_chunk()
@@ -547,15 +577,13 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 
     if params['resume_training']:
-        model = CVAE(x_data_train.shape[1], params['ndata'],
-                     y_data_train.shape[2], params['z_dimension'], params['n_modes'], params, bounds = bounds, masks = masks)
+        model = CVAE(params, bounds, masks)
         # Load the previously saved weights
         latest = tf.train.latest_checkpoint(checkpoint_dir)
         model.load_weights(latest)
         print('... loading in previous model %s' % checkpoint_path)
     else:
-        model = CVAE(test_dataset.X.shape[1], params['ndata'],
-                     test_dataset.Y_noisefree.shape[2], params['z_dimension'], params['n_modes'], params, bounds, masks)
+        model = CVAE(params, bounds, masks)
 
 
     # Make publication plots
@@ -597,11 +625,14 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # compile and build the model (hardcoded values will change soon)
     model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
-    model.build((None, 256,2))
-    model.summary()
+    #model.build((None, 1024,2))
+    with open(os.path.join(path, "model_summary.txt"),"w") as f:
+        model.encoder_r1.summary(print_fn=lambda x: f.write(x + '\n'))
+        model.encoder_q.summary(print_fn=lambda x: f.write(x + '\n'))
+        model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
 
 
-    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir), TestCallback(test_dataset,plot_dir,bilby_samples), TimeCallback()]
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples), TimeCallback(save_dir=plot_dir, save_interval = 100)]
     model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
 
     # not happy with this re-wrapping of the dataset

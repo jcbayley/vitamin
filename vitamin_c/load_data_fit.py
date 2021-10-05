@@ -34,6 +34,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.chunk_size = self.batch_size*chunk_batch
         self.chunk_iter = 0
         self.max_chunk_num = int(np.floor((self.num_data/self.chunk_size)))
+        #self.max_chunk_num = 50
         
         self.num_epoch_load = 4
         self.epoch_iter = 0
@@ -71,6 +72,8 @@ class DataLoader(tf.keras.utils.Sequence):
             
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
+            self.chunk_size = len(self.X)
+            self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
             end_load = time.time()
             print("load_time chunk {}: {}".format(self.chunk_iter, end_load - start_load))
 
@@ -164,7 +167,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 if not self.silent:
                     print('...... Loaded file ' + os.path.join(self.input_dir,filename))
             except OSError:
-                print('Could not load requested file')
+                print('Could not load requested file: {}'.format(filename))
                 continue
 
         # concatentation all the x data (parameters) from each of the files
@@ -174,6 +177,30 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
         data['snrs'] = np.concatenate(np.array(data['snrs']), axis=0)
+        
+        """
+        # temporary code to set a mass range
+        for i,k in enumerate(data['rand_pars']):
+            if k.decode('utf-8')=='mass_1':
+                m1_idx = i
+            if k.decode('utf-8')=='mass_2':
+                m2_idx = i
+        
+        low_m = 2
+        high_m = 102
+
+        mass_inrange = (data["x_data"][:,m1_idx] > low_m)&(data["x_data"][:,m1_idx] < high_m)&(data["x_data"][:,m2_idx] < high_m)&(data["x_data"][:,m1_idx] > low_m)
+        """
+        
+        data["x_data"] = data["x_data"]#[mass_inrange]
+        data["y_data_noisefree"] = data["y_data_noisefree"]#[mass_inrange]
+        if self.test_set:
+            data["y_data_noisy"] = data["y_data_noisy"]#[mass_inrange]
+        try:
+            data["snrs"] = data["snrs"]#[mass_inrange]
+        except:
+            pass
+
 
         # convert the parameters from right ascencsion to hour angle
         data['x_data'] = convert_ra_to_hour_angle(data['x_data'], self.params, self.params['rand_pars'])
@@ -229,7 +256,7 @@ class DataLoader(tf.keras.utils.Sequence):
             data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
         else:
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale 
-        
+
         return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
 
 
@@ -490,7 +517,7 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
     """
     if type("%s" % params['pe_dir']) is str:
         # load generated samples back in
-        dataLocations = '%s_%s' % (params['pe_dir'],sampler+'1')
+        dataLocations = '%s_%s' % (params['pe_dir'],sampler+'2')
         print('... looking in {} for posterior samples'.format(dataLocations))
     else:
         print('ERROR: input samples directory not a string')
@@ -515,7 +542,7 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
                 else:
                     continue
 
-            dataLocations_inner = '%s_%s' % (params['pe_dir'],samp_idx_inner+'1')
+            dataLocations_inner = '%s_%s' % (params['pe_dir'],samp_idx_inner+'2')
             filename_inner = '%s/%s_%d.h5py' % (dataLocations_inner,params['bilby_results_label'],i)
             # If file does not exist, skip to next file
             inner_file_existance = os.path.isfile(filename_inner)                
@@ -524,7 +551,7 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
 
         if inner_file_existance == False:
             i+=1
-            print('File does not exist for one of the samplers')
+            print('File does not exist for one of the samplers: {}'.format(filename))
             continue
         #if not os.path.isfile(filename):
         #    print('... unable to find file {}. Exiting.'.format(filename))

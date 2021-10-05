@@ -18,6 +18,7 @@ import lalsimulation
 import lal
 import time
 import h5py
+import json
 from scipy.ndimage.interpolation import shift
 import argparse
 from gwpy.timeseries import TimeSeries
@@ -137,7 +138,9 @@ def gen_template(duration,
 
     # Fixed arguments passed into the source model 
     waveform_arguments = dict(waveform_approximant='IMRPhenomPv2',
-                              reference_frequency=20., minimum_frequency=20.)
+                              reference_frequency=20., 
+                              minimum_frequency=10.,
+                              maximum_frequency=sampling_frequency/2.0)
 
     # Create the waveform_generator using a LAL BinaryBlackHole source function
     waveform_generator = bilby.gw.WaveformGenerator(
@@ -210,28 +213,157 @@ def gen_template(duration,
     print('... Whitened signals')
     return np.squeeze(np.array(whitened_signal_td_all),axis=1),np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
 
+def load_template(duration,
+                  sampling_frequency,
+                  params,
+                  ref_geocent_time, psd_files=[],
+                  use_real_det_noise=False,
+                  real_noise_seg =[None,None],
+                  data_dir = None
+              ):
+    """ Generates a whitened waveforms in Gaussian noise.
+
+    Parameters
+    ----------
+    duration: float
+        duration of the signal in seconds
+    sampling_frequency: float
+        sampling frequency of the signal
+    pars: dict
+        values of source parameters for the waveform
+    ref_geocent_time: float
+        reference geocenter time of injected signal
+    psd_files: list
+        list of psd files to use for each detector (if other than default is wanted)
+    use_real_det_noise: bool
+        if True, use real ligo noise around ref_geocent_time
+    real_noise_seg: list
+        list containing the starting and ending times of the real noise 
+        segment
+
+    Returns
+    -------
+    whitened noise-free signal: array_like
+    whitened noisy signal: array_like
+    injection_parameters: dict
+        source parameter values of injected signal
+    ifos: dict
+        interferometer properties
+    waveform_generator: bilby function
+        function used by bilby to inject signal into noise 
+    """
+
+    if sampling_frequency>4096:
+        print('EXITING: bilby doesn\'t seem to generate noise above 2048Hz so lower the sampling frequency')
+        exit(0)
+
+    with open(os.path.join(data_dir,"meta.json"), "r") as f:
+        data_info = json.load(f)
+
+    pars = data_info["injection"]
+
+    # compute the number of time domain samples
+    Nt = int(sampling_frequency*duration)
+
+    trigger_time = 1325030418.015282
+    end_time = trigger_time + 0.17
+    start_time = end_time - duration
+
+
+    # define the start time of the timeseries
+    #start_time = ref_geocent_time-duration/2.0
+    end_time = start_time + duration
+
+    # fix parameters here
+    injection_parameters = dict(
+        mass_1=pars['mass_1'],mass_2=pars['mass_2'], a_1=pars['a_1'], a_2=pars['a_2'], tilt_1=pars['tilt_1'], tilt_2=pars['tilt_2'],
+        phi_12=pars['phi_12'], phi_jl=pars['phi_jl'], luminosity_distance=pars['luminosity_distance'], theta_jn=pars['theta_jn'], psi=pars['psi'],
+        phase=pars['phase'], geocent_time=pars['geocent_time'], ra=pars['ra'], dec=pars['dec'])
+
+
+    ifos = bilby.gw.detector.InterferometerList([])
+    for i, det in enumerate(["H1","L1"]):
+
+        ifo = bilby.gw.detector.get_empty_interferometer(det)
+
+        #file_name = "/home/joseph.bayley/data/CBC/O4MDC/o4_online/U1/{}-O4MDC-1325029266-1184.gwf".format(det)
+        file_name = os.path.join(data_dir,"{}-O4MDC-1325029268-1152.gwf".format(det))
+        channel_name = "{}:O4MDC".format(det)
+
+        # load timeseries from start to end time for signal
+        ts = TimeSeries.read(file_name,channel_name, start = start_time, end = end_time)
+        ts_resamp = ts.resample(sampling_frequency)
+
+        ifo.strain_data.set_from_gwpy_timeseries(ts_resamp)
+        # set psd as same from o4
+        ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=psd_files[0])
+
+        ifos.append(ifo)
+
+    # Fixed arguments passed into the source model 
+    waveform_arguments = dict(waveform_approximant='IMRPhenomPv2',
+                              reference_frequency=20., minimum_frequency=20.)
+
+    # Create the waveform_generator using a LAL BinaryBlackHole source function
+    waveform_generator = bilby.gw.WaveformGenerator(
+        duration=duration, sampling_frequency=sampling_frequency,
+        frequency_domain_source_model=bilby.gw.source.lal_binary_black_hole,
+        parameter_conversion=bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters,
+        waveform_arguments=waveform_arguments,
+        start_time=start_time)
+
+    # create waveform
+    wfg = waveform_generator
+
+    # extract waveform from bilby
+    wfg.parameters = injection_parameters
+    freq_signal = wfg.frequency_domain_strain()
+    time_signal = wfg.time_domain_strain()
+
+    # Set up interferometers. These default to their design
+    # sensitivity
+
+    whitened_h_td_all = [] 
+    # iterate over ifos
+    for i in range(len(params['det'])):
+
+        # get frequency domain signal + noise at detector
+        h_fd = ifos[i].strain_data.frequency_domain_strain
+
+        # whiten noisy frequency domain signal
+        whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
+    
+        # inverse FFT noisy signal back to time domain and normalise
+        whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
+        
+        whitened_h_td_all.append([whitened_h_td])
+
+    print('... Whitened signals')
+    return np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
+
 def run(sampling_frequency=256.0,
-           duration=1.,
-           N_gen=1000,
-           bounds=None,
-           fixed_vals=None,
-           rand_pars=[None],
-           inf_pars=[None],
-           ref_geocent_time=1126259642.5,
-           training=True,
-           do_pe=False,
-           label='test_results',
-           out_dir='bilby_output',
-           seed=None,
-           samplers=['vitamin','dynesty'],
-           condor_run=False,
-           params=None,
-           det=['H1','L1','V1'],
-           psd_files=[],
-           use_real_det_noise=False,
-           use_real_events=False,
-           samp_idx=False,
-           ):
+        duration=1.,
+        N_gen=1000,
+        bounds=None,
+        fixed_vals=None,
+        rand_pars=[None],
+        inf_pars=[None],
+        ref_geocent_time=1126259642.5,
+        training=True,
+        do_pe=False,
+        label='test_results',
+        out_dir='bilby_output',
+        seed=None,
+        samplers=['vitamin','dynesty'],
+        condor_run=False,
+        params=None,
+        det=['H1','L1','V1'],
+        psd_files=[],
+        use_real_det_noise=False,
+        use_real_events=False,
+        samp_idx=False,
+        real_test_data = None
+    ):
     """ Main function to generate both training sample time series 
     and test sample time series/posteriors.
 
@@ -281,8 +413,9 @@ def run(sampling_frequency=256.0,
 
     # Set up a PriorDict, which inherits from dict.
     priors = bilby.gw.prior.BBHPriorDict()
-    priors.pop('chirp_mass')
+    #priors.pop('chirp_mass')
     priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.125, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
+    priors['chirp_mass'] = bilby.gw.prior.Constraint(minimum=25, maximum=100, name='chirp_mass', latex_label='$q$', unit=None)
     if np.any([r=='geocent_time' for r in rand_pars]):
         priors['geocent_time'] = bilby.core.prior.Uniform(
                 minimum=ref_geocent_time + bounds['geocent_time_min'],
@@ -416,11 +549,16 @@ def run(sampling_frequency=256.0,
                     temp.append(qi-ref_geocent_time) if p=='geocent_time' else temp.append(qi)      
 
         # inject signal - shift geocent time to correct reference
-        test_samples_noisefree,test_samples_noisy,injection_parameters,ifos,waveform_generator = gen_template(duration,sampling_frequency,
-                                   pars,ref_geocent_time,psd_files)
+        if real_test_data is None:
+            test_samples_noisefree,test_samples_noisy,injection_parameters,ifos,waveform_generator = gen_template(duration,sampling_frequency,
+                                                                                                                  pars,ref_geocent_time,psd_files)
+            # get test sample snr
+            snr = np.array([ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))])
 
-        # get test sample snr
-        snr = np.array([ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))])
+        else:
+            test_samples_noisy,injection_parameters,ifos,waveform_generator = load_template(duration,sampling_frequency,
+                                                                                            pars,ref_geocent_time,psd_files, data_dir = real_test_data)
+            snr = 0
 
         # if not doing PE then return signal data
         if not do_pe:
@@ -464,6 +602,7 @@ def run(sampling_frequency=256.0,
             hf.close()
 
         # look for dynesty sampler option
+        print("samplers......", samplers)
         if np.any([r=='dynesty1' for r in samplers]) or np.any([r=='dynesty2' for r in samplers]) or np.any([r=='dynesty' for r in samplers]):
 
             run_startt = time.time()
@@ -500,7 +639,7 @@ def run(sampling_frequency=256.0,
                 pickle_files=glob.glob("%s_dynesty1/*.pickle*" % (out_dir))
                 resume_files=glob.glob("%s_dynesty1/*.resume*" % (out_dir))
                 pkl_files=glob.glob("%s_dynesty1/*.pkl*" % (out_dir))
-                filelist = [png_files,hdf5_files,pickle_files,resume_files,pkl_files]
+                filelist = [png_files,pickle_files,resume_files,pkl_files]
                 for file_type in filelist:
                     for file in file_type:
                         os.remove(file)
