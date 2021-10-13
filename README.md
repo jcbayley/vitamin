@@ -20,12 +20,13 @@ Note: This repository is a work in progress. No official release of code just ye
 
 ## Requirements
 
-VItamin requires python3.6. You may use python3.6 by initializing a virtual environment.
+VItamin requires python3.7. You may use python3.7 by initializing a virtual environment.
 
 ```
-virtualenv -p python3.6 myenv
-source myenv/bin/activate
-pip install --upgrade pip
+conda create -n vitc_keras python=3.7
+conda activate vitc_keras
+conda install pip
+pip install -r requirements.txt
 ```
 
 Optionally, install `basemap` and `geos` in order to produce sky plots of results.
@@ -34,9 +35,9 @@ For installing basemap:
 - Install geos-3.3.3 from source
 - Once geos is installed, install basemap using `pip install git+https://github.com/matplotlib/basemap.git`
 
-Install VItamin using pip:
+Install VItamin using pip (not currently working):
 ```
-pip install vitamin-b
+pip install vitamin-c
 ```
 
 ## Training

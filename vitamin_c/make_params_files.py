@@ -249,7 +249,7 @@ def get_params():
         __definition__gpu_num='gpu number run is running on',
         ndata = ndata,                                                          
         __definition__ndata='number of data points (number of data points, = to sampling frequency if 1s duration)',
-        sample_rate = sample_rate,                                                          
+        sample_rate = sampling_rate,                                                          
         __definition__sample_rate='sampling frequency (number of data points, = to sampling frequency if 1s duration)',
         run_label=run_label,                                                    
         __definition__run_label='label of run',
