@@ -242,12 +242,13 @@ class DataLoader(tf.keras.utils.Sequence):
         # randomise phase, time and distance
         y_normscale = tf.cast(self.params['y_normscale'], dtype=tf.float32)
         if not self.test_set:
-            data["x_data"], time_correction = self.randomise_time(data["x_data"])
+            #data["x_data"], time_correction = self.randomise_time(data["x_data"])
             data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
             data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         
             # apply phase, time and distance corrections
-            y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
+            #y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
+            y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction
             data["y_data_noisefree"] = tf.transpose(tf.signal.irfft(y_temp_fft),[0,2,1])*distance_correction
             del y_temp_fft
         
@@ -551,6 +552,8 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
 
         if inner_file_existance == False:
             i+=1
+            if i > 5000:
+                sys.exit()
             print('File does not exist for one of the samplers: {}'.format(filename))
             continue
         #if not os.path.isfile(filename):

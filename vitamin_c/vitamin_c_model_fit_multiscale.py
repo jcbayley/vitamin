@@ -50,42 +50,62 @@ class CVAE(tf.keras.Model):
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
         #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
         
-        
-        #conv = tf.keras.layers.Conv1D(filters=128, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
-        conv = tf.keras.layers.Conv1D(filters=128, kernel_size=32, strides=1, activation=self.act)(all_input_y)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
-        
-        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        # scale 1
 
-        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        conv = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
+        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
         #conv = tf.keras.layers.BatchNormalization()(conv)
         
-        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
         #conv = tf.keras.layers.BatchNormalization()(conv)
+
+        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+
+        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+
+        # scale 2
+
+        conv2 = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act, dilation_rate = 8)(all_input_y)
+        conv2 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv2)
+        #conv2 = tf.keras.layers.BatchNormalization()(conv2)
         
-        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv2 = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv2)
+        conv2 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv2)
+        #conv2 = tf.keras.layers.BatchNormalization()(conv2)
 
+        conv2 = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv2)
+        conv2 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv2)
+        #conv2 = tf.keras.layers.BatchNormalization()(conv2)
 
-        #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        # 3rd scale
+
+        conv3 = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act, dilation_rate = 32)(all_input_y)
+        conv3 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv3)
+        #conv3 = tf.keras.layers.BatchNormalization()(conv3)
+        
+        #conv3 = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv3)
+        #conv3 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv3)
+        #conv3 = tf.keras.layers.BatchNormalization()(conv3)
+
+        conv3 = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv3)
+        conv3 = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv3)
+        #conv3 = tf.keras.layers.BatchNormalization()(conv3)
+
 
         """
         conv = tf.keras.layers.Conv1D(filters=16, kernel_size=1, strides=1, activation=self.act)(conv)
         #conv = tf.keras.layers.BatchNormalization()(conv)
         """
+
         conv = tf.keras.layers.Flatten()(conv)
-        
+        conv2 = tf.keras.layers.Flatten()(conv2)
+        conv3 = tf.keras.layers.Flatten()(conv3)
+        conv = tf.keras.layers.concatenate([conv,conv2, conv3])        
         #conv = tf.keras.layers.Flatten()(all_input_y)
 
         lin_layers = 4096, 2048, 1024
@@ -96,8 +116,7 @@ class CVAE(tf.keras.Model):
         # r1 encoder
         r1 = conv
         for lin_l in lin_layers:
-            #r1 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
-            r1 = tf.keras.layers.Dense(lin_l, activation=self.act)(r1)            
+            r1 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
             r1 = tf.keras.layers.BatchNormalization()(r1)
             #r1 = tf.keras.layers.Dropout(.5)(r1)
 
@@ -110,8 +129,7 @@ class CVAE(tf.keras.Model):
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
         for lin_l in lin_layers:
-            #q = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
-            q = tf.keras.layers.Dense(lin_l, activation=self.act)(q)            
+            q = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
             q = tf.keras.layers.BatchNormalization()(q)
             #q = tf.keras.layers.Dropout(.5)(q)
 
@@ -124,8 +142,7 @@ class CVAE(tf.keras.Model):
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
         for lin_l in lin_layers:
-            #r2 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
-            r2 = tf.keras.layers.Dense(lin_l, activation=self.act)(r2)     
+            r2 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
             r2 = tf.keras.layers.BatchNormalization()(r2)
             #r2 = tf.keras.layers.Dropout(.5)(r2)
 

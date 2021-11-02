@@ -25,6 +25,21 @@ import matplotlib.ticker as ticker
 from lal import GreenwichMeanSiderealTime
 from load_data_fit import load_samples, convert_hour_angle_to_ra
 
+def make_ppplot(samples, truths, savepath, labels):
+
+    results = []
+    for sp in range(len(samples)):
+        res = bilby.result.Result()
+        post = pandas.DataFrame(data = samples[sp], columns = labels)
+        res.posterior = post
+        res.search_parameter_keys = labels
+        res.injection_parameters = {labels[i]:truths[sp][i] for i in range(len(labels))}
+        res.priors = {labels[i]:bilby.prior.Gaussian(0,1, name=labels[i]) for i in range(len(labels))}
+        results.append(res)
+
+    fig, pv = bilby.result.make_pp_plot(results, filename = savepath)
+
+
 def prune_samples(chain_file_loc,params):
     """ Function to remove bad likelihood emcee chains 
    
@@ -385,7 +400,7 @@ class make_plots:
 
         return r
 
-    def plot_pp(self, model, sig_test, par_test, params, bounds, inf_ol_idx, bilby_ol_idx):
+    def plot_pp(self, model, sig_test, par_test, params, bounds, inf_ol_idx, bilby_ol_idx, bilby_samples):
         """ make p-p plots using in-house methods
         
         Parameters
@@ -417,7 +432,8 @@ class make_plots:
             except:
                 pass
             hf = h5py.File('%s/pp_plot_data.h5' % self.params['plot_dir'], 'w')
-
+   
+        self.params["load_plot_data"] = False
         if self.params['load_plot_data'] == False:
             pp = np.zeros(((self.params['r'])+2,len(self.params['bilby_pars']))) 
             for cnt in range(Npp):
@@ -490,6 +506,7 @@ class make_plots:
 
         #confidence_pp = np.zeros((len(self.params['samplers'])-1,int(self.params['r'])+2))
         # make bilby p-p plots
+        """
         samplers = self.params['samplers']
         CB_color_cycle=['blue','green','purple','orange']
 
@@ -499,7 +516,7 @@ class make_plots:
             if self.params['load_plot_data'] == False:
                 # load bilby sampler samples
                 #samples,time = self.load_test_set(model,sig_test,par_test,normscales,bounds,sampler=samplers[i]+'1')
-                samples = load_samples(self.params, samplers[i], pp_plot=True)
+                samples = bilby_samples[:,i,:]#load_samples(self.params, samplers[i], pp_plot=True)
                 true_XS = np.zeros([samples.shape[0],samples.shape[1],len(bilby_ol_idx)])
                 true_x = np.zeros([samples.shape[0],len(bilby_ol_idx)])
                 ol_pars = []; cnt_rm_inf = 0
@@ -540,7 +557,7 @@ class make_plots:
                     axis.plot(np.arange((self.params['r'])+2)/((self.params['r'])+1.0),np.sort(pp_bilby),'-',color=CB_color_cycle[i-1],linewidth=1,alpha=0.5)
 
             confidence_pp[i-1,:] = np.sort(pp_bilby)
-
+        """
         matplotlib.rc('text', usetex=True) 
         # Remove whitespace on x-axis in all plots
         axis.margins(x=0,y=0)

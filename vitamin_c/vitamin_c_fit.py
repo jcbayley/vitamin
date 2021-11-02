@@ -19,9 +19,21 @@ from universal_divergence import estimate
 import natsort
 import plotting
 from tensorflow.keras import regularizers
+model_fit_type = "basic"
+if model_fit_type == "multidet":
+    from vitamin_c_model_fit_multidet import CVAE
+elif model_fit_type == "basic":
+    from vitamin_c_model_fit import CVAE
+elif model_fit_type == "multiscale":
+    from vitamin_c_model_fit_multiscale import CVAE
+elif model_fit_type == "kaggle":
+    from vitamin_c_model_fit_kaggle1 import CVAE
+elif model_fit_type == "resnet":
+    from vitamin_c_model_fit_resnet import CVAE
 
-from vitamin_c_model_fit import CVAE, PlotCallback, TrainCallback, TestCallback, TimeCallback
+from callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
 from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader, psiphi_to_psiX, psiX_to_psiphi
+#from keras_adamw import AdamW
 
 def get_param_index(all_pars,pars,sky_extra=None):
     """ 
@@ -439,6 +451,8 @@ def get_params(params, bounds, fixed_vals, params_dir = "./params_files", print_
 
     masks["periodic_mask"], masks["periodic_idx_mask"], masks["periodic_len"] = get_param_index(params['inf_pars'],['phase','psi','phi_12','phi_jl'])
     masks["nonperiodic_mask"], masks["nonperiodic_idx_mask"], masks["nonperiodic_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2'])
+    masks["nonperiodic_nonm1m2_mask"], masks["nonperiodic_nonm1m2_idx_mask"], masks["nonperiodic_nonm1m2_len"] = get_param_index(params['inf_pars'],['luminosity_distance','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2'])
+    masks["nonperiodic_m1m2_mask"], masks["nonperiodic_m1m2_idx_mask"], masks["nonperiodic_m1m2_len"] = get_param_index(params['inf_pars'],['mass_1','mass_2'])
 
     masks["idx_xyz_mask"] = np.argsort(masks["xyz_idx_mask"] + masks["not_xyz_idx_mask"])
     masks["idx_dist_mask"] = np.argsort(masks["not_dist_idx_mask"] + masks["dist_idx_mask"])
@@ -605,8 +619,10 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     KL_samples = []
 
     #tf.keras.mixed_precision.set_global_policy('float32')
-    #optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
-    optimizer = tf.keras.optimizers.Adam(1e-4)
+    optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
+    #optimizer = tf.keras.optimizers.Adam(1e-4)
+    #optimizer = AdamW(lr=1e-4, model=model,
+    #                  use_cosine_annealing=True, total_iterations=40)
     #optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
     # Keras hyperparameter optimization
     if hyper_par_tune:
@@ -618,7 +634,17 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     # log params used for this run
     path = params['plot_dir']
     shutil.copy('./vitamin_c_fit.py',path)
-    shutil.copy('./vitamin_c_model_fit.py',path)
+    if model_fit_type == "basic":
+        shutil.copy('./vitamin_c_model_fit.py',path)
+    elif model_fit_type == "multidet":
+        shutil.copy('./vitamin_c_model_fit_multidet.py',path)
+    elif model_fit_type == "multiscale":
+        shutil.copy('./vitamin_c_model_fit_multiscale.py',path)
+    elif model_fit_type == "kaggle":
+        shutil.copy('./vitamin_c_model_fit_kaggle1.py',path)
+    elif model_fit_type == "resnet":
+        shutil.copy('./vitamin_c_model_fit_resnet.py',path)
+
     shutil.copy('./load_data_fit.py',path)
     shutil.copy(os.path.join(params_dir,'params.json'),path)
     shutil.copy(os.path.join(params_dir,'bounds.json'),path)

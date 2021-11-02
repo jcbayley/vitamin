@@ -1,10 +1,4 @@
-######################################################################################################################
-
-# -- Variational Inference for Gravitational wave Parameter Estimation --
-
-
-#######################################################################################################################
-
+#!/usr/bin/env python
 import warnings
 warnings.filterwarnings("ignore")
 import os
@@ -1002,6 +996,7 @@ def test(params=params,bounds=bounds,fixed_vals=fixed_vals,use_gpu=False):
         config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True  # Let GPU consumption grow as needed
         session = tf.compat.v1.Session(config=config)
+        print("Using GPU: {}".format(tf.test.is_gpu_available()))
     else:
         print("... Using CPU")
         os.environ["CUDA_VISIBLE_DEVICES"]=''
@@ -1266,7 +1261,7 @@ def test(params=params,bounds=bounds,fixed_vals=fixed_vals,use_gpu=False):
             bilby_pred = samp_posteriors[samp+'1'][i]
 
             # compute weights, otherwise the 1d histograms will be different scales, could remove this
-#            weights = np.ones(len(VI_pred)) * (len(samp_posteriors[samp+'1'][i]) / len(VI_pred))
+            #weights = np.ones(len(VI_pred)) * (len(samp_posteriors[samp+'1'][i]) / len(VI_pred))
             weights = np.ones(len(VI_pred)) / len(VI_pred)
             if samp_idx == 0:
                 figure = corner.corner(bilby_pred,**defaults_kwargs,labels=parnames,

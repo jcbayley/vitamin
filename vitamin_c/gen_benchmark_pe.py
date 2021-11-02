@@ -187,29 +187,35 @@ def gen_template(duration,
     whitened_signal_td_all = []
     whitened_h_td_all = [] 
     # iterate over ifos
+    whiten_data = True
     for i in range(len(pars['det'])):
         # get frequency domain noise-free signal at detector
         signal_fd = ifos[i].get_detector_response(freq_signal, injection_parameters) 
 
-        # whiten frequency domain noise-free signal (and reshape/flatten)
-        whitened_signal_fd = signal_fd/ifos[i].amplitude_spectral_density_array
-        #whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    
-
         # get frequency domain signal + noise at detector
         h_fd = ifos[i].strain_data.frequency_domain_strain
 
-        # inverse FFT noise-free signal back to time domain and normalise
-        whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+        # whitening
+        if whiten_data:
+            # whiten frequency domain noise-free signal (and reshape/flatten)
+            whitened_signal_fd = signal_fd/ifos[i].amplitude_spectral_density_array
+            #whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    
 
-        # whiten noisy frequency domain signal
-        whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
+            # inverse FFT noise-free signal back to time domain and normalise
+            whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+
+            # whiten noisy frequency domain signal
+            whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
     
-        # inverse FFT noisy signal back to time domain and normalise
-        whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
-        
-        whitened_h_td_all.append([whitened_h_td])
-        whitened_signal_td_all.append([whitened_signal_td])
-
+            # inverse FFT noisy signal back to time domain and normalise
+            whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
+            
+            whitened_h_td_all.append([whitened_h_td])
+            whitened_signal_td_all.append([whitened_signal_td])            
+        else:
+            whitened_h_td_all.append([h_fd])
+            whitened_signal_td_all.append([signal_fd])
+            
     print('... Whitened signals')
     return np.squeeze(np.array(whitened_signal_td_all),axis=1),np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
 
@@ -414,7 +420,8 @@ def run(sampling_frequency=256.0,
     # Set up a PriorDict, which inherits from dict.
     priors = bilby.gw.prior.BBHPriorDict()
     #priors.pop('chirp_mass')
-    priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.125, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
+    #priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.125, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
+    priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.5, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
     priors['chirp_mass'] = bilby.gw.prior.Constraint(minimum=25, maximum=100, name='chirp_mass', latex_label='$q$', unit=None)
     if np.any([r=='geocent_time' for r in rand_pars]):
         priors['geocent_time'] = bilby.core.prior.Uniform(

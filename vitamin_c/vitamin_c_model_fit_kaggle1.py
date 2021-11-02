@@ -48,112 +48,84 @@ class CVAE(tf.keras.Model):
 
         # the convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
-        
-        
-        #conv = tf.keras.layers.Conv1D(filters=128, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
-        conv = tf.keras.layers.Conv1D(filters=128, kernel_size=32, strides=1, activation=self.act)(all_input_y)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
-        
-        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        convs = []
+        for ch in range(self.n_channels):
 
-        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        #conv = tf.keras.layers.BatchNormalization()(conv)
-        
-        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        #conv = tf.keras.layers.BatchNormalization()(conv)
-        
-        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+            conv_input = tf.keras.layers.Lambda(lambda x: x[:,:, ch:ch+1])(all_input_y)
+            #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
+            
+            conv = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv_input)
+            conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
+            conv = tf.keras.layers.BatchNormalization()(conv)
 
+            conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+            conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
+            conv = tf.keras.layers.BatchNormalization()(conv)
 
-        #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2,  activation=self.act)(conv)
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
-
-        """
-        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=1, strides=1, activation=self.act)(conv)
-        #conv = tf.keras.layers.BatchNormalization()(conv)
-        """
-        conv = tf.keras.layers.Flatten()(conv)
+            #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+            #conv = tf.keras.layers.BatchNormalization()(conv)
+            
+            #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+            #conv = tf.keras.layers.BatchNormalization()(conv)
         
+            #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+            #conv = tf.keras.layers.BatchNormalization()(conv)
+            
+
+            #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+            #conv = tf.keras.layers.BatchNormalization()(conv)
+
+            """
+            conv = tf.keras.layers.Conv1D(filters=16, kernel_size=1, strides=1, activation=self.act)(conv)
+            #conv = tf.keras.layers.BatchNormalization()(conv)
+            """
+            conv = tf.keras.layers.Flatten()(conv)
+            convs.append(conv)
         #conv = tf.keras.layers.Flatten()(all_input_y)
+        convs.append(conv) # just to give it 3 channels for now
+        conv = tf.keras.layers.concatenate(convs)
 
-        lin_layers = 4096, 2048, 1024
-        #lin_layers = 2048, 1024, 512, 256
-        #lin_layers = 1024, 512, 256, 256
-        #lin1, lin2, lin3 = 1024, 512, 256
-        #lin1, lin2, lin3 = 512, 256, 128
-        # r1 encoder
-        r1 = conv
-        for lin_l in lin_layers:
-            #r1 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
-            r1 = tf.keras.layers.Dense(lin_l, activation=self.act)(r1)            
-            r1 = tf.keras.layers.BatchNormalization()(r1)
-            #r1 = tf.keras.layers.Dropout(.5)(r1)
+        res_in_shape = (64, 58, self.n_channels + 1)
+        conv = tf.keras.layers.Reshape(res_in_shape)(conv)
+        
 
+        res_out = 512
+        l1,l2 = 512,256
+        r1 = tf.keras.applications.ResNet50(weights=None, include_top=True, classes = res_out, input_shape=res_in_shape)(conv)
+        r1 = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
+        r1 = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
         r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes)(r1)
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
-        print(self.encoder_r1.summary())
 
-        # the q encoder network
+        #q = tf.keras.applications.ResNet50(weights=None, include_top = True, classes = res_out, input_shape=res_in_shape)(conv)
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
-        q = tf.keras.layers.concatenate([conv,q_inx])
-        for lin_l in lin_layers:
-            #q = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
-            q = tf.keras.layers.Dense(lin_l, activation=self.act)(q)            
-            q = tf.keras.layers.BatchNormalization()(q)
-            #q = tf.keras.layers.Dropout(.5)(q)
-
+        q = tf.keras.layers.concatenate([r1,q_inx])
+        q = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
+        q = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
         q = tf.keras.layers.Dense(2*self.z_dim)(q)
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
-        print(self.encoder_q.summary())
 
-        # the r2 decoder network
+        #r2 = tf.keras.applications.ResNet50(weights=None, include_top = True, classes = res_out, input_shape = res_in_shape)(conv)
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
-        r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        for lin_l in lin_layers:
-            #r2 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
-            r2 = tf.keras.layers.Dense(lin_l, activation=self.act)(r2)     
-            r2 = tf.keras.layers.BatchNormalization()(r2)
-            #r2 = tf.keras.layers.Dropout(.5)(r2)
+        r2 = tf.keras.layers.concatenate([r1,r2_inz])
+        r2 = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)            
+        r2 = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)            
 
-        extra_layer = False
-        if extra_layer:
-            exdim = 1024
-            # non periodic outputs
-            r2_nonp = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)
-        else:
-            r2_nonp = r2
-        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2_nonp)
-        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2_nonp)
-
+        # non periodic outputs
+        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2)
+        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2)
         # periodic outputs
-        if extra_layer:
-            r2_p = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
-        else:
-            r2_p = r2
-        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2_p)
-        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2_p)
-
+        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2)
+        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2)
         # sky outputs (x,y,z)
-        if extra_layer:
-            r2_sky = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
-        else:
-            r2_sky = r2
-        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2_sky)
-        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2_sky)
+        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2)
+        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2)
         # all outputs
         r2 = tf.keras.layers.concatenate([r2mu_nonperiodic,r2mu_periodic,r2mu_sky,r2logvar_nonperiodic,r2logvar_periodic,r2logvar_sky])
 
