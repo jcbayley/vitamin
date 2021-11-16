@@ -86,8 +86,9 @@ def gen_template(duration,
                  pars,
                  ref_geocent_time, psd_files=[],
                  use_real_det_noise=False,
-                 real_noise_seg =[None,None]
-                 ):
+                 real_noise_seg =[None,None],
+                 return_polarisations = False
+             ):
     """ Generates a whitened waveforms in Gaussian noise.
 
     Parameters
@@ -107,6 +108,8 @@ def gen_template(duration,
     real_noise_seg: list
         list containing the starting and ending times of the real noise 
         segment
+    return_polarisations: bool
+        if true return freq domain h+ and hx waveform, otherwise injects signal into ifo and returns whitened waveform
 
     Returns
     -------
@@ -160,64 +163,68 @@ def gen_template(duration,
 
     # Set up interferometers. These default to their design
     # sensitivity
+    if return_polarisations == False:
+        ifos = bilby.gw.detector.InterferometerList(pars['det'])
 
-    ifos = bilby.gw.detector.InterferometerList(pars['det'])
+        # If user is specifying PSD files
+        if len(psd_files) > 0:
+            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=psd_files[0])
+                elif type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=psd_files[0])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
 
-    # If user is specifying PSD files
-    if len(psd_files) > 0:
-        type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
-        for int_idx,ifo in enumerate(ifos):
-            if type_psd == 'psd':
-                ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=psd_files[0])
-            elif type_psd == 'asd':
-                ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=psd_files[0])
-            else:
-                print('Could not determine whether psd or asd ...')
-                exit()
+        ifos.set_strain_data_from_power_spectral_densities(
+            sampling_frequency=sampling_frequency, duration=duration,
+            start_time=start_time)
 
-    ifos.set_strain_data_from_power_spectral_densities(
-    sampling_frequency=sampling_frequency, duration=duration,
-    start_time=start_time)
+        # inject signal
+        ifos.inject_signal(waveform_generator=waveform_generator,
+                           parameters=injection_parameters)
 
-    # inject signal
-    ifos.inject_signal(waveform_generator=waveform_generator,
-                       parameters=injection_parameters)
+        print('... Injected signal')
+        whitened_signal_td_all = []
+        whitened_h_td_all = [] 
+        # iterate over ifos
+        whiten_data = True
+        for i in range(len(pars['det'])):
+            # get frequency domain noise-free signal at detector
+            signal_fd = ifos[i].get_detector_response(freq_signal, injection_parameters) 
+            
+            # get frequency domain signal + noise at detector
+            h_fd = ifos[i].strain_data.frequency_domain_strain
 
-    print('... Injected signal')
-    whitened_signal_td_all = []
-    whitened_h_td_all = [] 
-    # iterate over ifos
-    whiten_data = True
-    for i in range(len(pars['det'])):
-        # get frequency domain noise-free signal at detector
-        signal_fd = ifos[i].get_detector_response(freq_signal, injection_parameters) 
+            # whitening
+            if whiten_data:
+                # whiten frequency domain noise-free signal (and reshape/flatten)
+                whitened_signal_fd = signal_fd/ifos[i].amplitude_spectral_density_array
+                #whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    
 
-        # get frequency domain signal + noise at detector
-        h_fd = ifos[i].strain_data.frequency_domain_strain
+                # inverse FFT noise-free signal back to time domain and normalise
+                whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
 
-        # whitening
-        if whiten_data:
-            # whiten frequency domain noise-free signal (and reshape/flatten)
-            whitened_signal_fd = signal_fd/ifos[i].amplitude_spectral_density_array
-            #whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    
-
-            # inverse FFT noise-free signal back to time domain and normalise
-            whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
-
-            # whiten noisy frequency domain signal
-            whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
+                # whiten noisy frequency domain signal
+                whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
     
-            # inverse FFT noisy signal back to time domain and normalise
-            whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
+                # inverse FFT noisy signal back to time domain and normalise
+                whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
             
-            whitened_h_td_all.append([whitened_h_td])
-            whitened_signal_td_all.append([whitened_signal_td])            
-        else:
-            whitened_h_td_all.append([h_fd])
-            whitened_signal_td_all.append([signal_fd])
+                whitened_h_td_all.append([whitened_h_td])
+                whitened_signal_td_all.append([whitened_signal_td])            
+            else:
+                whitened_h_td_all.append([h_fd])
+                whitened_signal_td_all.append([signal_fd])
             
-    print('... Whitened signals')
-    return np.squeeze(np.array(whitened_signal_td_all),axis=1),np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
+        print('... Whitened signals')
+        return np.squeeze(np.array(whitened_signal_td_all),axis=1),np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
+    
+    else:
+
+        return freq_signal, injection_parameters, waveform_generator
 
 def load_template(duration,
                   sampling_frequency,
@@ -368,7 +375,8 @@ def run(sampling_frequency=256.0,
         use_real_det_noise=False,
         use_real_events=False,
         samp_idx=False,
-        real_test_data = None
+        real_test_data = None,
+        return_polarisations = False
     ):
     """ Main function to generate both training sample time series 
     and test sample time series/posteriors.
@@ -411,6 +419,8 @@ def run(sampling_frequency=256.0,
         detectors to use
     psd_files
         optional list of psd files to use for each detector
+    return_polarisations: bool
+        if true returns h+ and hx, if false return whitened waveforms
     """
 
     # Set up a random seed for result reproducibility.  This is optional!
@@ -419,10 +429,9 @@ def run(sampling_frequency=256.0,
 
     # Set up a PriorDict, which inherits from dict.
     priors = bilby.gw.prior.BBHPriorDict()
-    #priors.pop('chirp_mass')
-    #priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.125, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
-    priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=0.5, maximum=1, name='mass_ratio', latex_label='$q$', unit=None)
-    priors['chirp_mass'] = bilby.gw.prior.Constraint(minimum=25, maximum=100, name='chirp_mass', latex_label='$q$', unit=None)
+    priors.pop('chirp_mass')
+    priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=bounds['massratio_min'], maximum=bounds['massratio_max'], name='mass_ratio', latex_label='$q$', unit=None)
+    #priors['chirp_mass'] = bilby.gw.prior.Constraint(minimum=25, maximum=100, name='chirp_mass', latex_label='$q$', unit=None)
     if np.any([r=='geocent_time' for r in rand_pars]):
         priors['geocent_time'] = bilby.core.prior.Uniform(
                 minimum=ref_geocent_time + bounds['geocent_time_min'],
@@ -453,13 +462,11 @@ def run(sampling_frequency=256.0,
         priors['a_2'] = fixed_vals['a_2']
 
     if np.any([r=='tilt_1' for r in rand_pars]):
-        #priors['tilt_1'] = bilby.gw.prior.Uniform(name='tilt_1', minimum=bounds['tilt_1_min'], maximum=bounds['tilt_1_max'])
         priors['tilt_1'] = bilby.core.prior.Sine(name='tilt_1', minimum=bounds['tilt_1_min'], maximum=bounds['tilt_1_max'])
     else:
         priors['tilt_1'] = fixed_vals['tilt_1']
 
     if np.any([r=='tilt_2' for r in rand_pars]):
-        #priors['tilt_2'] = bilby.gw.prior.Uniform(name='tilt_2', minimum=bounds['tilt_2_min'], maximum=bounds['tilt_2_max'])
         priors['tilt_2'] = bilby.core.prior.Sine(name='tilt_2', minimum=bounds['tilt_2_min'], maximum=bounds['tilt_2_max'])
     else:
         priors['tilt_2'] = fixed_vals['tilt_2']
@@ -528,19 +535,29 @@ def run(sampling_frequency=256.0,
             #train_pars.append([temp])
 
             # make the data - shift geocent time to correct reference
-            train_samp_noisefree, train_samp_noisy,_,ifos,_ = gen_template(duration,sampling_frequency,
-                                                                           pars,ref_geocent_time,psd_files,
-                                                                           use_real_det_noise=use_real_det_noise
-                                                                           )
-            train_samples.append([train_samp_noisefree,train_samp_noisy])
-            small_snr_list = [ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))]
-            snrs.append(small_snr_list)
+            if return_polarisations == False:
+                train_samp_noisefree, train_samp_noisy,_,ifos,_ = gen_template(duration,sampling_frequency,pars,ref_geocent_time,psd_files,use_real_det_noise=use_real_det_noise)
+
+                train_samples.append([train_samp_noisefree,train_samp_noisy])
+                small_snr_list = [ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))]
+                snrs.append(small_snr_list)
+            else:
+                train_hplus_hcross, injpars, wfg = gen_template(duration,sampling_frequency,
+                                                                pars,ref_geocent_time,psd_files,
+                                                                use_real_det_noise=use_real_det_noise,
+                                                                return_polarisations=True)
+                train_samples.append(train_hplus_hcross)
+
             #train_samples.append(gen_template(duration,sampling_frequency,pars,ref_geocent_time)[0:2])
             print('Made waveform %d/%d' % (i,N_gen)) 
 
-        train_samples_noisefree = np.array(train_samples)[:,0,:]
+        if return_polarisations:
+            train_samples_noisefree = np.array(train_samples)#[:,0,:]
+        else:
+            train_samples_noisefree = np.array(train_samples)[:,0,:]
+
         snrs = np.array(snrs) 
-#        train_pars = np.array(train_pars)
+        #train_pars = np.array(train_pars)
         return train_samples_noisefree,train_pars,snrs
 
     # otherwise we are doing test data 
@@ -557,8 +574,7 @@ def run(sampling_frequency=256.0,
 
         # inject signal - shift geocent time to correct reference
         if real_test_data is None:
-            test_samples_noisefree,test_samples_noisy,injection_parameters,ifos,waveform_generator = gen_template(duration,sampling_frequency,
-                                                                                                                  pars,ref_geocent_time,psd_files)
+            test_samples_noisefree,test_samples_noisy,injection_parameters,ifos,waveform_generator = gen_template(duration,sampling_frequency,pars,ref_geocent_time,psd_files)
             # get test sample snr
             snr = np.array([ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))])
 

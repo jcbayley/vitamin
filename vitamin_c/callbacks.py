@@ -172,7 +172,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
 class TestCallback(tf.keras.callbacks.Callback):
 
 
-    def __init__(self,test_dataset, comp_post_dir, full_post_dir, latent_dir, bilby_samples, paper_plots = False):
+    def __init__(self,test_dataset, comp_post_dir, full_post_dir, latent_dir, bilby_samples, paper_plots = False, test_epoch = 500):
         from vitamin_c_fit import plot_latent, plot_posterior
         self.plot_latent = plot_latent
         self.plot_posterior = plot_posterior
@@ -182,16 +182,17 @@ class TestCallback(tf.keras.callbacks.Callback):
         self.latent_dir = latent_dir
         self.bilby_samples = bilby_samples
         self.paper_plots = paper_plots
+        self.test_epoch = test_epoch
 
     def on_epoch_end(self, epoch, logs = None):
         
-        if epoch % 500 == 0:
+        if epoch % self.test_epoch == 0:
             for step in range(len(self.test_dataset)):
                 mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
                 self.plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
                 start_time_test = time.time()
                 samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.model.params['n_samples'])
-                print(samples.shape)
+
                 end_time_test = time.time()
                 if np.any(np.isnan(samples)):
                     print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
@@ -201,8 +202,8 @@ class TestCallback(tf.keras.callbacks.Callback):
                     KL_est = [-1,-1,-1]
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.model.params['n_samples'],end_time_test - start_time_test))
-                    KL_est = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.comp_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
-                    _ = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,run=self.full_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
+                    KL_est = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.comp_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks, unconvert_parameters = self.test_dataset.unconvert_parameters)
+                    #_ = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,run=self.full_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
                     #KL_samples.append(KL_est)
             if self.paper_plots:
                 epoch = 'pub_plot'; ramp = 1

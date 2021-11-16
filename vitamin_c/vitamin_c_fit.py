@@ -32,7 +32,7 @@ elif model_fit_type == "resnet":
     from vitamin_c_model_fit_resnet import CVAE
 
 from callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
-from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader, psiphi_to_psiX, psiX_to_psiphi
+from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
 #from keras_adamw import AdamW
 
 def get_param_index(all_pars,pars,sky_extra=None):
@@ -181,7 +181,7 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.close()
 
 
-def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=None, params = None, masks= None, bounds = None, scale_other_samples = True):
+def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=None, params = None, masks= None, bounds = None, scale_other_samples = True, unconvert_parameters = None):
     """
     plots the posteriors
     """
@@ -193,23 +193,25 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
             mask.append(True)
         else:
             mask.append(False)
+
     samples = tf.boolean_mask(samples,mask,axis=0)
     print('identified {} good samples'.format(samples.shape[0]))
     print(np.array(all_other_samples).shape)
     if samples.shape[0]<100:
         print('... Bad run, not doing posterior plotting.')
         return [-1.0] * len(params['samplers'][1:])
-
-    
-    # randonly convert from reduced psi-phi space to full space
-    _, psi_idx, _ = get_param_index(params['inf_pars'],['psi'])
-    _, phi_idx, _ = get_param_index(params['inf_pars'],['phase'])
-    psi_idx = psi_idx[0]
-    phi_idx = phi_idx[0]
+    # make numpy arrays
     samples = samples.numpy()
-    samples[:,psi_idx], samples[:,phi_idx] = psiX_to_psiphi(samples[:,psi_idx], samples[:,phi_idx])
+    x_truth = x_truth.numpy()
 
+    samples_file = '{}/posterior_samples_epoch_{}_event_{}_normed.txt'.format(run,epoch,idx)
+    np.savetxt(samples_file,samples)
 
+    # convert vitamin sample and true parameter back to truths
+    vit_samples = unconvert_parameters(samples)
+    x_truth = np.squeeze(unconvert_parameters(np.expand_dims(x_truth, axis=0)), axis=0)
+    
+    print("samp_shape",np.shape(vit_samples), np.shape(x_truth))
     # define general plotting arguments
     defaults_kwargs = dict(
                     bins=50, smooth=0.9, label_kwargs=dict(fontsize=16),
@@ -229,32 +231,15 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
         for i, other_samples in enumerate(all_other_samples):
             true_post = np.zeros([other_samples.shape[0],masks["bilby_ol_len"]])
             true_x = np.zeros(masks["inf_ol_len"])
-            true_XS = np.zeros([samples.shape[0],masks["inf_ol_len"]])
+            true_XS = np.zeros([vit_samples.shape[0],masks["inf_ol_len"]])
             ol_pars = []
             cnt = 0
             for inf_idx,bilby_idx in zip(masks["inf_ol_idx"],masks["bilby_ol_idx"]):
                 inf_par = params['inf_pars'][inf_idx]
                 bilby_par = params['bilby_pars'][bilby_idx]
-                true_XS[:,cnt] = (samples[:,inf_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par+'_min']
-                if scale_other_samples:
-                    true_post[:,cnt] = (other_samples[:,bilby_idx] * (bounds[bilby_par+'_max'] - bounds[bilby_par+'_min'])) + bounds[bilby_par + '_min']
-                else:
-                    true_post[:,cnt] = other_samples[:,bilby_idx]
-                #if inf_par == "geocent_time":
-                #    true_XS[:,inf_idx] += params["ref_geocent_time"]
-
-                if x_truth is not None:
-                    if scale_other_samples:
-                        true_x[cnt] = (x_truth[inf_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
-                    else:
-                        true_x[cnt] = x_truth[inf_idx]
-                else:
-                    true_x = None
-
-                if inf_par == "geocent_time":
-                    if true_x[cnt] > 10:
-                        true_x[cnt] -= params["ref_geocent_time"]
-                        true_post[:,cnt] -= params["ref_geocent_time"]
+                true_XS[:,cnt] = vit_samples[:,inf_idx]
+                true_post[:,cnt] = other_samples[:,bilby_idx]
+                true_x[cnt] = x_truth[cnt]
 
                 ol_pars.append(inf_par)
                 cnt += 1
@@ -264,7 +249,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
                     parnames.append(params['corner_labels'][k])
 
             # convert to RA
-            true_XS = convert_hour_angle_to_ra(true_XS,params,ol_pars)
+            #vit_samples = convert_hour_angle_to_ra(vit_samples,params,ol_pars)
             #true_x = convert_hour_angle_to_ra(np.reshape(true_x,[1,true_XS.shape[1]]),params,ol_pars).flatten()
             old_true_post = true_post                 
 
@@ -287,6 +272,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
             other_samples_file = '{}/posterior_samples_epoch_{}_event_{}_{}.txt'.format(run,epoch,idx,i)
             np.savetxt(other_samples_file,true_post)
 
+            print("true_samples_shape", np.shape(true_post))
             if i==0:
                 figure = corner.corner(true_post, **defaults_kwargs,labels=parnames,
                            color='tab:blue',
@@ -314,9 +300,9 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
             plt.annotate('KL = {:.3f}'.format(KL),(0.2,0.95-j*0.02),xycoords='figure fraction',fontsize=18)
 
         corner.corner(true_XS,**defaults_kwargs,
-                           color='tab:red',
-                           fill_contours=False, truths=true_x,
-                           show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
+                      color='tab:red',
+                      fill_contours=False, truths=true_x,
+                      show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
             print('Saved output to %s/comp_posterior_%s_event_%d.png' % (run,epoch,idx))
             plt.savefig('%s/comp_posterior_%s_event_%d.png' % (run,epoch,idx))
@@ -336,16 +322,16 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
         full_true_x = np.zeros(len(params['inf_pars']))
         new_samples = np.zeros([samples.shape[0],len(params['inf_pars'])])
         for inf_par_idx,inf_par in enumerate(params['inf_pars']):
-            new_samples[:,inf_par_idx] = (samples[:,inf_par_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par+'_min']
+            new_samples[:,inf_par_idx] = samples[:,inf_par_idx]# * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par+'_min']
             if x_truth is not None:
-                full_true_x[inf_par_idx] = (x_truth[inf_par_idx] * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
+                full_true_x[inf_par_idx] = x_truth[inf_par_idx]# * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
             else:
                 full_true_x = None
-        new_samples = convert_hour_angle_to_ra(new_samples,params,params['inf_pars'])
+        #new_samples = convert_hour_angle_to_ra(new_samples,params,params['inf_pars'])
         if full_true_x is not None:
             print(np.shape(full_true_x))
             print(samples.shape)
-            full_true_x = convert_hour_angle_to_ra(np.reshape(full_true_x,[1,samples.shape[1]]),params,params['inf_pars']).flatten()       
+            #full_true_x = convert_hour_angle_to_ra(np.reshape(full_true_x,[1,samples.shape[1]]),params,params['inf_pars']).flatten()       
 
         figure = corner.corner(new_samples,**defaults_kwargs,labels=parnames,
                            color='tab:red',
@@ -658,7 +644,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
 
 
-    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples), TimeCallback(save_dir=plot_dir, save_interval = 100)]
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples, test_epoch = 500), TimeCallback(save_dir=plot_dir, save_interval = 100)]
     model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
 
     # not happy with this re-wrapping of the dataset
@@ -666,25 +652,5 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     #valdata_gen_wrap = tf.data.Dataset.from_generator(lambda : validation_dataset,(tf.float32,tf.float32))
 
     #model.fit_generator(data_gen_wrap, use_multiprocessing = False, workers = 6,epochs = 10000, callbacks = callbacks, shuffle = False, validation_data = valdata_gen_wrap, max_queue_size = 100)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

@@ -131,12 +131,19 @@ plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/BBH_{}Hz_{}s_fullpar
 #pe_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/test_sets/1024_khz_spins_included_15par/test'
 
 numdet = len(det)
-
+real_noise = False
 # default training/testing directories
-train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
-val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
-test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test_waveforms' % bilby_results_label
-pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets/%s/test' % bilby_results_label
+if real_noise:
+    train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
+    pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test' % bilby_results_label
+else:
+    train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets_gaussnoise/%s/test_waveforms' % bilby_results_label
+    pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets_gaussnoise/%s/test' % bilby_results_label
+
 
 
 # Prior bounds on source parameters, changed to match bilby default
@@ -144,6 +151,10 @@ bounds = {'mass_1_min':10.0, 'mass_1_max':100.0,
         '__definition__mass_1': 'mass 1 range',
         'mass_2_min':10.0, 'mass_2_max':100.0,
         '__definition__mass_2': 'mass 2 range',
+        #'chirpmass_min':10.0, 'chirpmass_max':100.0,
+        #'__definition__chirpmass': 'chirp mass range',
+        'massratio_min':0.125, 'massratio_max':1.0,
+        '__definition__massratio': 'mass ratio range',
         'M_min':70.0, 'M_max':160.0,
         '__definition__M': 'total mass range',
         'geocent_time_min':duration - 0.35,'geocent_time_max':duration - 0.15,
@@ -249,7 +260,7 @@ def get_params():
         __definition__gpu_num='gpu number run is running on',
         ndata = ndata,                                                          
         __definition__ndata='number of data points (number of data points, = to sampling frequency if 1s duration)',
-        sample_rate = sample_rate,                                                          
+        sample_rate = sampling_rate,                                                          
         __definition__sample_rate='sampling frequency (number of data points, = to sampling frequency if 1s duration)',
         run_label=run_label,                                                    
         __definition__run_label='label of run',
@@ -411,7 +422,7 @@ if __name__ == "__main__":
     # Save training/test parameters of run if files do not already exist
     params=get_params()
 
-    out_dir = "./params_files_{}_{}s_widespin".format(params["ndata"], params["duration"])
+    out_dir = "./params_files_{}Hz_{}s_widespin".format(params["sample_rate"], params["duration"])
     
     # Make directory containing params files
     try:
@@ -419,7 +430,8 @@ if __name__ == "__main__":
     except FileExistsError:
         print("directory 'params_files' already exists")
         print("Overwriting .json files in directory ...")
-        
+
+    print("Saving to {}".format(out_dir))
     # Generate params files
     #if not os.path.isfile('./params_files/params.json'):
     

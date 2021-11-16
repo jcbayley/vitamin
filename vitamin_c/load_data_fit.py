@@ -69,7 +69,7 @@ class DataLoader(tf.keras.utils.Sequence):
             temp_chunk_indices = temp_chunk_indices % self.params["tset_split"]
             # if the index falls to zero then split as the file is the next one 
             temp_chunk_indices_split = np.split(temp_chunk_indices, np.where(np.diff(temp_chunk_indices) < 0)[0] + 1)
-            
+
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
             self.chunk_size = len(self.X)
@@ -148,7 +148,6 @@ class DataLoader(tf.keras.utils.Sequence):
         data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': []}
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
-        
         for i,filename in enumerate(filenames):
             try:
                 h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
@@ -170,6 +169,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 print('Could not load requested file: {}'.format(filename))
                 continue
 
+        print("datashape", np.shape(data["x_data"]), np.shape(data["y_data_noisefree"]))
         # concatentation all the x data (parameters) from each of the files
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
         # concatenate, then transpose the dimensions for keras, from (num_templates, num_dets, num_samples) to (num_templates, num_samples, num_dets)
@@ -191,8 +191,10 @@ class DataLoader(tf.keras.utils.Sequence):
 
         mass_inrange = (data["x_data"][:,m1_idx] > low_m)&(data["x_data"][:,m1_idx] < high_m)&(data["x_data"][:,m2_idx] < high_m)&(data["x_data"][:,m1_idx] > low_m)
         """
+        self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
         
-        data["x_data"] = data["x_data"]#[mass_inrange]
+        data["x_data"] = data['x_data'][:,self.par_idx]
+
         data["y_data_noisefree"] = data["y_data_noisefree"]#[mass_inrange]
         if self.test_set:
             data["y_data_noisy"] = data["y_data_noisy"]#[mass_inrange]
@@ -202,65 +204,137 @@ class DataLoader(tf.keras.utils.Sequence):
             pass
 
 
+        if not self.silent:
+            print('...... {} will be inferred'.format(infparlist))
+
+        y_normscale = self.params["y_normscale"]
+        if not self.test_set:
+            data["x_data"], time_correction = self.randomise_time(data["x_data"])
+            data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+            data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        
+            # apply phase, time and distance corrections
+            y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
+            #y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction
+            data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+            #data["y_data_noisefree"] = data["y_data_noisefree"]*distance_correction
+            
+            del y_temp_fft
+        
+            # add noise to the noisefree waveforms and normalise and normalise
+
+            #data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
+            data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*np.random.normal(size=np.shape(data["y_data_noisefree"]), loc=0.0, scale=1.0))/y_normscale
+        else:
+            data["y_data_noisy"] = data["y_data_noisy"]/y_normscale 
+
+
+        data["x_data"] = self.convert_parameters(data["x_data"])
+
+        # cast data to float
+        data["x_data"] = tf.cast(data['x_data'][:,self.par_idx],dtype=tf.float32)
+        data["y_data_noisefree"] = tf.cast(data['y_data_noisefree'],dtype=tf.float32)
+        data["y_data_noisy"] = tf.cast(data['y_data_noisy'],dtype=tf.float32)
+
+        return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
+
+
+    def convert_parameters(self, x_data):
         # convert the parameters from right ascencsion to hour angle
-        data['x_data'] = convert_ra_to_hour_angle(data['x_data'], self.params, self.params['rand_pars'])
+        x_data = convert_ra_to_hour_angle(x_data, self.params, self.params['inf_pars'])
 
         # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
-        for i,k in enumerate(data['rand_pars']):
-            if k.decode('utf-8')=='psi':
+        
+        for i,k in enumerate(self.params["inf_pars"]):
+            #if k.decode('utf-8')=='psi':
+            if k =='psi':
                 psi_idx = i
-            if k.decode('utf-8')=='phase':
+            if k =='phase':
                 phi_idx = i
+            if k =='mass_1':
+                m1_idx = i
+            if k =='mass_2':
+                m2_idx = i
 
-        data['x_data'][:,psi_idx], data['x_data'][:,phi_idx] = psiphi_to_psiX(data['x_data'][:,psi_idx],data['x_data'][:,phi_idx])
+        x_data[:,psi_idx], x_data[:,phi_idx] = psiphi_to_psiX(x_data[:,psi_idx],x_data[:,phi_idx])
+        #replace m1 with chirp mass
+        #x_data[:, m1_idx], x_data[:,m2_idx] = m1m2_to_chirpmassq(x_data[:,m1_idx], x_data[:,m2_idx])
 
-        decoded_rand_pars, par_idx = self.get_infer_pars(data)
+        min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
+        max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
+        
+        # normalise to bounds
+        #decoded_rand_pars, par_idx = self.get_infer_pars(data)
 
-        for i,k in enumerate(decoded_rand_pars):
+        for i,k in enumerate(self.params["inf_pars"]):
+            par_min = k + '_min'
+            par_max = k + '_max'
+            # Ensure that psi is between 0 and pi
+            if par_min == 'psi_min':
+                x_data[:,i] = x_data[:,i]/(np.pi/2.0)
+                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+            elif par_min=='phase_min':
+                x_data[:,i] = x_data[:,i]/np.pi
+            
+            #elif k in "mass_1":
+                #chirm mass
+            #    x_data[:, i] = (x_data[:, i] - min_chirp)/(max_chirp - min_chirp)
+            #elif k in "mass_2":
+                # mass ratio
+            #    x_data[:, i] = (x_data[:, i] - 0.125)/(1 - 0.125)
+            
+            else:
+                x_data[:,i] = (x_data[:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
+        
+        return x_data
+
+    def unconvert_parameters(self, x_data):
+
+        # unnormalise to bounds
+        min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
+        max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
+        for i,k in enumerate(self.params["inf_pars"]):
             par_min = k + '_min'
             par_max = k + '_max'
 
             # Ensure that psi is between 0 and pi
             if par_min == 'psi_min':
-                data['x_data'][:,i] = data['x_data'][:,i]/(np.pi/2.0)
+                x_data[:,i] = x_data[:,i]*(np.pi/2.0)
                 #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
             elif par_min=='phase_min':
-                data['x_data'][:,i] = data['x_data'][:,i]/np.pi
+                x_data[:,i] = x_data[:,i]*np.pi
+
+            #elif k in "mass_1":
+            #    x_data[:,i] = x_data[:, i]*(max_chirp - min_chirp) + min_chirp
+            #elif k in "mass_2":
+            #    x_data[:,i] = x_data[:, i]*(1 - 0.125) + 0.125
+            
             else:
-                data['x_data'][:,i]=(data['x_data'][:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
-                # normalize each parameter by its bounds
-                #data['x_data'][:,i] = (data['x_data'][:,i] - self.bounds[par_min]) / (self.bounds[par_max] - self.bounds[par_min])
+                x_data[:,i]=x_data[:,i]*(self.bounds[par_max] - self.bounds[par_min]) + self.bounds[par_min]
 
-        if not self.silent:
-            print('...... {} will be inferred'.format(infparlist))
 
-        # cast data to floats
-        data["x_data"] = tf.cast(data['x_data'][:,par_idx],dtype=tf.float32)
-        data["y_data_noisefree"] = tf.cast(data['y_data_noisefree'],dtype=tf.float32)
-        data["y_data_noisy"] = tf.cast(data['y_data_noisy'],dtype=tf.float32)
+        # convert the parameters from right ascencsion to hour angle
+        x_data = convert_hour_angle_to_ra(x_data, self.params, self.params['inf_pars'])
 
-        # randomise phase, time and distance
-        y_normscale = tf.cast(self.params['y_normscale'], dtype=tf.float32)
-        if not self.test_set:
-            #data["x_data"], time_correction = self.randomise_time(data["x_data"])
-            data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
-            data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
         
-            # apply phase, time and distance corrections
-            #y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
-            y_temp_fft = tf.signal.rfft(tf.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction
-            data["y_data_noisefree"] = tf.transpose(tf.signal.irfft(y_temp_fft),[0,2,1])*distance_correction
-            del y_temp_fft
+        for i,k in enumerate(self.params["inf_pars"]):
+            if k =='psi':
+                psi_idx = i
+            if k =='phase':
+                phi_idx = i
+            if k =='mass_1':
+                m1_idx = i
+            if k =='mass_2':
+                m2_idx = i
+
+        x_data[:,psi_idx], x_data[:,phi_idx] = psiX_to_psiphi(x_data[:,psi_idx],x_data[:,phi_idx])
+        #replace m1 with chirp mass
+        #x_data[:, m1_idx], x_data[:,m2_idx] = chirpmassq_to_m1m2(x_data[:,m1_idx], x_data[:,m2_idx])
         
-            # add noise to the noisefree waveforms and normalise and normalise
+        return x_data
 
-            data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
-        else:
-            data["y_data_noisy"] = data["y_data_noisy"]/y_normscale 
-
-        return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
-
-
+    
     def get_infer_pars(self,data):
 
         # Get rid of encoding
@@ -285,42 +359,72 @@ class DataLoader(tf.keras.utils.Sequence):
     def randomise_phase(self, x, y):
         """ randomises phase of input parameter x"""
         # get old phase and define new phase
+        """
         old_phase = self.bounds['phase_min'] + tf.boolean_mask(x,self.masks["phase_mask"],axis=1)*(self.bounds['phase_max'] - self.bounds['phase_min'])
         new_x = tf.random.uniform(shape=tf.shape(old_phase), minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
         new_phase = self.bounds['phase_min'] + new_x*(self.bounds['phase_max'] - self.bounds['phase_min'])
+
         # defice 
         x = tf.gather(tf.concat([tf.reshape(tf.boolean_mask(x,self.masks["not_phase_mask"],axis=1),[-1,tf.shape(x)[1]-1]), tf.reshape(new_x,[-1,1])],axis=1),tf.constant(self.masks["idx_phase_mask"]),axis=1)
 
         phase_correction = -1.0*tf.complex(tf.cos(new_phase-old_phase),tf.sin(new_phase-old_phase))
         phase_correction = tf.tile(tf.expand_dims(phase_correction,axis=1),(1,self.num_dets,tf.shape(y)[1]/2 + 1))
+        """
+        old_phase = x[:,np.array(self.masks["phase_mask"]).astype(np.bool)]
+        new_x = np.random.uniform(size=np.shape(old_phase), low=0.0, high=1.0)
+        new_phase = self.bounds['phase_min'] + new_x*(self.bounds['phase_max'] - self.bounds['phase_min'])
+
+        # defice 
+        x[:, np.array(self.masks["phase_mask"]).astype(np.bool)] = new_phase
+
+        phase_correction = -1.0*(np.cos(new_phase-old_phase) + 1j*np.sin(new_phase-old_phase))
+        phase_correction = np.tile(np.expand_dims(phase_correction,axis=1),(1,self.num_dets,int(np.shape(y)[1]/2) + 1))
+
         return x, phase_correction
 
     def randomise_time(self, x):
 
-        old_geocent = self.bounds['geocent_time_min'] + tf.boolean_mask(x,self.masks["geocent_mask"],axis=1)*(self.bounds['geocent_time_max'] - self.bounds['geocent_time_min'])
-        new_x = tf.random.uniform(shape=tf.shape(old_geocent), minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
-        
+        old_geocent = x[:,np.array(self.masks["geocent_mask"]).astype(np.bool)]
+        new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
         new_geocent = self.bounds['geocent_time_min'] + new_x*(self.bounds['geocent_time_max'] - self.bounds['geocent_time_min'])
 
-        x = tf.gather(tf.concat([tf.reshape(tf.boolean_mask(x,self.masks["not_geocent_mask"],axis=1),[-1,tf.shape(x)[1]-1]), tf.reshape(new_x,[-1,1])],axis=1),tf.constant(self.masks["idx_geocent_mask"]),axis=1)
+        x[:, np.array(self.masks["geocent_mask"]).astype(np.bool)] = new_geocent
 
-        fvec = tf.range(self.params['ndata']/2 + 1, dtype = tf.dtypes.float32)/self.params['duration']
+        fvec = np.arange(self.params['ndata']/2 + 1)/self.params['duration']
 
         time_correction = -2.0*np.pi*fvec*(new_geocent-old_geocent)
-        time_correction = tf.complex(tf.cos(time_correction),tf.sin(time_correction))
-        time_correction = tf.tile(tf.expand_dims(time_correction,axis=1),(1,self.num_dets,1))
+        time_correction = np.cos(time_correction) + 1j*np.sin(time_correction)
+        time_correction = np.tile(np.expand_dims(time_correction,axis=1),(1,self.num_dets,1))
         
         return x, time_correction
         
     def randomise_distance(self,x, y):
-
+        """
         old_d = self.bounds['luminosity_distance_min'] + tf.boolean_mask(x,self.masks["dist_mask"],axis=1)*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
         new_x = tf.random.uniform(shape=tf.shape(old_d), minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
         new_d = self.bounds['luminosity_distance_min'] + new_x*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
         x = tf.gather(tf.concat([tf.reshape(tf.boolean_mask(x,self.masks["not_dist_mask"],axis=1),[-1,tf.shape(x)[1]-1]), tf.reshape(new_x,[-1,1])],axis=1),tf.constant(self.masks["idx_dist_mask"]),axis=1)
         dist_scale = tf.tile(tf.expand_dims(old_d/new_d,axis=1),(1,tf.shape(y)[1],1))
+        """
+        old_d = x[:, np.array(self.masks["dist_mask"]).astype(np.bool)]
+        new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
+        new_d = self.bounds['luminosity_distance_min'] + new_x*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
+        
+        x[:, np.array(self.masks["dist_mask"]).astype(np.bool)] = new_d
+                                                           
+        dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))
 
         return x, dist_scale
+
+def m1m2_to_chirpmassq(m1,m2):
+    chirp_mass = ((m1*m2)**(3./5))/((m1 + m2)**(1./5))
+    q = m2/m1
+    return chirp_mass, q
+
+def chirpmassq_to_m1m2(chirp_mass, q):
+    m1 = chirp_mass*((1+q)/(q**3))**(1./5)
+    m2 = m1*q
+    return m1,m2
 
 def psiphi_to_psiX(psi,phi):
     """
@@ -337,11 +441,11 @@ def psiX_to_psiphi(psi,X):
     Input and Output innormalised units [0,1]
     """
     r = np.random.randint(0,2,size=(psi.shape[0],2))
-    psi *= np.pi/2.0   # convert to radians                                                                                                                             
-    X *= np.pi         # convert to radians                                                                                                                             
+    #psi *= np.pi/2.0   # convert to radians                                                                                                                             
+    #X *= np.pi         # convert to radians                                                                                                                             
     phi = np.remainder(X-psi + np.pi*r[:,0] + r[:,1]*np.pi/2.0,2.0*np.pi).flatten()
     psi = np.remainder(psi + np.pi*r[:,1]/2.0, np.pi).flatten()
-    return psi/np.pi,phi/(np.pi*2.0)  # convert back to normalised [0,1] 
+    return psi,phi  # convert back to normalised [0,1] 
     
 
 
@@ -393,6 +497,7 @@ def load_data(params,bounds,fixed_vals,input_dir,inf_pars,test_data=False,silent
         try:
             data['x_data'].append(h5py.File(dataLocations[0]+'/'+filename, 'r')['x_data'][:])
             data['y_data_noisefree'].append(h5py.File(dataLocations[0]+'/'+filename, 'r')['y_data_noisefree'][:])
+
             if test_data:
                 data['y_data_noisy'].append(h5py.File(dataLocations[0]+'/'+filename, 'r')['y_data_noisy'][:])
             data['rand_pars'] = h5py.File(dataLocations[0]+'/'+filename, 'r')['rand_pars'][:]
