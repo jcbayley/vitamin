@@ -227,7 +227,7 @@ def gen_train(params=None,bounds=None,fixed_vals=None, num_files = 100, start_in
                                                        psd_files=params['psd_files'],
                                                        use_real_det_noise=params['use_real_det_noise'],
                                                        samp_idx=start_ind + i, params=params,
-                                                       return_polarisations = False)
+                                                       return_polarisations = params["save_polarisations"])
 
         logging.config.dictConfig({
         'version': 1,
@@ -247,9 +247,11 @@ def gen_train(params=None,bounds=None,fixed_vals=None, num_files = 100, start_in
             hf.create_dataset('x_data', data=signal_train_pars)
             for k, v in bounds.items():
                 hf.create_dataset(k,data=v)
-            hf.create_dataset('y_data_noisy', data=np.array([]))
-            hf.create_dataset('y_data_noisefree', data=signal_train)
-            #hf.creat_dataset('y_hplus_hcross', data = signal_train)
+            if params["save_polarisations"] == False:
+                hf.create_dataset('y_data_noisy', data=np.array([]))
+                hf.create_dataset('y_data_noisefree', data=signal_train)
+            else:
+                hf.create_dataset('y_hplus_hcross', data = signal_train)
             hf.create_dataset('snrs', data=snrs)
             hf.close()
     return
@@ -301,17 +303,18 @@ def gen_val(params=None,bounds=None,fixed_vals=None):
         with suppress_stdout():
             # generate training sample source parameter, waveform and snr
             signal_train, signal_train_pars,snrs = run(sampling_frequency=params['ndata']/params['duration'],
-                                                          duration=params['duration'],
-                                                          N_gen=params['val_dataset_size'],
-                                                          ref_geocent_time=params['ref_geocent_time'],
-                                                          bounds=bounds,
-                                                          fixed_vals=fixed_vals,
-                                                          rand_pars=params['rand_pars'],
-                                                          seed=params['validation_data_seed']+i,
-                                                          label=params['run_label'],
-                                                          training=True,det=params['det'],
-                                                          psd_files=params['psd_files'],
-                                                          use_real_det_noise=params['use_real_det_noise'])
+                                                       duration=params['duration'],
+                                                       N_gen=params['val_dataset_size'],
+                                                       ref_geocent_time=params['ref_geocent_time'],
+                                                       bounds=bounds,
+                                                       fixed_vals=fixed_vals,
+                                                       rand_pars=params['rand_pars'],
+                                                       seed=params['validation_data_seed']+i,
+                                                       label=params['run_label'],
+                                                       training=True,det=params['det'],
+                                                       psd_files=params['psd_files'],
+                                                       use_real_det_noise=params['use_real_det_noise'],
+                                                       return_polarisations=params["save_polarisations"])
         logging.config.dictConfig({
         'version': 1,
         'disable_existing_loggers': False,
@@ -330,8 +333,11 @@ def gen_val(params=None,bounds=None,fixed_vals=None):
             hf.create_dataset('x_data', data=signal_train_pars)
             for k, v in bounds.items():
                 hf.create_dataset(k,data=v)
-            hf.create_dataset('y_data_noisy', data=np.array([]))
-            hf.create_dataset('y_data_noisefree', data=signal_train)
+            if params["save_polarisations"] == False:
+                hf.create_dataset('y_data_noisy', data=np.array([]))
+                hf.create_dataset('y_data_noisefree', data=signal_train)
+            else:
+                hf.create_dataset('y_hplus_hcross', data = signal_train)
             hf.create_dataset('snrs', data=snrs)
             hf.close()
     return

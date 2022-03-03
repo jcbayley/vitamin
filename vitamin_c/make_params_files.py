@@ -49,6 +49,7 @@ y_normscale = 16#16.638832624721797
 sampling_rate = 1024
 duration = 1
 ndata = int(sampling_rate*duration)
+save_polarisations = True
 det=['H1','L1']                                                            
 #psd_files=['cuda_11_env/lib/python3.6/site-packages/bilby/gw/detector/noise_curves/aLIGO_O4_high_asd.txt'] 
 psd_files=["/home/joseph.bayley/projects/o4_online_pe_mdc/data/asd_files/aLIGO_O4_high_asd.txt"]
@@ -102,11 +103,11 @@ n_weights_q = [n_fc,n_fc,n_fc]
 #############################
 run_label = 'vitamin_c_run4_{}Hz_{}s'.format(sampling_rate, duration)#'demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start' % (len(det),len(rand_pars),ndata) 
 gpu_num = 1
-
+append_string = "full_param"
 # 1024 Hz label
 #bilby_results_label = 'weichangfeng_theta_jn_issue'                                             
 # 256 Hz label
-bilby_results_label = '{}Hz_{}s_full_15par_{}det_fullparam'.format(sampling_rate,duration, len(det))
+bilby_results_label = '{}Hz_{}s_full_15par_{}det_{}'.format(sampling_rate,duration, len(det), append_string)
 
 r = 10 # 251                                                         
 pe_test_num = 10                                                               
@@ -122,7 +123,7 @@ samplers=['vitamin','dynesty']
 val_dataset_size = int(1e3)
 
 # Directory variables
-plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4MDC/BBH_{}Hz_{}s_fullparam/{}'.format(sampling_rate, duration, run_label)  
+plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4/BBH_{}Hz_{}s_{}/{}'.format(sampling_rate, duration, run_label, append_string)  
 
 # Training/testing for 1024 Hz full par case
 #train_set_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/training_sets_3det_15par_1024Hz/tset_tot-10000000_split-1000_O4PSDH1L1_AdvVirgoPSD'
@@ -139,10 +140,13 @@ if real_noise:
     test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
     pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test' % bilby_results_label
 else:
-    train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
-    val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
-    test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets_gaussnoise/%s/test_waveforms' % bilby_results_label
-    pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets_gaussnoise/%s/test' % bilby_results_label
+    if save_polarisations:
+        train_set_dir = '/home/joseph.bayley/data/CBC/O4/training_polarisations_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
+    else:
+        train_set_dir='/home/joseph.bayley/data/CBC/O4/training_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/O4/validation_sets_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/%s/test_waveforms' % bilby_results_label
+    pe_dir='/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/%s/test' % bilby_results_label
 
 
 
@@ -150,15 +154,15 @@ else:
 bounds = {'mass_1_min':10.0, 'mass_1_max':100.0,
         '__definition__mass_1': 'mass 1 range',
         'mass_2_min':10.0, 'mass_2_max':100.0,
-        '__definition__mass_2': 'mass 2 range',
+        '__definition__mass_2': 'mass 2 constraints',
         #'chirpmass_min':10.0, 'chirpmass_max':100.0,
         #'__definition__chirpmass': 'chirp mass range',
         'massratio_min':0.125, 'massratio_max':1.0,
         '__definition__massratio': 'mass ratio range',
         'M_min':70.0, 'M_max':160.0,
         '__definition__M': 'total mass range',
-        'geocent_time_min':duration - 0.35,'geocent_time_max':duration - 0.15,
-        '__definition__geocent_time': 'time of coalescence range',
+        'geocent_time_min':np.round(duration/2. - 0.35,2),'geocent_time_max':np.round(duration/2. - 0.15, 2),
+        '__definition__geocent_time': 'time of coalescence range (s from center of data timespan)',
         'phase_min':0.0, 'phase_max':2.0*np.pi,
         '__definition__phase': 'phase range',
         'ra_min':0.0, 'ra_max':2.0*np.pi,
@@ -220,6 +224,8 @@ def get_params():
         __definition__conv_dilations_q='size of convolutional dilation to use in q network', 
         hour_angle_range=[-3.813467684252483,2.469671758574231],
         __definition__hour_angle_range='min and max range of hour angle space',
+        save_polarisations = save_polarisations,
+        __definition__save_polarisations = 'Save the polarisations for the training data if true (detector waveforms if not)',
         use_real_det_noise=False,
         __definition__use_real_det_noise='If True, use real detector noise around reference time',
         real_noise_time_range = [1126051217, 1137254417],
@@ -422,7 +428,7 @@ if __name__ == "__main__":
     # Save training/test parameters of run if files do not already exist
     params=get_params()
 
-    out_dir = "./params_files_{}Hz_{}s_widespin".format(params["sample_rate"], params["duration"])
+    out_dir = "./params_files_{}Hz_{}s_polarisation".format(params["sample_rate"], params["duration"])
     
     # Make directory containing params files
     try:

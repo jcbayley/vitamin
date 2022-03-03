@@ -27,7 +27,9 @@ import pandas as pd
 import logging.config
 from contextlib import contextmanager
 import json
+
 from lal import GreenwichMeanSiderealTime
+print("load1")
 
 import skopt
 from skopt import gp_minimize, forest_minimize, dump
@@ -35,7 +37,6 @@ from skopt.space import Real, Categorical, Integer
 from skopt.plots import plot_convergence
 from skopt.plots import plot_objective, plot_evaluations
 from skopt.utils import use_named_args
-
 try:
     from .gen_benchmark_pe import run, gen_real_noise
     from . import plotting
@@ -61,64 +62,9 @@ else:
         from .skyplotting import plot_sky
     except:
         from skyplotting import plot_sky
+print("load3")
 
-""" Script has several main functions:
-1.) Generate training data
-2.) Generate testing data
-3.) Train model
-4.) Test model
-5.) Generate samples only given model and timeseries
-6.) Apply importance sampling to VItamin results
-"""
-
-parser = argparse.ArgumentParser(description='VItamin: A user friendly Bayesian inference machine learning library.')
-parser.add_argument("--gen_train", default=False, help="generate the training data")
-parser.add_argument("--gen_rnoise", default=False, help="generate the real noise samples")
-parser.add_argument("--gen_val", default=False, help="generate the validation data")
-parser.add_argument("--gen_test", default=False, help="generate the testing data")
-parser.add_argument("--train", default=False, help="train the network")
-parser.add_argument("--resume_training", default=False, help="resume training of network")
-parser.add_argument("--test", default=False, help="test the network")
-parser.add_argument("--params_file", default=None, type=str, help="dictionary containing parameters of run")
-parser.add_argument("--bounds_file", default=None, type=str, help="dictionary containing source parameter bounds")
-parser.add_argument("--fixed_vals_file", default=None, type=str, help="dictionary containing source parameter values when fixed")
-parser.add_argument("--pretrained_loc", default=None, type=str, help="location of a pretrained network (i.e. .ckpt file)")
-parser.add_argument("--test_set_loc", default=None, type=str, help="directory containing test set waveforms")
-parser.add_argument("--gen_samples", default=False, help="If True, generate samples only (no plotting)")
-parser.add_argument("--num_samples", type=int, default=10000, help="number of posterior samples to generate")
-parser.add_argument("--use_gpu", default=False, help="if True, use gpu")
-parser.add_argument("--importance_sampling", default=False, help="Apply importance sampling to VItamin posterior samples")
-parser.add_argument("--params_dir", type=str, default="./params_files", help="directory containing params files")
-args = parser.parse_args()
-
-global params; global bounds; global fixed_vals
-
-params_dir = args.params_dir
-
-# Define default location of the parameters files
-params = os.path.join(os.getcwd(), params_dir, 'params.json')
-bounds = os.path.join(os.getcwd(), params_dir, 'bounds.json')
-fixed_vals = os.path.join(os.getcwd(), params_dir, 'fixed_vals.json')
-
-# Load parameters files
-if args.params_file != None:
-    params = args.params_file
-if args.bounds_file != None:
-    bounds = args.bounds_file
-if args.fixed_vals_file != None:
-    fixed_vals = args.fixed_vals_file
-
-# Ranges over which hyperparameter optimization parameters are allowed to vary
-r1_filter_num = Integer(low=2, high=64, name='r1_filter_num')
-r1_filter_size = Integer(low=2, high=33, name='r1_filter_size')
-
-# putting defined hyperparameter optimization ranges into a list
-dimensions = [r1_filter_num, r1_filter_size]
-
-# dummy value for initial hyperparameter best KL (to be minimized). Doesn't need to be changed.
-best_loss = int(1e5)
-
-@use_named_args(dimensions=dimensions)
+#@use_named_args(dimensions=dimensions)
 def hyperparam_fitness(r1_filter_num, r1_filter_size):
     """ Fitness function used in Gaussian Process hyperparameter optimization 
     Returns a value to be minimized (in this case, the total loss of the 
@@ -427,7 +373,7 @@ def load_data(params,bounds,fixed_vals,input_dir,inf_pars,test_data=False):
 
     return x_data, y_data, y_data_noisy, snrs
 
-def gen_rnoise(params=params,bounds=bounds,fixed_vals=fixed_vals):
+def gen_rnoise(params,bounds,fixed_vals):
     """ Generate real noise over requested time segment
 
     Parameters
@@ -506,7 +452,7 @@ def gen_rnoise(params=params,bounds=bounds,fixed_vals=fixed_vals):
         exit()
     return 
 
-def gen_train(params=params,bounds=bounds,fixed_vals=fixed_vals):
+def gen_train(params,bounds,fixed_vals):
     """ Generate training samples
 
     Parameters
@@ -587,7 +533,7 @@ def gen_train(params=params,bounds=bounds,fixed_vals=fixed_vals):
         hf.close()
     return
 
-def gen_val(params=params,bounds=bounds,fixed_vals=fixed_vals):
+def gen_val(params,bounds,fixed_vals):
     """ Generate validation samples
 
     Parameters
@@ -667,7 +613,7 @@ def gen_val(params=params,bounds=bounds,fixed_vals=fixed_vals):
         hf.close()
     return
 
-def gen_test(params=params,bounds=bounds,fixed_vals=fixed_vals):
+def gen_test(params,bounds,fixed_vals):
     """ Generate testing sample time series and posteriors using Bayesian inference (bilby)
 
     Parameters
@@ -748,7 +694,7 @@ def gen_test(params=params,bounds=bounds,fixed_vals=fixed_vals):
         hf.close()
     return
 
-def train(resume_training=False, params_dir = params_dir):
+def train(resume_training=False, params_dir=None):
     """ Train neural network given pre-made training/testing samples
 
     Parameters
@@ -945,7 +891,7 @@ def train(resume_training=False, params_dir = params_dir):
     return
 
 # if we are now testing the network
-def test(params=params,bounds=bounds,fixed_vals=fixed_vals,use_gpu=False):
+def test(params,bounds,fixed_vals,use_gpu=False):
     """ Test a pre-trained neural network. There are several metrics by 
     which the user may test the efficiency of the model (e.g. KL divergence, 
     pp plots, corner plots).
@@ -1369,7 +1315,7 @@ def test(params=params,bounds=bounds,fixed_vals=fixed_vals,use_gpu=False):
 
     return
 
-def gen_samples(params=params,bounds=bounds,fixed_vals=fixed_vals,model_loc='model_ex/model.ckpt',test_set='test_waveforms/',num_samples=None,plot_corner=True,use_gpu=False):
+def gen_samples(params,bounds,fixed_vals,model_loc='model_ex/model.ckpt',test_set='test_waveforms/',num_samples=None,plot_corner=True,use_gpu=False):
     """ Function to generate VItamin samples given a trained model
 
     Parameters
@@ -1508,19 +1454,74 @@ def gen_samples(params=params,bounds=bounds,fixed_vals=fixed_vals,model_loc='mod
     print('... All posterior samples generated for all waveforms in test sample directory!')
     return samples
 
-# If running module from command line
-if args.gen_train:
-    gen_train(params,bounds,fixed_vals)
-if args.gen_rnoise:
-    gen_rnoise(params,bounds,fixed_vals)
-if args.gen_val:
-    gen_val(params,bounds,fixed_vals)
-if args.gen_test:
-    gen_test(params,bounds,fixed_vals)
-if args.train:
-    train(params_dir = params_dir)
-if args.test:
-    test(params,bounds,fixed_vals,use_gpu=bool(args.use_gpu))
-if args.gen_samples:
-    gen_samples(params,bounds,fixed_vals,model_loc=args.pretrained_loc,
-                test_set=args.test_set_loc,num_samples=args.num_samples,use_gpu=bool(args.use_gpu))
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='VItamin: A user friendly Bayesian inference machine learning library.')
+    parser.add_argument("--gen_train", default=False, help="generate the training data")
+    parser.add_argument("--gen_rnoise", default=False, help="generate the real noise samples")
+    parser.add_argument("--gen_val", default=False, help="generate the validation data")
+    parser.add_argument("--gen_test", default=False, help="generate the testing data")
+    parser.add_argument("--train", default=False, help="train the network")
+    parser.add_argument("--resume_training", default=False, help="resume training of network")
+    parser.add_argument("--test", default=False, help="test the network")
+    parser.add_argument("--params_file", default=None, type=str, help="dictionary containing parameters of run")
+    parser.add_argument("--bounds_file", default=None, type=str, help="dictionary containing source parameter bounds")
+    parser.add_argument("--fixed_vals_file", default=None, type=str, help="dictionary containing source parameter values when fixed")
+    parser.add_argument("--pretrained_loc", default=None, type=str, help="location of a pretrained network (i.e. .ckpt file)")
+    parser.add_argument("--test_set_loc", default=None, type=str, help="directory containing test set waveforms")
+    parser.add_argument("--gen_samples", default=False, help="If True, generate samples only (no plotting)")
+    parser.add_argument("--num_samples", type=int, default=10000, help="number of posterior samples to generate")
+    parser.add_argument("--use_gpu", default=False, help="if True, use gpu")
+    parser.add_argument("--importance_sampling", default=False, help="Apply importance sampling to VItamin posterior samples")
+    parser.add_argument("--params_dir", type=str, default="./params_files", help="directory containing params files")
+    args = parser.parse_args()
+
+    
+    print("run1")
+    params_dir = args.params_dir
+    
+    # Define default location of the parameters files
+    params = os.path.join(os.getcwd(), params_dir, 'params.json')
+    bounds = os.path.join(os.getcwd(), params_dir, 'bounds.json')
+    fixed_vals = os.path.join(os.getcwd(), params_dir, 'fixed_vals.json')
+    
+    
+    print("load pars")
+    # Load parameters files
+    if args.params_file != None:
+        params = args.params_file
+    if args.bounds_file != None:
+        bounds = args.bounds_file
+    if args.fixed_vals_file != None:
+        fixed_vals = args.fixed_vals_file
+
+    # Ranges over which hyperparameter optimization parameters are allowed to vary
+    r1_filter_num = Integer(low=2, high=64, name='r1_filter_num')
+    r1_filter_size = Integer(low=2, high=33, name='r1_filter_size')
+    
+    # putting defined hyperparameter optimization ranges into a list
+    dimensions = [r1_filter_num, r1_filter_size]
+    
+    # dummy value for initial hyperparameter best KL (to be minimized). Doesn't need to be changed.
+    best_loss = int(1e5)
+    
+    print("run train")
+    # If running module from command line
+    if args.gen_train:
+        gen_train(params,bounds,fixed_vals)
+    if args.gen_rnoise:
+        gen_rnoise(params,bounds,fixed_vals)
+    if args.gen_val:
+        gen_val(params,bounds,fixed_vals)
+    if args.gen_test:
+        gen_test(params,bounds,fixed_vals)
+    if args.train:
+        train(params_dir = params_dir)
+    if args.test:
+        test(params,bounds,fixed_vals,use_gpu=bool(args.use_gpu))
+    if args.gen_samples:
+        gen_samples(params,bounds,fixed_vals,model_loc=args.pretrained_loc,
+                    test_set=args.test_set_loc,num_samples=args.num_samples,use_gpu=bool(args.use_gpu))
+
+

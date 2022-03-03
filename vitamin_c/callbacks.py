@@ -11,7 +11,7 @@ import plotting
 
 class PlotCallback(tf.keras.callbacks.Callback):
 
-    def __init__(self, plot_dir, epoch_plot = 2):
+    def __init__(self, plot_dir, epoch_plot = 2, start_epoch = 0):
         from vitamin_c_fit import plot_losses, plot_losses_zoom
         self.plot_losses = plot_losses
         self.plot_losses_zoom = plot_losses_zoom
@@ -19,6 +19,11 @@ class PlotCallback(tf.keras.callbacks.Callback):
         self.epoch_plot = epoch_plot
         self.train_losses = [[],[],[]]
         self.val_losses = [[],[],[]]
+        if start_epoch != 0:
+            with open(os.path.join(plot_dir, "loss.txt")) as f:
+                losses = np.loadtxt(f)
+            self.train_losses = [list(losses[:,0]),list(losses[:,2]),list(losses[:,2])]
+            self.val_losses = [list(losses[:,3]),list(losses[:,4]),list(losses[:,5])]
 
     def on_epoch_end(self, epoch, logs = None):
         self.train_losses[2].append(logs["total_loss"])
@@ -110,11 +115,11 @@ class TrainCallback(tf.keras.callbacks.Callback):
         tf.keras.backend.set_value(self.model.ramp, ramp)
         #self.model.compile(run_eagerly = False, optimizer = self.optimizer)
 
-    def cyclic_learning_rate(self, epoch, epochs_range = 30):
+    def cyclic_learning_rate(self, epoch, epochs_range = 100):
 
         half_fact_arr = np.linspace(self.model.initial_learning_rate/10., self.model.initial_learning_rate, int(epochs_range/2))
         fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
-        start_cycle = 0#self.ramp_start + self.ramp_length
+        start_cycle = self.ramp_start + 10*self.ramp_length
         if epoch > start_cycle:
             position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
             factor = fact_arr[position]
@@ -130,7 +135,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
         print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
     def on_epoch_begin(self, epoch, logs = None):
-        #self.cyclic_learning_rate(epoch)
+        self.cyclic_learning_rate(epoch)
         #self.learning_rate_it(epoch)
         if epoch > self.ramp_start:
             self.ramp_func(epoch)
@@ -202,7 +207,7 @@ class TestCallback(tf.keras.callbacks.Callback):
                     KL_est = [-1,-1,-1]
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.model.params['n_samples'],end_time_test - start_time_test))
-                    KL_est = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.comp_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks, unconvert_parameters = self.test_dataset.unconvert_parameters)
+                    KL_est = self.plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.comp_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks, unconvert_parameters = self.test_dataset.unconvert_parameters)
                     #_ = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,run=self.full_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
                     #KL_samples.append(KL_est)
             if self.paper_plots:
@@ -219,19 +224,24 @@ class TestCallback(tf.keras.callbacks.Callback):
 
 
 class TimeCallback(tf.keras.callbacks.Callback):
-    def __init__(self, save_dir, save_interval):
+    def __init__(self, save_dir, save_interval, start_epoch = 0):
         self.save_interval = save_interval
         self.save_dir = save_dir
         self.fname = os.path.join(self.save_dir, "epochs_times.txt")
-
-    def on_train_begin(self, logs={}):
-        self.times = []
+        self.start_epoch = start_epoch
+        if start_epoch != 0:
+            with open(self.fname, "r") as f:
+                self.times = np.loadtxt(f)
+            self.total_elapsed = self.times[-1] - self.times[0]
+        else:
+            self.times = []
+            self.total_elapsed = 0
 
     def on_epoch_begin(self, batch, logs={}):
         self.epoch_time_start = time.time()
 
     def on_epoch_end(self, batch, logs={}):
-        temp_time = time.time() - self.epoch_time_start
+        temp_time = time.time() - self.epoch_time_start + self.total_elapsed
         self.times.append(temp_time)
 
         if batch % self.save_interval == 0:

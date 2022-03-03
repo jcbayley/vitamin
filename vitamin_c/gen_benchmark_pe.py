@@ -79,6 +79,40 @@ def gen_real_noise(duration,
     noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
 
     return noise_sample
+
+def get_real_noise(duration,
+                   sampling_frequency,
+                   det,
+                   ref_geocent_time, psd_files=[],
+                   real_noise_seg =[None,None]
+               ):
+    """ pull real noise samples
+    """
+
+    # compute the number of time domain samples
+    Nt = int(sampling_frequency*duration)
+
+    # Get ifos bilby variable
+    ifos = bilby.gw.detector.InterferometerList(det)
+    det_string = "{}".format(det[0])
+    gwf_file = find_urls(det_string, "{}1_HOFT_C01".format(det_string), real_noise_seg[0], real_noise_seg[1])
+
+    fname = gwf_file[0].replace("file://localhost","")
+    
+    
+
+    start_open_seg, end_open_seg = real_noise_seg # 1 sec noise segments
+    for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+        time_series = TimeSeries.find('%s:GDS-CALIB_STRAIN' % det[ifo_idx],
+                      start_open_seg, end_open_seg) # pull timeseries data using gwpy
+        ifo.set_strain_data_from_gwpy_timeseries(time_series=time_series) # input new ts into bilby ifo
+
+    noise_sample = ifos[0].strain_data.frequency_domain_strain # get frequency domain strain
+    noise_sample /= ifos[0].amplitude_spectral_density_array # assume default psd from bilby
+    noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
+
+    return noise_sample
+
     
 
 def gen_template(duration,
@@ -223,8 +257,8 @@ def gen_template(duration,
         return np.squeeze(np.array(whitened_signal_td_all),axis=1),np.squeeze(np.array(whitened_h_td_all),axis=1),injection_parameters,ifos,waveform_generator
     
     else:
-
-        return freq_signal, injection_parameters, waveform_generator
+        plus_cross = np.array([freq_signal["plus"], freq_signal["cross"]])
+        return plus_cross, injection_parameters, waveform_generator
 
 def load_template(duration,
                   sampling_frequency,

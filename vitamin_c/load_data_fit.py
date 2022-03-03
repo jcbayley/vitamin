@@ -7,10 +7,13 @@ import time
 from lal import GreenwichMeanSiderealTime
 from astropy.time import Time
 from astropy import coordinates as coord
+import bilby 
+from gwpy.timeseries import TimeSeries
+import copy 
 
 class DataLoader(tf.keras.utils.Sequence):
 
-    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40, val_set = False):
+    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40, val_set = False, num_epoch_load = 4, shuffle=False):
         
         self.params = params
         self.bounds = bounds
@@ -20,7 +23,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.test_set = test_set
         self.val_set = val_set
         self.silent = silent
-        self.shuffle = False
+        self.shuffle = shuffle
         self.batch_size = batch_size
 
         #load all filenames
@@ -36,7 +39,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.max_chunk_num = int(np.floor((self.num_data/self.chunk_size)))
         #self.max_chunk_num = 50
         
-        self.num_epoch_load = 4
+        self.num_epoch_load = num_epoch_load
         self.epoch_iter = 0
         # will addthis to init files eventually
         self.params["noiseamp"] = 1
@@ -52,7 +55,7 @@ class DataLoader(tf.keras.utils.Sequence):
         Loads in one chunk of data where the size if set by chunk_size
         """
         if self.test_set:
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs = self.load_waveforms(self.filenames, None)
+            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.truths = self.load_waveforms(self.filenames, None)
         else:
             if self.chunk_iter >= self.max_chunk_num:
                 print("Reached maximum number of chunks, restarting index and shuffling files")
@@ -103,11 +106,15 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.test_set:
             # parameters, waveform noisefree, waveform noisy, snrs
             X, Y_noisefree, Y_noisy, snrs = self.X, self.Y_noisefree, self.Y_noisy, self.snrs
+            #Y_noisy = Y_noisy/self.params["y_normscale"]
         else:
 
             start_index = index*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
+            # add noise here
+            Y_noisefree = (Y_noisefree + self.params["noiseamp"]*np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/self.params["y_normscale"]
+
         return np.array(Y_noisefree), np.array(X)
 
 
@@ -129,6 +136,82 @@ class DataLoader(tf.keras.utils.Sequence):
         """
         # Sort files by number index in file name using natsorted program
         self.filenames = np.array(natsort.natsorted(os.listdir(self.input_dir),reverse=False))
+
+    def get_whitened_signal_response(self, data):
+
+        ifos = bilby.gw.detector.InterferometerList(self.params['det'])
+        for int_idx,ifo in enumerate(ifos):
+            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params["psd_files"][0])
+
+        ifos.set_strain_data_from_power_spectral_densities(
+            sampling_frequency=self.params["sample_rate"], duration=self.params["duration"],
+            start_time=self.params["ref_geocent_time"] - self.params["duration"]/2)
+
+        data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
+
+        all_signals = []
+            
+        for inj in range(len(data["x_data"])):
+            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.params["inf_pars"])}
+                    
+            injection_parameters["geocent_time"] += self.params["ref_geocent_time"]
+
+            Nt = self.params["sample_rate"]*self.params["duration"]
+            whitened_signals_td = []
+            polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
+            for dt in range(len(self.params['det'])):
+                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters) 
+                whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
+                whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                whitened_signals_td.append(whitened_signal_td)            
+                    
+            all_signals.append(whitened_signals_td)
+
+        data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
+               
+        data["x_data"], time_correction = self.randomise_time(data["x_data"])
+        data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction*time_correction
+        
+        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])#*distance_correction
+        data["y_data_noisefree"] *= distance_correction
+        del y_temp_fft
+        return data
+
+    def get_real_noise(self, data, segment_duration, segment_range):
+
+        # compute the number of time domain samples
+        Nt = int(sampling_frequency*duration)
+
+        # Get ifos bilby variable
+        ifos = bilby.gw.detector.InterferometerList(det)
+
+        start_range, end_range = segment_range
+        starts = []
+        for i in range(len(ifos)):
+            if i == 0:
+                # get initial semgent start time
+                start_temp = np.random.uniform(start_range + segment_duration, end_range - segment_duration, 1)
+            else:
+                # get segmnet start time which does not overlap with other detectors
+                while np.any((np.array(starts) <= start_temp) & (np.array(starts) <= starts + segment_duration)): 
+                    start_temp = np.random.uniform(start_range + segment_duration, end_range - segment_duration, 1)
+            starts.append(start_temp)
+
+
+        for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+            time_series = TimeSeries.find('%s:GDS-CALIB_STRAIN' % self.params["dets"][ifo_idx],
+                                          starts[ifo_idx], starts[ifo_idx] + segment_duration) # pull timeseries data using gwpy
+            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params["psd_files"][0])
+            ifo.set_strain_data_from_gwpy_timeseries(time_series=time_series) # input new ts into bilby ifo
+
+        noise_sample = ifos[0].strain_data.frequency_domain_strain # get frequency domain strain
+        noise_sample /= ifos[0].amplitude_spectral_density_array # normalise to a fixed psd
+        noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
+
+        return noise_sample
         
     def load_waveforms(self, filenames, indices = None):
         """
@@ -145,7 +228,7 @@ class DataLoader(tf.keras.utils.Sequence):
         y_data_noisy     : waveform with noise
         """
 
-        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': []}
+        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': [], 'y_hplus_hcross': []}
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
         for i,filename in enumerate(filenames):
@@ -160,89 +243,80 @@ class DataLoader(tf.keras.utils.Sequence):
                     data['snrs'].append(h5py_file['snrs'])
                 else:
                     data['x_data'].append(h5py_file['x_data'][indices[i]])
-                    data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
+                    if self.params["save_polarisations"]:
+                        data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
+                    else:
+                        data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
                     data['rand_pars'] = [i for i in h5py_file['rand_pars']]
-                    data['snrs'].append(h5py_file['snrs'][indices[i]])
+                    #data['snrs'].append(h5py_file['snrs'][indices[i]])
                 if not self.silent:
                     print('...... Loaded file ' + os.path.join(self.input_dir,filename))
             except OSError:
                 print('Could not load requested file: {}'.format(filename))
                 continue
 
-        print("datashape", np.shape(data["x_data"]), np.shape(data["y_data_noisefree"]))
         # concatentation all the x data (parameters) from each of the files
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
-        # concatenate, then transpose the dimensions for keras, from (num_templates, num_dets, num_samples) to (num_templates, num_samples, num_dets)
-        data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
-        data['snrs'] = np.concatenate(np.array(data['snrs']), axis=0)
-        
-        """
-        # temporary code to set a mass range
-        for i,k in enumerate(data['rand_pars']):
-            if k.decode('utf-8')=='mass_1':
-                m1_idx = i
-            if k.decode('utf-8')=='mass_2':
-                m2_idx = i
-        
-        low_m = 2
-        high_m = 102
+        else:
+            if self.params["save_polarisations"] == True:
+                data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
+            else:
+                data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
 
-        mass_inrange = (data["x_data"][:,m1_idx] > low_m)&(data["x_data"][:,m1_idx] < high_m)&(data["x_data"][:,m2_idx] < high_m)&(data["x_data"][:,m1_idx] > low_m)
-        """
+
         self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
         
+        # reorder x parameters into params['infer_pars'] order
         data["x_data"] = data['x_data'][:,self.par_idx]
-
-        data["y_data_noisefree"] = data["y_data_noisefree"]#[mass_inrange]
+        
         if self.test_set:
-            data["y_data_noisy"] = data["y_data_noisy"]#[mass_inrange]
-        try:
-            data["snrs"] = data["snrs"]#[mass_inrange]
-        except:
-            pass
-
+            truths = copy.copy(data["x_data"])
 
         if not self.silent:
             print('...... {} will be inferred'.format(infparlist))
 
         y_normscale = self.params["y_normscale"]
         if not self.test_set:
-            data["x_data"], time_correction = self.randomise_time(data["x_data"])
-            data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
-            data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+            if self.params["save_polarisations"]:
+                data = self.get_whitened_signal_response(data)
+            else:
+                data["x_data"], time_correction = self.randomise_time(data["x_data"])
+                data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+                data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         
-            # apply phase, time and distance corrections
-            y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
-            #y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction
-            data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
-            #data["y_data_noisefree"] = data["y_data_noisefree"]*distance_correction
-            
-            del y_temp_fft
+                # apply phase, time and distance corrections
+                y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"],[0,2,1]))*phase_correction*time_correction
+                data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+
+                pass
+                #del y_temp_fft
         
             # add noise to the noisefree waveforms and normalise and normalise
 
             #data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
-            data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*np.random.normal(size=np.shape(data["y_data_noisefree"]), loc=0.0, scale=1.0))/y_normscale
+            #data["y_data_noisefree"] = data["y_data_noisefree"] 
         else:
-            data["y_data_noisy"] = data["y_data_noisy"]/y_normscale 
-
+            data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
         data["x_data"] = self.convert_parameters(data["x_data"])
 
         # cast data to float
-        data["x_data"] = tf.cast(data['x_data'][:,self.par_idx],dtype=tf.float32)
+        data["x_data"] = tf.cast(data['x_data'],dtype=tf.float32)
         data["y_data_noisefree"] = tf.cast(data['y_data_noisefree'],dtype=tf.float32)
         data["y_data_noisy"] = tf.cast(data['y_data_noisy'],dtype=tf.float32)
 
-        return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
+        if self.test_set:
+            return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths
+        else:
+            return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
 
 
     def convert_parameters(self, x_data):
         # convert the parameters from right ascencsion to hour angle
         x_data = convert_ra_to_hour_angle(x_data, self.params, self.params['inf_pars'])
-
+        
         # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
         
         for i,k in enumerate(self.params["inf_pars"]):
@@ -260,8 +334,8 @@ class DataLoader(tf.keras.utils.Sequence):
         #replace m1 with chirp mass
         #x_data[:, m1_idx], x_data[:,m2_idx] = m1m2_to_chirpmassq(x_data[:,m1_idx], x_data[:,m2_idx])
 
-        min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
-        max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
+        #min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
+        #max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
         
         # normalise to bounds
         #decoded_rand_pars, par_idx = self.get_infer_pars(data)
@@ -291,8 +365,8 @@ class DataLoader(tf.keras.utils.Sequence):
     def unconvert_parameters(self, x_data):
 
         # unnormalise to bounds
-        min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
-        max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
+        #min_chirp, minq = m1m2_to_chirpmassq(self.bounds["mass_1_min"],self.bounds["mass_2_min"])
+        #max_chirp, maxq = m1m2_to_chirpmassq(self.bounds["mass_1_max"],self.bounds["mass_2_max"])
         for i,k in enumerate(self.params["inf_pars"]):
             par_min = k + '_min'
             par_max = k + '_max'
@@ -356,20 +430,25 @@ class DataLoader(tf.keras.utils.Sequence):
         return decoded_rand_pars, par_idx
 
 
+    def randomise_extrinsic_parameters(self, x):
+        "randomise the extrinsic parameters"
+
+        new_ra = np.random.uniform(size = len(x), low = self.bounds["ra_min"], high = self.bounds["ra_max"])
+        # uniform in the sin of the declination (doesnt yet change if input prior is changed)
+        new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.bounds["dec_min"]), high = np.sin(self.bounds["dec_max"])))
+        new_psi = np.random.uniform(size = len(x), low = self.bounds["psi_min"], high = self.bounds["psi_max"])
+        #new_geocent_time = np.random.uniform(size = len(x), low = self.bounds["geocent_time_min"], high = self.bounds["geocent_time_max"])
+
+        #x[:, np.where(np.array(self.params["inf_pars"])=="geocent_time")[0][0]] = new_geocent_time
+        x[:, np.where(np.array(self.params["inf_pars"])=="ra")[0][0]] = new_ra
+        x[:, np.where(np.array(self.params["inf_pars"])=="dec")[0][0]] = new_dec
+        x[:, np.where(np.array(self.params["inf_pars"])=="psi")[0][0]] = new_psi
+
+        return x
+        
     def randomise_phase(self, x, y):
         """ randomises phase of input parameter x"""
         # get old phase and define new phase
-        """
-        old_phase = self.bounds['phase_min'] + tf.boolean_mask(x,self.masks["phase_mask"],axis=1)*(self.bounds['phase_max'] - self.bounds['phase_min'])
-        new_x = tf.random.uniform(shape=tf.shape(old_phase), minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
-        new_phase = self.bounds['phase_min'] + new_x*(self.bounds['phase_max'] - self.bounds['phase_min'])
-
-        # defice 
-        x = tf.gather(tf.concat([tf.reshape(tf.boolean_mask(x,self.masks["not_phase_mask"],axis=1),[-1,tf.shape(x)[1]-1]), tf.reshape(new_x,[-1,1])],axis=1),tf.constant(self.masks["idx_phase_mask"]),axis=1)
-
-        phase_correction = -1.0*tf.complex(tf.cos(new_phase-old_phase),tf.sin(new_phase-old_phase))
-        phase_correction = tf.tile(tf.expand_dims(phase_correction,axis=1),(1,self.num_dets,tf.shape(y)[1]/2 + 1))
-        """
         old_phase = x[:,np.array(self.masks["phase_mask"]).astype(np.bool)]
         new_x = np.random.uniform(size=np.shape(old_phase), low=0.0, high=1.0)
         new_phase = self.bounds['phase_min'] + new_x*(self.bounds['phase_max'] - self.bounds['phase_min'])
@@ -399,13 +478,6 @@ class DataLoader(tf.keras.utils.Sequence):
         return x, time_correction
         
     def randomise_distance(self,x, y):
-        """
-        old_d = self.bounds['luminosity_distance_min'] + tf.boolean_mask(x,self.masks["dist_mask"],axis=1)*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
-        new_x = tf.random.uniform(shape=tf.shape(old_d), minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
-        new_d = self.bounds['luminosity_distance_min'] + new_x*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
-        x = tf.gather(tf.concat([tf.reshape(tf.boolean_mask(x,self.masks["not_dist_mask"],axis=1),[-1,tf.shape(x)[1]-1]), tf.reshape(new_x,[-1,1])],axis=1),tf.constant(self.masks["idx_dist_mask"]),axis=1)
-        dist_scale = tf.tile(tf.expand_dims(old_d/new_d,axis=1),(1,tf.shape(y)[1],1))
-        """
         old_d = x[:, np.array(self.masks["dist_mask"]).astype(np.bool)]
         new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
         new_d = self.bounds['luminosity_distance_min'] + new_x*(self.bounds['luminosity_distance_max'] - self.bounds['luminosity_distance_min'])
@@ -415,6 +487,10 @@ class DataLoader(tf.keras.utils.Sequence):
         dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))
 
         return x, dist_scale
+
+
+
+
 
 def m1m2_to_chirpmassq(m1,m2):
     chirp_mass = ((m1*m2)**(3./5))/((m1 + m2)**(1./5))
@@ -637,7 +713,6 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
             samp_idx = samp_idx
             break
     while i_idx < params['r']:
-
         filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
         for samp_idx_inner in params['samplers'][1:]:
             inner_file_existance = True
@@ -657,7 +732,7 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
 
         if inner_file_existance == False:
             i+=1
-            if i > 5000:
+            if i > 500:
                 sys.exit()
             print('File does not exist for one of the samplers: {}'.format(filename))
             continue
@@ -675,14 +750,17 @@ def load_samples(params,sampler,pp_plot=False, bounds=None):
             par_min = q + '_min'
             par_max = q + '_max'
             data_temp[p] = h5py.File(filename, 'r')[p][:]
+            
             if p == 'psi_post':
                 data_temp[p] = np.remainder(data_temp[p],np.pi)
             elif p == 'geocent_time_post':
                 data_temp[p] = data_temp[p] - params['ref_geocent_time']
+            """
             # Convert samples to hour angle if doing pp plot
             if p == 'ra_post' and pp_plot:
                 data_temp[p] = convert_ra_to_hour_angle(data_temp[p], params, None, single=True)
             data_temp[p] = (data_temp[p] - bounds[par_min]) / (bounds[par_max] - bounds[par_min])
+            """            
             Nsamp = data_temp[p].shape[0]
             n = n + 1
         print('... read in {} samples from {}'.format(Nsamp,filename))

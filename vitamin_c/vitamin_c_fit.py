@@ -19,6 +19,9 @@ from universal_divergence import estimate
 import natsort
 import plotting
 from tensorflow.keras import regularizers
+from scipy.spatial.distance import jensenshannon
+import scipy.stats as st
+
 model_fit_type = "basic"
 if model_fit_type == "multidet":
     from vitamin_c_model_fit_multidet import CVAE
@@ -30,6 +33,8 @@ elif model_fit_type == "kaggle":
     from vitamin_c_model_fit_kaggle1 import CVAE
 elif model_fit_type == "resnet":
     from vitamin_c_model_fit_resnet import CVAE
+elif model_fit_type == "freq":
+    from vitamin_c_model_fit_freq import CVAE
 
 from callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
 from load_data_fit import load_data, load_samples, convert_ra_to_hour_angle, convert_hour_angle_to_ra, DataLoader, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
@@ -202,16 +207,19 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
         return [-1.0] * len(params['samplers'][1:])
     # make numpy arrays
     samples = samples.numpy()
-    x_truth = x_truth.numpy()
+    #x_truth = x_truth.numpy()
 
     samples_file = '{}/posterior_samples_epoch_{}_event_{}_normed.txt'.format(run,epoch,idx)
     np.savetxt(samples_file,samples)
 
     # convert vitamin sample and true parameter back to truths
-    vit_samples = unconvert_parameters(samples)
-    x_truth = np.squeeze(unconvert_parameters(np.expand_dims(x_truth, axis=0)), axis=0)
-    
-    print("samp_shape",np.shape(vit_samples), np.shape(x_truth))
+    if unconvert_parameters is not None:
+        vit_samples = unconvert_parameters(samples)
+    else:
+        vit_samples = samples
+    #x_truth = np.squeeze(unconvert_parameters(np.expand_dims(x_truth, axis=0)), axis=0)
+    print("truth", x_truth)
+    #print("samp_shape",np.shape(vit_samples), np.shape(x_truth))
     # define general plotting arguments
     defaults_kwargs = dict(
                     bins=50, smooth=0.9, label_kwargs=dict(fontsize=16),
@@ -227,7 +235,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
     hist_kwargs_other2 = dict(density=True,color='tab:green')
 
     if all_other_samples is not None:
-        KL_est = []
+        JS_est = []
         for i, other_samples in enumerate(all_other_samples):
             true_post = np.zeros([other_samples.shape[0],masks["bilby_ol_len"]])
             true_x = np.zeros(masks["inf_ol_len"])
@@ -239,7 +247,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
                 bilby_par = params['bilby_pars'][bilby_idx]
                 true_XS[:,cnt] = vit_samples[:,inf_idx]
                 true_post[:,cnt] = other_samples[:,bilby_idx]
-                true_x[cnt] = x_truth[cnt]
+                true_x[cnt] = x_truth[inf_idx]
 
                 ol_pars.append(inf_par)
                 cnt += 1
@@ -257,20 +265,42 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
             np.savetxt(samples_file,true_XS)
 
             # compute KL estimate
-            idx1 = np.random.randint(0,true_XS.shape[0],2000)
-            idx2 = np.random.randint(0,true_post.shape[0],2000)
-            """
-            try:
-                current_KL = 0.5*(estimate(true_XS[idx1,:],true_post[idx2,:],n_jobs=4) + estimate(true_post[idx2,:],true_XS[idx1,:],n_jobs=4))
-            except:
-                current_KL = -1.0
-                pass
-            """
-            current_KL = -1
-            KL_est.append(current_KL)
+            idx1 = np.random.randint(0,true_XS.shape[0],3000)
+            idx2 = np.random.randint(0,true_post.shape[0],3000)
+            temp_JS = []
+            SMALL_CONST = 1e-162
+            def my_kde_bandwidth(obj, fac=1.0):
+                """We use Scott's Rule, multiplied by a constant factor."""
+                return np.power(obj.n, -1./(obj.d+4)) * fac
+
+            for pr in range(np.shape(true_XS)[1]):
+                #try:
+                kdsampp = true_XS[idx1, pr:pr+1][~np.isnan(true_XS[idx1, pr:pr+1])].flatten()
+                kdsampq = true_post[idx1, pr:pr+1][~np.isnan(true_post[idx1, pr:pr+1])].flatten()
+                eval_pointsp = np.linspace(np.min(kdsampp), np.max(kdsampp), len(kdsampp))
+                eval_pointsq = np.linspace(np.min(kdsampq), np.max(kdsampq), len(kdsampq))
+                kde_p = st.gaussian_kde(kdsampp)(eval_pointsp)
+                kde_q = st.gaussian_kde(kdsampq)(eval_pointsq)
+                #kde_q = st.gaussian_kde(kdsampq, bw_method=my_kde_bandwidth)(kdsampq)
+
+                #kl_1 = 1./(len(kdsampp))*np.sum(kde_p(kdsampp)*np.log((kde_p(kdsampp) + SMALL_CONST)/(kde_q(kdsampp) + SMALL_CONST)))
+                #kl_2 = 1./(len(kdsampq))*np.sum(kde_q(kdsampq)*np.log((kde_q(kdsampq) + SMALL_CONST)/(kde_p(kdsampq) + SMALL_CONST)))
+                current_JS = np.power(jensenshannon(kde_p, kde_q),2)
+                #kl_1 = 1./(len(kdsampp))*np.sum(np.log((kde_p(kdsampp) + SMALL_CONST)/(kde_q(kdsampp) + SMALL_CONST)))
+                #kl_2 = 1./(len(kdsampq))*np.sum(np.log((kde_q(kdsampq) + SMALL_CONST)/(kde_p(kdsampq) + SMALL_CONST)))
+                                                                
+                #current_JS = kl_1 + kl_2
+                #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
+                #except:
+                #    current_JS = -1.0
+
+                temp_JS.append(current_JS)
+
+            JS_est.append(temp_JS)
 
             other_samples_file = '{}/posterior_samples_epoch_{}_event_{}_{}.txt'.format(run,epoch,idx,i)
             np.savetxt(other_samples_file,true_post)
+
 
             print("true_samples_shape", np.shape(true_post))
             if i==0:
@@ -278,26 +308,30 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
                            color='tab:blue',
                            show_titles=True, hist_kwargs=hist_kwargs_other)
             else:
-
+                """
                 # compute KL estimate
                 idx1 = np.random.randint(0,old_true_post.shape[0],2000)
                 idx2 = np.random.randint(0,true_post.shape[0],2000)
-                """
+                
                 try:
                     current_KL = 0.5*(estimate(old_true_post[idx1,:],true_post[idx2,:],n_jobs=4) + estimate(true_post[idx2,:],old_true_post[idx1,:],n_jobs=4))
                 except:
                     current_KL = -1.0
                     pass
-                """
-                current_KL=-1
+                
+                #current_KL=-1
                 KL_est.append(current_KL)
-
+                """
                 corner.corner(true_post,**defaults_kwargs,
                            color='tab:green',
                            show_titles=True, fig=figure, hist_kwargs=hist_kwargs_other2)
         
-        for j,KL in enumerate(KL_est):    
-            plt.annotate('KL = {:.3f}'.format(KL),(0.2,0.95-j*0.02),xycoords='figure fraction',fontsize=18)
+        JS_file = '{}/JS_divergence_epoch_{}_event_{}_{}.txt'.format(run,epoch,idx,i)
+        np.savetxt(JS_file,JS_est)
+
+        for j,JS in enumerate(JS_est):    
+            for j1,JS_ind in enumerate(JS):
+                plt.annotate('JS_{} = {:.3f}'.format(parnames[j1],JS_ind),(0.2 + 0.05*j1,0.95-j*0.02 - j1*0.02),xycoords='figure fraction',fontsize=18)
 
         corner.corner(true_XS,**defaults_kwargs,
                       color='tab:red',
@@ -310,7 +344,7 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
             print('Saved output to %s/comp_posterior_epoch_%d_event_%d.png' % (run,epoch,idx))
             plt.savefig('%s/comp_posterior_epoch_%d_event_%d.png' % (run,epoch,idx))
         plt.close()
-        return KL_est
+        return JS_est
 
     else:
         # Get corner parnames to use in plotting labels
@@ -516,8 +550,8 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     # define which gpu to use during training
     gpu_num = str(params['gpu_num'])   
     os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
-    print('... running on GPU {}'.format(gpu_num))
-    
+    #print('... running on GPU {}'.format(gpu_num))
+    print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
     # Let GPU consumption grow as needed
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -556,7 +590,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # load the training data
     if not make_paper_plots:
-        train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40) 
+        train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40, num_epoch_load = 10) 
         validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
     test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = test_size, test_set = True)
@@ -575,13 +609,15 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     train_loss_metric = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-
+    start_epoch = 0
     if params['resume_training']:
         model = CVAE(params, bounds, masks)
         # Load the previously saved weights
         latest = tf.train.latest_checkpoint(checkpoint_dir)
         model.load_weights(latest)
         print('... loading in previous model %s' % checkpoint_path)
+        with open(os.path.join(params['plot_dir'], "loss.txt"),"r") as f:
+            start_epoch = len(np.loadtxt(f))
     else:
         model = CVAE(params, bounds, masks)
 
@@ -605,8 +641,8 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     KL_samples = []
 
     #tf.keras.mixed_precision.set_global_policy('float32')
-    optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
-    #optimizer = tf.keras.optimizers.Adam(1e-4)
+    #optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
+    optimizer = tf.keras.optimizers.Adam(params["initial_training_rate"])
     #optimizer = AdamW(lr=1e-4, model=model,
     #                  use_cosine_annealing=True, total_iterations=40)
     #optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
@@ -619,19 +655,22 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # log params used for this run
     path = params['plot_dir']
-    shutil.copy('./vitamin_c_fit.py',path)
+    root_dir = params['root_dir']
+    shutil.copy(os.path.join(root_dir,'vitamin_c_fit.py'),path)
     if model_fit_type == "basic":
-        shutil.copy('./vitamin_c_model_fit.py',path)
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit.py'),path)
     elif model_fit_type == "multidet":
-        shutil.copy('./vitamin_c_model_fit_multidet.py',path)
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit_multidet.py'),path)
     elif model_fit_type == "multiscale":
-        shutil.copy('./vitamin_c_model_fit_multiscale.py',path)
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit_multiscale.py'),path)
     elif model_fit_type == "kaggle":
-        shutil.copy('./vitamin_c_model_fit_kaggle1.py',path)
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit_kaggle1.py'),path)
     elif model_fit_type == "resnet":
-        shutil.copy('./vitamin_c_model_fit_resnet.py',path)
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit_resnet.py'),path)
+    elif model_fit_type == "freq":
+        shutil.copy(os.path.join(root_dir,'vitamin_c_model_fit_freq.py'),path)
 
-    shutil.copy('./load_data_fit.py',path)
+    shutil.copy(os.path.join(root_dir,'load_data_fit.py'),path)
     shutil.copy(os.path.join(params_dir,'params.json'),path)
     shutil.copy(os.path.join(params_dir,'bounds.json'),path)
 
@@ -644,8 +683,9 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
         model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
 
 
-    callbacks = [PlotCallback(plot_dir, epoch_plot=100), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples, test_epoch = 500), TimeCallback(save_dir=plot_dir, save_interval = 100)]
-    model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100)
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100,start_epoch=start_epoch), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples, test_epoch = 1000), TimeCallback(save_dir=plot_dir, save_interval = 100)]
+
+    model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
 
     # not happy with this re-wrapping of the dataset
     #data_gen_wrap = tf.data.Dataset.from_generator(lambda : train_dataset,(tf.float32,tf.float32))
