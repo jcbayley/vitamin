@@ -49,7 +49,7 @@ y_normscale = 16#16.638832624721797
 sampling_rate = 1024
 duration = 1
 ndata = int(sampling_rate*duration)
-save_polarisations = True
+
 det=['H1','L1']                                                            
 #psd_files=['cuda_11_env/lib/python3.6/site-packages/bilby/gw/detector/noise_curves/aLIGO_O4_high_asd.txt'] 
 psd_files=["/home/joseph.bayley/projects/o4_online_pe_mdc/data/asd_files/aLIGO_O4_high_asd.txt"]
@@ -123,7 +123,7 @@ samplers=['vitamin','dynesty']
 val_dataset_size = int(1e3)
 
 # Directory variables
-plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4/BBH_{}Hz_{}s_{}/{}'.format(sampling_rate, duration, run_label, append_string)  
+plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_TEST/BBH_{}Hz_{}s_{}/{}'.format(sampling_rate, duration, run_label, append_string)  
 
 # Training/testing for 1024 Hz full par case
 #train_set_dir='/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/training_sets_3det_15par_1024Hz/tset_tot-10000000_split-1000_O4PSDH1L1_AdvVirgoPSD'
@@ -133,24 +133,26 @@ plot_dir='/home/joseph.bayley/public_html/CBC/vitamin_O4/BBH_{}Hz_{}s_{}/{}'.for
 
 numdet = len(det)
 real_noise = False
+save_polarisations = True
 # default training/testing directories
 if real_noise:
     if save_polarisations:
-        train_set_dir = '/home/joseph.bayley/data/CBC/O4/training_polarisations_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
+        train_set_dir = '/home/joseph.bayley/data/CBC/TEST/training_polarisations_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
     else:
-        train_set_dir='/home/joseph.bayley/data/CBC/O4/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
-    noise_set_dir='/home/joseph.bayley/data/CBC/O4/training_noise_realnoise_%ddet_%dHz_%ds/tset_tot-%d_split-%d' % (numdet,sampling_rate,duration,tot_dataset_size,tset_split)
-    val_set_dir='/home/joseph.bayley/data/CBC/O4/validation_sets_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
-    test_set_dir = '/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
-    pe_dir='/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/%s/test' % bilby_results_label
+        train_set_dir='/home/joseph.bayley/data/CBC/TEST/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    noise_set_dir='/home/joseph.bayley/data/CBC/TEST/training_noise_realnoise_%ddet_%dHz_%ds/tset_tot-%d_split-%d' % (numdet,sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/TEST/validation_sets_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/TEST/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
+    pe_dir='/home/joseph.bayley/data/CBC/TEST/test_sets_realnoise/%s/test' % bilby_results_label
 else:
     if save_polarisations:
-        train_set_dir = '/home/joseph.bayley/data/CBC/O4/training_polarisations_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
+        train_set_dir = '/home/joseph.bayley/data/CBC/TEST/training_polarisations_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
     else:
-        train_set_dir='/home/joseph.bayley/data/CBC/O4/training_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
-    val_set_dir='/home/joseph.bayley/data/CBC/O4/validation_sets_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
-    test_set_dir = '/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/%s/test_waveforms' % bilby_results_label
-    pe_dir='/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/%s/test' % bilby_results_label
+        train_set_dir='/home/joseph.bayley/data/CBC/TEST/training_sets_gaussnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/TEST/validation_sets_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/TEST/test_sets_gaussnoise/%s/test_waveforms' % bilby_results_label
+    noise_set_dir='none'
+    pe_dir='/home/joseph.bayley/data/CBC/TEST/test_sets_gaussnoise/%s/test' % bilby_results_label
 
 
 
@@ -434,7 +436,7 @@ if __name__ == "__main__":
     # Save training/test parameters of run if files do not already exist
     params=get_params()
 
-    out_dir = "./params_files_{}Hz_{}s_polarisation".format(params["sample_rate"], params["duration"])
+    out_dir = "./params_files_{}Hz_{}s_TEST".format(params["sample_rate"], params["duration"])
     
     # Make directory containing params files
     try:

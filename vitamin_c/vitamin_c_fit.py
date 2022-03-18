@@ -21,8 +21,8 @@ import plotting
 from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
-import wandb
-from wandb.keras import WandbCallback
+#import wandb
+#from wandb.keras import WandbCallback
 
 model_fit_type = "resnet"
 if model_fit_type == "multidet":
