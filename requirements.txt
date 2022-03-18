@@ -105,6 +105,7 @@ natsort
 tensorboard
 tensorflow-estimator
 tensorflow-probability==0.12.2
+tensorflow_addons
 termcolor
 tqdm
 universal-divergence
