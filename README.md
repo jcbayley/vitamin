@@ -25,6 +25,7 @@ VItamin requires python3.7. You may use python3.7 by initializing a virtual envi
 ```
 conda create -n vitc_keras python=3.7
 conda activate vitc_keras
+conda install tensorflow=2.6.0
 conda install pip
 pip install -r requirements.txt
 ```
