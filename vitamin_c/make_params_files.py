@@ -135,10 +135,14 @@ numdet = len(det)
 real_noise = False
 # default training/testing directories
 if real_noise:
-    train_set_dir='/home/joseph.bayley/data/CBC/O4MDC/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
-    val_set_dir='/home/joseph.bayley/data/CBC/O4MDC/validation_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,val_dataset_size,tset_split) 
-    test_set_dir = '/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
-    pe_dir='/home/joseph.bayley/data/CBC/O4MDC/test_sets_realnoise/%s/test' % bilby_results_label
+    if save_polarisations:
+        train_set_dir = '/home/joseph.bayley/data/CBC/O4/training_polarisations_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
+    else:
+        train_set_dir='/home/joseph.bayley/data/CBC/O4/training_sets_realnoise_%ddet_%dpar_%dHz_%ds_fullparam/tset_tot-%d_split-%d' % (numdet,len(rand_pars),sampling_rate,duration,tot_dataset_size,tset_split)
+    noise_set_dir='/home/joseph.bayley/data/CBC/O4/training_noise_realnoise_%ddet_%dHz_%ds/tset_tot-%d_split-%d' % (numdet,sampling_rate,duration,tot_dataset_size,tset_split)
+    val_set_dir='/home/joseph.bayley/data/CBC/O4/validation_sets_realnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,val_dataset_size,tset_split) 
+    test_set_dir = '/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/%s/test_waveforms' % bilby_results_label
+    pe_dir='/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/%s/test' % bilby_results_label
 else:
     if save_polarisations:
         train_set_dir = '/home/joseph.bayley/data/CBC/O4/training_polarisations_gaussnoise_{}det_{}par_{}Hz_{}s_{}/tset_tot-{}_split-{}'.format(numdet,len(rand_pars),sampling_rate,duration,append_string,tot_dataset_size,tset_split)
@@ -391,6 +395,8 @@ def get_params():
         __definition__inf_pars='parameters to infer',                                              
         train_set_dir=train_set_dir,
         __definition__train_set_dir='location of training set directory',
+        noise_set_dir=noise_set_dir,
+        __definition__noise_set_dir='location of training real noise set directory',
         val_set_dir=val_set_dir,
         __definition__val_set_dir='location of validation set directory',
         test_set_dir=test_set_dir,

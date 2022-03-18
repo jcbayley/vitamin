@@ -10,10 +10,11 @@ from astropy import coordinates as coord
 import bilby 
 from gwpy.timeseries import TimeSeries
 import copy 
+from gwdatafind import find_urls
 
 class DataLoader(tf.keras.utils.Sequence):
 
-    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40, val_set = False, num_epoch_load = 4, shuffle=False):
+    def __init__(self, input_dir,  batch_size = 512, params=None, bounds=None, masks = None, fixed_vals = None, test_set = False, silent = True, chunk_batch = 40, val_set = False, num_epoch_load = 4, shuffle=False,channel_name="DCS-CALIB_STRAIN_C01"):
         
         self.params = params
         self.bounds = bounds
@@ -43,7 +44,10 @@ class DataLoader(tf.keras.utils.Sequence):
         self.epoch_iter = 0
         # will addthis to init files eventually
         self.params["noiseamp"] = 1
+        self.channel_name = channel_name
 
+        if self.params["use_real_det_noise"]:
+            self.noise_files = os.listdir(self.params["noise_set_dir"])
 
     def __len__(self):
         """ number of batches per epoch"""
@@ -73,7 +77,7 @@ class DataLoader(tf.keras.utils.Sequence):
             # if the index falls to zero then split as the file is the next one 
             temp_chunk_indices_split = np.split(temp_chunk_indices, np.where(np.diff(temp_chunk_indices) < 0)[0] + 1)
 
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
+            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
             self.chunk_size = len(self.X)
             self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
@@ -113,7 +117,10 @@ class DataLoader(tf.keras.utils.Sequence):
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
             # add noise here
-            Y_noisefree = (Y_noisefree + self.params["noiseamp"]*np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/self.params["y_normscale"]
+            if self.params["use_real_det_noise"]:
+                Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/self.params["y_normscale"]
+            else:
+                Y_noisefree = (Y_noisefree + self.params["noiseamp"]*np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/self.params["y_normscale"]
 
         return np.array(Y_noisefree), np.array(X)
 
@@ -180,38 +187,109 @@ class DataLoader(tf.keras.utils.Sequence):
         del y_temp_fft
         return data
 
-    def get_real_noise(self, data, segment_duration, segment_range):
+    def get_real_noise(self, segment_duration, segment_range, num_segments):
 
         # compute the number of time domain samples
-        Nt = int(sampling_frequency*duration)
+        Nt = int(self.params["sample_rate"]*self.params["duration"])
 
         # Get ifos bilby variable
-        ifos = bilby.gw.detector.InterferometerList(det)
+        ifos = bilby.gw.detector.InterferometerList(self.params["det"])
 
         start_range, end_range = segment_range
-        starts = []
-        for i in range(len(ifos)):
-            if i == 0:
-                # get initial semgent start time
-                start_temp = np.random.uniform(start_range + segment_duration, end_range - segment_duration, 1)
-            else:
-                # get segmnet start time which does not overlap with other detectors
-                while np.any((np.array(starts) <= start_temp) & (np.array(starts) <= starts + segment_duration)): 
-                    start_temp = np.random.uniform(start_range + segment_duration, end_range - segment_duration, 1)
-            starts.append(start_temp)
+        # select times within range that do not overlap by the duration
+        file_length_sec = 4096
+        num_load_files = 1#int(0.1*num_segments/file_length_sec)
 
+        num_f_seg = int((end_range - start_range)/file_length_sec)
+
+        if num_load_files > num_f_seg:
+            num_load_files = num_f_seg
+
+        file_time = np.random.choice(num_f_seg, size=(num_load_files, len(self.params["det"])))*file_length_sec + start_range
+
+        load_files = {det:[] for det in self.params["det"]}
+        start_times = {}
+        #for fle in range(num_load_files):
+        fle = 0
+        st1 = time.time()
+        for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+            det_str = ifo.name
+            gwf_url = find_urls("{}".format(det_str[0]), "{}_HOFT_C01".format(det_str), file_time[fle][ifo_idx],file_time[fle][ifo_idx] + segment_duration)
+            time_series = TimeSeries.read(gwf_url, "{}:{}".format(det_str,self.channel_name))
+            time_series = time_series.resample(1024)
+            start_times[det_str] = np.array(time_series.t0)
+            load_files[det_str] = time_series
+            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params["psd_files"][0])
+            del time_series
+
+        st2 = time.time()
+        starts = []
+        for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+            det_str = ifo.name
+            st_t = np.random.uniform(start_times[det_str] + segment_duration,start_times[det_str] + file_length_sec - segment_duration, num_segments)
+            starts.append(st_t)
+
+        noise_samples = []
+        for st_ind in range(num_segments):
+            t_noise_samp = []
+            for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+                det_str = ifo.name
+                t_time_series = load_files[det_str].crop(starts[ifo_idx][st_ind], starts[ifo_idx][st_ind] + segment_duration)
+                ifo.set_strain_data_from_gwpy_timeseries(time_series=t_time_series) # input new ts into bilby ifo
+                del t_time_series
+                noise_sample = ifo.strain_data.frequency_domain_strain # get frequency domain strain
+                noise_sample /= ifo.amplitude_spectral_density_array # normalise to a fixed psd
+                noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
+                t_noise_samp.append(noise_sample)
+            noise_samples.append(t_noise_samp)
+
+        return np.transpose(np.array(noise_samples), (0,2,1))
+
+    def load_real_noise(self, num_segments):
+
+        # compute the number of time domain samples
+        Nt = int(self.params["sample_rate"]*self.params["duration"])
+
+        # Get ifos bilby variable
+        ifos = bilby.gw.detector.InterferometerList(self.params["det"])
 
         for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
-            time_series = TimeSeries.find('%s:GDS-CALIB_STRAIN' % self.params["dets"][ifo_idx],
-                                          starts[ifo_idx], starts[ifo_idx] + segment_duration) # pull timeseries data using gwpy
             ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params["psd_files"][0])
-            ifo.set_strain_data_from_gwpy_timeseries(time_series=time_series) # input new ts into bilby ifo
 
-        noise_sample = ifos[0].strain_data.frequency_domain_strain # get frequency domain strain
-        noise_sample /= ifos[0].amplitude_spectral_density_array # normalise to a fixed psd
-        noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
 
-        return noise_sample
+        file_choice = np.random.choice(self.noise_files, len(self.params["det"]))
+        data = {ifo.name:[] for ifo in ifos}
+        for find in file_choice:
+            h5py_file = h5py.File(os.path.join(self.params["noise_set_dir"],find), 'r')
+            for ifo_idx,ifo in enumerate(ifos):
+                data[ifo.name].append(TimeSeries(h5py_file["real_noise_samples"][ifo_idx], sample_rate=h5py_file["sample_rate"][ifo_idx], t0=h5py_file["t0"][ifo_idx]))
+
+        rand_times = np.random.uniform(0, 4096, size = (num_segments, len(self.params["det"])))
+        fle = 0
+        return_segments = []
+        st1 = time.time()
+        for seg in range(num_segments):
+            file_ind = np.arange(len(self.params["det"]))
+            np.random.shuffle(file_ind)
+            temp_segment = []
+            for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+                det_str = ifo.name
+                
+                rand_time = np.random.uniform(data[det_str][file_ind[ifo_idx]].t0.value + self.params["duration"], data[det_str][file_ind[ifo_idx]].t0.value + data[det_str][file_ind[ifo_idx]].duration.value - self.params["duration"])
+
+                temp_ts = data[det_str][file_ind[ifo_idx]].crop(rand_time, rand_time + self.params["duration"])
+                ifo.strain_data.set_from_gwpy_timeseries(temp_ts)
+
+                h_fd = ifo.strain_data.frequency_domain_strain
+                whitened_h_fd = h_fd/ifo.amplitude_spectral_density_array
+                whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
+                
+                temp_segment.append(whitened_h_td)
+                
+            return_segments.append(temp_segment)
+
+        return np.transpose(np.array(return_segments), (0,2,1))
+
         
     def load_waveforms(self, filenames, indices = None):
         """
@@ -265,9 +343,7 @@ class DataLoader(tf.keras.utils.Sequence):
             else:
                 data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
 
-
         self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
-        
         # reorder x parameters into params['infer_pars'] order
         data["x_data"] = data['x_data'][:,self.par_idx]
         
@@ -302,6 +378,13 @@ class DataLoader(tf.keras.utils.Sequence):
 
         data["x_data"] = self.convert_parameters(data["x_data"])
 
+
+
+        if self.params["use_real_det_noise"] and not self.test_set:
+            real_det_noise= self.load_real_noise(len(data["y_data_noisefree"]))
+
+            data["y_data_noise"] = tf.cast(np.array(real_det_noise),dtype=tf.float32)
+
         # cast data to float
         data["x_data"] = tf.cast(data['x_data'],dtype=tf.float32)
         data["y_data_noisefree"] = tf.cast(data['y_data_noisefree'],dtype=tf.float32)
@@ -310,7 +393,10 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths
         else:
-            return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs']
+            if self.params["use_real_det_noise"]:
+                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'],data["y_data_noise"]
+            else:
+                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None
 
 
     def convert_parameters(self, x_data):

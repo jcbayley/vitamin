@@ -22,6 +22,7 @@ class CVAE(tf.keras.Model):
         self.x_dim = self.x_dim_periodic + self.x_dim_nonperiodic + self.x_dim_sky
         self.y_dim = params["ndata"]
         self.n_channels = len(params["det"])
+        self.initial_learning_rate = params["initial_training_rate"]
         self.act = tf.keras.layers.LeakyReLU(alpha=0.3)
         self.act_relu = tf.keras.layers.ReLU()
         self.params = params
@@ -49,20 +50,25 @@ class CVAE(tf.keras.Model):
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
         #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
 
-        conv = self.conv_block(all_input_y, [64,64], [32,32], [1,1])
-        conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        conv = self.conv_block(all_input_y, [128,64], [1,64], [1,1])
+        #conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
         
-        conv = self.conv_block(conv, [64,32], [16,16], [1,2])
+        conv = self.conv_block(conv, [64,32], [1,64], [1,2])
+        conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
+
+        conv = self.conv_block(conv, [32,32], [1,32], [1,1])
         conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
 
-        #conv = self.conv_block(conv, [64,32], [16,16], [1,2])
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-
-        #conv = self.conv_block(conv, [64,32], [16,16], [1,2])
-        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-
-        conv = self.conv_block(conv, [32,16], [16,8], [1,1])
+        conv = self.conv_block(conv, [32,32], [1,32], [1,2])
         conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+
+        conv = self.conv_block(conv, [32,16], [1,16], [1,1])
+
+        conv = self.conv_block(conv, [32,16], [1,16], [1,1])
+        #conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
+
+        #conv = self.conv_block(conv, [32,16], [16,8], [1,2])
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
         
         #conv = self.conv_block(conv, [32,16], [8,8], [1,1])
         #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
@@ -115,7 +121,7 @@ class CVAE(tf.keras.Model):
         r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2)
         r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2)
         # periodic outputs
-        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2)
+        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True,activation='sigmoid')(r2)
         r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2)
         # sky outputs (x,y,z)
         r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2)
@@ -142,12 +148,19 @@ class CVAE(tf.keras.Model):
         conv = tf.keras.layers.BatchNormalization()(conv)
         conv = self.act(conv)
 
-        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, strides=strides2, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size2, strides=strides1, kernel_regularizer=regularizers.l2(0.001), padding="same")(input_data)
         conv = tf.keras.layers.BatchNormalization()(conv)
         conv = self.act(conv)
 
+        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size1, strides=strides2, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = self.act(conv)
+
+        # short block
+
         conv_short = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, strides=strides2, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv_short)
         conv_short = tf.keras.layers.BatchNormalization()(conv_short)
+        conv_short = self.act(conv_short)
 
         conv = tf.keras.layers.Add()([conv, conv_short])
         conv = self.act(conv)
@@ -245,7 +258,7 @@ class CVAE(tf.keras.Model):
         x = tf.cast(x, dtype=tf.float32)
         
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1)) + 1 - self.ramp
         gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
                                       components_distribution=tfd.MultivariateNormalDiag(
                                           loc=mean_r1,
@@ -288,7 +301,7 @@ class CVAE(tf.keras.Model):
 
         # define the von mises fisher for the sky
         fvm_loc = tf.reshape(tf.math.l2_normalize(mean_sky_r2, axis=1),[-1,3])  # mean in (x,y,z)
-        fvm_con = tf.reshape(tf.math.reciprocal(self.EPS + tf.exp(logvar_sky_r2)),[-1])
+        fvm_con = tf.reshape(tf.math.reciprocal(self.EPS + tf.exp(logvar_sky_r2) + 1 - self.ramp),[-1])
         fvm_r2 = tfp.distributions.VonMisesFisher(
             mean_direction = tf.cast(fvm_loc,dtype=tf.float32),
             concentration = tf.cast(fvm_con,dtype=tf.float32)

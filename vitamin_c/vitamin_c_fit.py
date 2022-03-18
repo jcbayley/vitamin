@@ -21,8 +21,10 @@ import plotting
 from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
+import wandb
+from wandb.keras import WandbCallback
 
-model_fit_type = "basic"
+model_fit_type = "resnet"
 if model_fit_type == "multidet":
     from vitamin_c_model_fit_multidet import CVAE
 elif model_fit_type == "basic":
@@ -590,7 +592,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # load the training data
     if not make_paper_plots:
-        train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40, num_epoch_load = 10) 
+        train_dataset = DataLoader(params["train_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 40, num_epoch_load = 10, batch_size = params["batch_size"]) 
         validation_dataset = DataLoader(params["val_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = 2, val_set = True)
 
     test_dataset = DataLoader(params["test_set_dir"],params = params,bounds = bounds, masks = masks,fixed_vals = fixed_vals, chunk_batch = test_size, test_set = True)
@@ -621,7 +623,6 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
     else:
         model = CVAE(params, bounds, masks)
 
-
     # Make publication plots
     if make_paper_plots:
         print('... Making plots for publication.')
@@ -642,7 +643,7 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     #tf.keras.mixed_precision.set_global_policy('float32')
     #optimizer = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay = 1e-8)
-    optimizer = tf.keras.optimizers.Adam(params["initial_training_rate"])
+    optimizer = tf.keras.optimizers.Adam(params["initial_training_rate"], clipvalue = 0.5)
     #optimizer = AdamW(lr=1e-4, model=model,
     #                  use_cosine_annealing=True, total_iterations=40)
     #optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
@@ -676,14 +677,23 @@ def run_vitc(params, x_data_train, y_data_train, x_data_val, y_data_val, x_data_
 
     # compile and build the model (hardcoded values will change soon)
     model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
-    #model.build((None, 1024,2))
+    #test_data = tf.zeros((batch_size, 1024, 2))
+    #test_pars = tf.zeros((batch_size, 15))
+    #model([test_data, test_pars])
+    #model.build([(None, 1024,2), (None, 15)])
+    #print(model.summary())
     with open(os.path.join(path, "model_summary.txt"),"w") as f:
+        #model.summary(print_fn=lambda x: f.write(x + '\n'))
         model.encoder_r1.summary(print_fn=lambda x: f.write(x + '\n'))
         model.encoder_q.summary(print_fn=lambda x: f.write(x + '\n'))
         model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
+    
+    
 
+    #wandb.init(project="Vitamin", entity="jgl")
+    #wandb.config = params
 
-    callbacks = [PlotCallback(plot_dir, epoch_plot=100,start_epoch=start_epoch), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples, test_epoch = 1000), TimeCallback(save_dir=plot_dir, save_interval = 100)]
+    callbacks = [PlotCallback(plot_dir, epoch_plot=100,start_epoch=start_epoch), TrainCallback(checkpoint_path, optimizer, plot_dir, train_dataset, model), TestCallback(test_dataset,comp_post_dir,full_post_dir, latent_dir, bilby_samples, test_epoch = 1000), TimeCallback(save_dir=plot_dir, save_interval = 100)]#, WandbCallback(save_model = False)]
 
     model.fit(train_dataset, use_multiprocessing = False, workers = 6,epochs = 30000, callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
 

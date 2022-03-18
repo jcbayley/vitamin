@@ -22,6 +22,7 @@ import json
 from scipy.ndimage.interpolation import shift
 import argparse
 from gwpy.timeseries import TimeSeries
+from gwdatafind import find_urls
 
 def parser():
     """ Parses command line arguments
@@ -53,6 +54,53 @@ def parser():
 
     return parser.parse_args()
 
+
+def get_real_noise( params = None, channel_name = "DCS-CALIB_STRAIN_C01", real_noise_seg = None):
+
+        # compute the number of time domain samples
+        Nt = int(params["sample_rate"]*params["duration"])
+
+        # Get ifos bilby variable
+        ifos = bilby.gw.detector.InterferometerList(params["det"])
+
+        if real_noise_seg is None:
+            start_range, end_range = params["real_noise_time_range"]
+        else:
+            start_range, end_range = real_noise_seg
+        # select times within range that do not overlap by the duration
+        file_length_sec = 4096
+        num_load_files = 1#int(0.1*num_segments/file_length_sec)
+
+        num_f_seg = int((end_range - start_range)/file_length_sec)
+
+        if num_load_files > num_f_seg:
+            num_load_files = num_f_seg
+
+        file_time = np.random.choice(num_f_seg, size=(num_load_files))*file_length_sec + start_range
+
+        load_files   = []
+        start_times  = []
+        durations    = []
+        sample_rates = []
+        #for fle in range(num_load_files):
+        fle = 0
+        st1 = time.time()
+        for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
+            det_str = ifo.name
+            gwf_url = find_urls("{}".format(det_str[0]), "{}_HOFT_C01".format(det_str), file_time[fle],file_time[fle] + params["duration"])
+            time_series = TimeSeries.read(gwf_url, "{}:{}".format(det_str,channel_name))
+            time_series = time_series.resample(params["sample_rate"])
+            load_files.append(time_series.value)
+            start_times.append(time_series.t0.value)
+            durations.append(time_series.duration.value)
+            sample_rates.append(time_series.sample_rate.value)
+            #ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params["psd_files"][0])
+            del time_series
+
+
+        return load_files, start_times, durations, sample_rates
+
+
 def gen_real_noise(duration,
                  sampling_frequency,
                  det,
@@ -80,39 +128,6 @@ def gen_real_noise(duration,
 
     return noise_sample
 
-def get_real_noise(duration,
-                   sampling_frequency,
-                   det,
-                   ref_geocent_time, psd_files=[],
-                   real_noise_seg =[None,None]
-               ):
-    """ pull real noise samples
-    """
-
-    # compute the number of time domain samples
-    Nt = int(sampling_frequency*duration)
-
-    # Get ifos bilby variable
-    ifos = bilby.gw.detector.InterferometerList(det)
-    det_string = "{}".format(det[0])
-    gwf_file = find_urls(det_string, "{}1_HOFT_C01".format(det_string), real_noise_seg[0], real_noise_seg[1])
-
-    fname = gwf_file[0].replace("file://localhost","")
-    
-    
-
-    start_open_seg, end_open_seg = real_noise_seg # 1 sec noise segments
-    for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
-        time_series = TimeSeries.find('%s:GDS-CALIB_STRAIN' % det[ifo_idx],
-                      start_open_seg, end_open_seg) # pull timeseries data using gwpy
-        ifo.set_strain_data_from_gwpy_timeseries(time_series=time_series) # input new ts into bilby ifo
-
-    noise_sample = ifos[0].strain_data.frequency_domain_strain # get frequency domain strain
-    noise_sample /= ifos[0].amplitude_spectral_density_array # assume default psd from bilby
-    noise_sample = np.sqrt(2.0*Nt)*np.fft.irfft(noise_sample) # convert frequency to time domain
-
-    return noise_sample
-
     
 
 def gen_template(duration,
@@ -121,7 +136,7 @@ def gen_template(duration,
                  ref_geocent_time, psd_files=[],
                  use_real_det_noise=False,
                  real_noise_seg =[None,None],
-                 return_polarisations = False
+                 return_polarisations = False,
              ):
     """ Generates a whitened waveforms in Gaussian noise.
 
@@ -211,10 +226,20 @@ def gen_template(duration,
                 else:
                     print('Could not determine whether psd or asd ...')
                     exit()
+        if real_noise_seg:
+            load_files, start_times, durations, sample_rates = get_real_noise(params = params, channel_name = "DCS-CALIB_STRAIN_C01", real_noise_seg = real_noise_seg)
+            # need to test this peice of code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            for int_idx,ifo in enumerate(ifos):
+                rand_time = np.random.uniform(start_times[int_idx] + self.params["duration"], start_times[int_idx] + durations[int_idx] + self.params["duration"] )
+                temp_ts = load_files[int_idx].crop(rand_time, rand_time + self.params["duration"])
+                ifo.strain_data.set_from_gwpy_timeseries(temp_ts)
 
-        ifos.set_strain_data_from_power_spectral_densities(
-            sampling_frequency=sampling_frequency, duration=duration,
-            start_time=start_time)
+                ifo.set_strain_data_from_gwpy_timeseries(ts_1)
+                ifo.set_strain_data(load_files[int_idx])
+        else:
+            ifos.set_strain_data_from_power_spectral_densities(
+                sampling_frequency=sampling_frequency, duration=duration,
+                start_time=start_time)
 
         # inject signal
         ifos.inject_signal(waveform_generator=waveform_generator,
@@ -613,9 +638,9 @@ def run(sampling_frequency=256.0,
             snr = np.array([ifos[j].meta_data['optimal_SNR'] for j in range(len(pars['det']))])
 
         else:
-            test_samples_noisy,injection_parameters,ifos,waveform_generator = load_template(duration,sampling_frequency,
-                                                                                            pars,ref_geocent_time,psd_files, data_dir = real_test_data)
+            #test_samples_noisy,injection_parameters,ifos,waveform_generator = load_template(duration,sampling_frequency,pars,ref_geocent_time,psd_files, data_dir = real_test_data)
             snr = 0
+            test_samples_noisefree,test_samples_noisy,injection_parameters,ifos,waveform_generator = gen_template(duration,sampling_frequency,pars,ref_geocent_time,psd_files, true_noise = test_noise)
 
         # if not doing PE then return signal data
         if not do_pe:

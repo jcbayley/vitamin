@@ -45,12 +45,12 @@ from skopt.plots import plot_objective, plot_evaluations
 from skopt.utils import use_named_args
 
 try:
-    from .gen_benchmark_pe import run, gen_real_noise
+    from .gen_benchmark_pe import run, get_real_noise
     from . import plotting
     from . import vitamin_c_fit as vitamin_c
     from .plotting import prune_samples
 except (ModuleNotFoundError, ImportError):
-    from gen_benchmark_pe import run, gen_real_noise
+    from gen_benchmark_pe import run, get_real_noise
     import plotting
     import vitamin_c_fit as vitamin_c
     from plotting import prune_samples
@@ -118,10 +118,10 @@ def gen_rnoise(params=None,bounds=None,fixed_vals=None):
         fixed_vals = json.load(fp)
 
     # Make training set directory
-    os.system('mkdir -p %s' % params['train_set_dir'])
+    os.system('mkdir -p %s' % params['noise_set_dir'])
 
     # Make directory for plots
-    os.system('mkdir -p %s/latest_%s' % (params['plot_dir'],params['run_label']))
+    #os.system('mkdir -p %s/latest_%s' % (params['plot_dir'],params['run_label']))
 
     print()
     print('... Making real noise samples')
@@ -132,42 +132,22 @@ def gen_rnoise(params=None,bounds=None,fixed_vals=None):
     start_file_seg = params['real_noise_time_range'][0]
     end_file_seg = None
     # iterate until we get the requested number of real noise samples
-    while idx <= params['tot_dataset_size'] or stop_flag:
+    while idx <= params['num_real_noise_files'] or stop_flag:
 
+        time_series, start_times, durations, sample_rates = get_real_noise(params = params)
 
-        file_samp_idx = 0
-        # iterate until we get the requested number of real noise samples per tset_split files
-        while file_samp_idx <= params['tset_split']:
-            real_noise_seg = [start_file_seg+idx+time_cnt, start_file_seg+idx+time_cnt+1]
-            real_noise_data = np.zeros((int(params['tset_split']),int( params['ndata']*params['duration'])))        
-
-            try:
-                # make the data - shift geocent time to correct reference
-                real_noise_data[file_samp_idx, :] = gen_real_noise(params['duration'],params['ndata'],params['det'],
-                                        params['ref_geocent_time'],params['psd_files'],
-                                        real_noise_seg=real_noise_seg
-                                        )
-                print('Found segment')
-            except ValueError as e:
-                print(e)
-                time_cnt+=1
-                continue
-            print(real_noise_data)
-            exit()
-
-        print("Generated: %s/data_%d-%d.h5py ..." % (params['train_set_dir'],start_file_seg,end_file_seg))
+        print("Generated: %s/data_%d-%d.h5py ..." % (params['noise_set_dir'],start_times[0],start_times[0] + durations[0]))
 
         # store noise sample information in hdf5 format
-        with h5py.File('%s/data_%d-%d.h5py' % (params['train_set_dir'],start_file_seg,end_file_seg), 'w') as hf:
-            hf.create_dataset('real_noise_samples', data=real_noise_data)
+        with h5py.File('%s/data_%d-%d.h5py' % (params['noise_set_dir'],start_times[0], start_times[0] + durations[0]), 'w') as hf:
+            hf.create_dataset('real_noise_samples', data=time_series)
+            hf.create_dataset('sample_rate', data=sample_rates)
+            hf.create_dataset('duration', data=durations)
+            hf.create_dataset('t0', data=start_times)
             hf.close()
-        idx+=params['tset_split']
 
-        # stop training
-        if idx>params['real_noise_time_range'][1]:
-            stop_flat = True  
-        exit()
-    return 
+        idx += 1
+
 
 def gen_train(params=None,bounds=None,fixed_vals=None, num_files = 100, start_ind = 0):
     """ Generate training samples
@@ -542,6 +522,8 @@ def write_subfile(sub_filename,p,comment):
             args += "--gen_test True "
         if p["real_test"]:
             args += "--gen_real_test True "
+        if p["real_noise"]:
+            args += "--gen_rnoise True "
         args += "--start_ind $(start_ind) --num_files {} --params_dir {}".format( p["files_per_job"], p["params_dir"])
         f.write('arguments = {}\n'.format(args))
         f.write('accounting_group = ligo.dev.o4.cbc.explore.test\n')
@@ -571,6 +553,7 @@ def make_train_dag(params, bounds, fixed_vals, params_dir, run_type = "train"):
     p["val"] = False
     p["test"] = False
     p["real_test"] = False
+    p["real_noise"] = False
     p[run_type] = True
     p["files_per_job"] = 20
 
@@ -587,6 +570,9 @@ def make_train_dag(params, bounds, fixed_vals, params_dir, run_type = "train"):
     if run_type == "train":
         num_files = int(params["tot_dataset_size"]/params["tset_split"])
         num_jobs = int(num_files/p["files_per_job"])
+    if run_type == "real_noise":
+        num_files = int(1)
+        num_jobs = int(1)
     elif run_type == "val":
         num_files = int(params["val_dataset_size"]/params["tset_split"])
         num_jobs = 1
@@ -644,8 +630,8 @@ if __name__ == "__main__":
     else:
         if args.gen_train:
             gen_train(params,bounds,fixed_vals, start_ind = int(args.start_ind), num_files = int(args.num_files))
-        #if args.gen_rnoise:
-        #    gen_rnoise(params,bounds,fixed_vals)
+        if args.gen_rnoise:
+            gen_rnoise(params,bounds,fixed_vals)
         if args.gen_val:
             gen_val(params,bounds,fixed_vals)
         if args.gen_test:

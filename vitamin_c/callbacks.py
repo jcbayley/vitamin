@@ -49,6 +49,8 @@ class TrainCallback(tf.keras.callbacks.Callback):
         super(TrainCallback, self).__init__()
         self.ramp_start = 400
         self.ramp_length = 500
+        self.decay_start = 5000
+        self.decay_length = 3000
         self.n_cycles = 1
         self.model = model
         self.checkpoint_path = checkpoint_path
@@ -115,6 +117,17 @@ class TrainCallback(tf.keras.callbacks.Callback):
         tf.keras.backend.set_value(self.model.ramp, ramp)
         #self.model.compile(run_eagerly = False, optimizer = self.optimizer)
 
+    def learning_rate_decay(self,epoch):
+        ramps = np.logspace(-3, 1, self.decay_length)[::-1]
+        if epoch >= self.decay_start + self.decay_length:
+            ramp = ramps[-1]
+        elif epoch > self.decay_start and epoch < self.decay_start + self.decay_length:
+            ramp = ramps[epoch - self.decay_start]
+        else:
+            ramp = 1
+        newlearn = self.model.initial_learning_rate*ramp
+        tf.keras.backend.set_value(self.optimizer.learning_rate, newlearn)
+
     def cyclic_learning_rate(self, epoch, epochs_range = 100):
 
         half_fact_arr = np.linspace(self.model.initial_learning_rate/10., self.model.initial_learning_rate, int(epochs_range/2))
@@ -123,6 +136,19 @@ class TrainCallback(tf.keras.callbacks.Callback):
         if epoch > start_cycle:
             position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
             factor = fact_arr[position]
+            tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
+            print("learning_rate:, {}".format(self.optimizer.learning_rate))
+
+    def cyclic_learning_rate_decay(self, epoch, epochs_range = 100, decay_length = 4000):
+
+        half_fact_arr = np.linspace(self.model.initial_learning_rate/10., self.model.initial_learning_rate, int(epochs_range/2))
+        dec_array = np.linspace(1e-2, 1, decay_length)[::-1]
+        fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
+        start_cycle = self.ramp_start + 10*self.ramp_length
+        if epoch > start_cycle:
+            position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
+            decay_pos = epoch - start_cycle
+            factor = fact_arr[position]*dec_array
             tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
             print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
@@ -135,7 +161,8 @@ class TrainCallback(tf.keras.callbacks.Callback):
         print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
     def on_epoch_begin(self, epoch, logs = None):
-        self.cyclic_learning_rate(epoch)
+        self.cyclic_learning_rate_decay(epoch)
+        #self.learning_rate_decay(epoch)
         #self.learning_rate_it(epoch)
         if epoch > self.ramp_start:
             self.ramp_func(epoch)
