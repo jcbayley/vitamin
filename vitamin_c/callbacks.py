@@ -148,7 +148,9 @@ class TrainCallback(tf.keras.callbacks.Callback):
         if epoch > start_cycle:
             position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
             decay_pos = epoch - start_cycle
-            factor = fact_arr[position]*dec_array
+            if decay_pos > decay_length:
+                decay_pos = -1
+            factor = fact_arr[position]*dec_array[decay_pos]
             tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
             print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
