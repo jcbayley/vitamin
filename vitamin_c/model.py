@@ -11,7 +11,7 @@ import sys
 class CVAE(tf.keras.Model):
     """Convolutional variational autoencoder."""
 
-    def __init__(self, params, bounds, masks):
+    def __init__(self, params, bounds, masks, verbose = False):
         super(CVAE, self).__init__()
         self.z_dim = params["z_dimension"]
         self.n_modes = params["n_modes"]
@@ -27,6 +27,7 @@ class CVAE(tf.keras.Model):
         self.params = params
         self.bounds = bounds
         self.masks = masks
+        self.verbose = verbose
         # consts
         self.EPS = 1e-3
         self.fourpisq = 4.0*np.pi*np.pi
@@ -48,84 +49,131 @@ class CVAE(tf.keras.Model):
 
         # the convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        convs = []
-        for ch in range(self.n_channels):
-
-            conv_input = tf.keras.layers.Lambda(lambda x: x[:,:, ch:ch+1])(all_input_y)
-            #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
-            
-            conv = tf.keras.layers.Conv1D(filters=64, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv_input)
-            conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
-            conv = tf.keras.layers.BatchNormalization()(conv)
-
-            conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-            conv = tf.keras.layers.MaxPool1D(pool_size=4, strides=4)(conv)
-            conv = tf.keras.layers.BatchNormalization()(conv)
-
-            #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-            #conv = tf.keras.layers.BatchNormalization()(conv)
-            
-            #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-            #conv = tf.keras.layers.BatchNormalization()(conv)
+        #all_input_y = tf.keras.layers.Activation(tf.keras.activations.sigmoid)(all_input_y)
         
-            #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-            #conv = tf.keras.layers.BatchNormalization()(conv)
-            
+        conv = tf.keras.layers.Conv1D(filters=96, kernel_size=64, strides=2, activity_regularizer=regularizers.l2(1e-5), padding='same')(all_input_y)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Activation(self.act)(conv)
+        
+        #conv = tf.keras.layers.Conv1D(filters=128, kernel_size=32, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(all_input_y)
+        #conv = tf.keras.layers.Conv1D(filters=96, kernel_size=64, strides=1, activity_regularizer=regularizers.l2(1e-5), padding='same')(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        #conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
 
-            #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
-            #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
-            #conv = tf.keras.layers.BatchNormalization()(conv)
+        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.Conv1D(filters=96, kernel_size=32, strides=4,activity_regularizer=regularizers.l2(1e-5), padding='same')(conv)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
 
-            """
-            conv = tf.keras.layers.Conv1D(filters=16, kernel_size=1, strides=1, activation=self.act)(conv)
-            #conv = tf.keras.layers.BatchNormalization()(conv)
-            """
-            conv = tf.keras.layers.Flatten()(conv)
-            convs.append(conv)
+
+        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=16, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        
+        #conv = tf.keras.layers.Conv1D(filters=64, kernel_size=8, strides=1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        
+        #conv = tf.keras.layers.Conv1D(filters=32, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.Conv1D(filters=96, kernel_size=32, strides=4,activity_regularizer=regularizers.l2(1e-5),padding='same')(conv)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+
+
+
+        #conv = tf.keras.layers.Conv1D(filters=16, kernel_size=8, strides=2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(conv)
+        conv = tf.keras.layers.Conv1D(filters=96, kernel_size=16, strides=2, activity_regularizer=regularizers.l2(1e-5),padding='same')(conv)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+
+        #conv = tf.keras.layers.Conv1D(filters=96, kernel_size=16, strides=2, activity_regularizer=regularizers.l2(1e-5),padding='same')(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        #conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+
+        conv = tf.keras.layers.Conv1D(filters=96, kernel_size=16, strides=4, activity_regularizer=regularizers.l2(1e-5),padding='same')(conv)
+        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Activation(self.act)(conv)
+        #conv = tf.keras.layers.MaxPool1D(pool_size=2, strides=2)(conv)
+
+
+        """
+        conv = tf.keras.layers.Conv1D(filters=16, kernel_size=1, strides=1, activation=self.act)(conv)
+        #conv = tf.keras.layers.BatchNormalization()(conv)
+        """
+        conv = tf.keras.layers.Flatten()(conv)
+        
         #conv = tf.keras.layers.Flatten()(all_input_y)
-        convs.append(conv) # just to give it 3 channels for now
-        conv = tf.keras.layers.concatenate(convs)
 
-        res_in_shape = (64, 58, self.n_channels + 1)
-        conv = tf.keras.layers.Reshape(res_in_shape)(conv)
-        
+        lin_layers = 2048, 1024, 512
 
-        res_out = 512
-        l1,l2 = 512,256
-        r1 = tf.keras.applications.ResNet50(weights=None, include_top=True, classes = res_out, input_shape=res_in_shape)(conv)
-        r1 = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
-        r1 = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)            
+        # r1 encoder
+        r1 = conv
+        for lin_l in lin_layers:
+            #r1 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r1)
+            r1 = tf.keras.layers.Dense(lin_l, activation=self.act,activity_regularizer=regularizers.l2(1e-5))(r1)
+            r1 = tf.keras.layers.BatchNormalization()(r1)
+            #r1 = tf.keras.layers.Dropout(.5)(r1)
+
         r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes)(r1)
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
+        if self.verbose:
+            print(self.encoder_r1.summary())
 
-        #q = tf.keras.applications.ResNet50(weights=None, include_top = True, classes = res_out, input_shape=res_in_shape)(conv)
+        # the q encoder network
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
-        q = tf.keras.layers.concatenate([r1,q_inx])
-        q = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
-        q = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
+        q = tf.keras.layers.concatenate([conv,q_inx])
+        for lin_l in lin_layers:
+            #q = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(q)            
+            q = tf.keras.layers.Dense(lin_l, activation=self.act,activity_regularizer=regularizers.l2(1e-5))(q)            
+            q = tf.keras.layers.BatchNormalization()(q)
+            #q = tf.keras.layers.Dropout(.5)(q)
+
         q = tf.keras.layers.Dense(2*self.z_dim)(q)
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
+        if self.verbose:
+            print(self.encoder_q.summary())
 
-        #r2 = tf.keras.applications.ResNet50(weights=None, include_top = True, classes = res_out, input_shape = res_in_shape)(conv)
+        # the r2 decoder network
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
-        r2 = tf.keras.layers.concatenate([r1,r2_inz])
-        r2 = tf.keras.layers.Dense(l1, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)            
-        r2 = tf.keras.layers.Dense(l2, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)            
+        r2 = tf.keras.layers.concatenate([conv,r2_inz])
+        for lin_l in lin_layers:
+            #r2 = tf.keras.layers.Dense(lin_l, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
+            r2 = tf.keras.layers.Dense(lin_l, activation=self.act,activity_regularizer=regularizers.l2(1e-5))(r2)     
+            r2 = tf.keras.layers.BatchNormalization()(r2)
+            #r2 = tf.keras.layers.Dropout(.5)(r2)
 
-        # non periodic outputs
-        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2)
-        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2)
+        extra_layer = False
+        if extra_layer:
+            exdim = 1024
+            # non periodic outputs
+            r2_nonp = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)
+        else:
+            r2_nonp = r2
+        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2_nonp)
+        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2_nonp)
+
         # periodic outputs
-        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2)
-        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2)
+        if extra_layer:
+            r2_p = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
+        else:
+            r2_p = r2
+        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2_p)
+        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2_p)
+
         # sky outputs (x,y,z)
-        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2)
-        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2)
+        if extra_layer:
+            r2_sky = tf.keras.layers.Dense(exdim, kernel_regularizer=regularizers.l2(0.001), activation=self.act)(r2)     
+        else:
+            r2_sky = r2
+        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2_sky)
+        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2_sky)
         # all outputs
         r2 = tf.keras.layers.concatenate([r2mu_nonperiodic,r2mu_periodic,r2mu_sky,r2logvar_nonperiodic,r2logvar_periodic,r2logvar_sky])
 
@@ -135,7 +183,9 @@ class CVAE(tf.keras.Model):
         #r2 = tf.keras.layers.concatenate([r2mu,r2logvar,r2w])
         #r2 = tf.keras.layers.Dense(2*self.x_dim*self.x_modes + self.x_modes)(r2)
         self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2)
-        print(self.decoder_r2.summary())
+        if self.verbose:
+            print(self.decoder_r2.summary())
+
 
     def encode_r1(self, y=None):
         mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
@@ -148,6 +198,7 @@ class CVAE(tf.keras.Model):
         return tf.split(self.decoder_r2([y,z]), num_or_size_splits=[self.x_dim_nonperiodic, 2*self.x_dim_periodic, self.x_dim_sky + 1, self.x_dim_nonperiodic, self.x_dim_periodic, 1], axis=1)
         #mean, logvar, weight = tf.split(self.decoder_r2([y,z]), num_or_size_splits=[self.x_dim*self.x_modes, self.x_dim*self.x_modes,self.x_modes], axis=1)
         #return tf.reshape(mean,[-1,self.x_modes,self.x_dim]), tf.reshape(logvar,[-1,self.x_modes,self.x_dim]), tf.reshape(weight,[-1,self.x_modes])
+
 
     @property
     def metrics(self):
@@ -267,7 +318,7 @@ class CVAE(tf.keras.Model):
 
         mean_nonperiodic_r2, mean_periodic_r2, mean_sky_r2, logvar_nonperiodic_r2, logvar_periodic_r2, logvar_sky_r2 = self.decode_r2(z = z_samp, y=y)
 
-
+        
         Root = tfp.distributions.JointDistributionCoroutine.Root 
         def model():
             md1 = yield Root(tfp.distributions.TruncatedNormal(
@@ -291,7 +342,16 @@ class CVAE(tf.keras.Model):
         
         tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_np_r2.log_prob(tf.boolean_mask(x,self.masks["nonperiodic_nonm1m2_mask"],axis=1)),axis=1),axis=0)
         m1m2_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(joint_trunc_m1m2.log_prob(tf.boolean_mask(x,self.masks["m1_mask"],axis=1),tf.boolean_mask(x,self.masks["m2_mask"],axis=1)),axis=1),axis=0)
+        """
+
+        # truncated normal for non-periodic params                      
+        tmvn_np_r2 = tfp.distributions.TruncatedNormal(
+            loc=tf.cast(mean_nonperiodic_r2,dtype=tf.float32),
+            scale=tf.cast(self.EPS + tf.sqrt(tf.exp(logvar_nonperiodic_r2)),dtype=tf.float32),
+            low=-10.0 + self.ramp*10.0, high=1.0 + 10.0 - self.ramp*10.0)
         
+        tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_np_r2.log_prob(tf.boolean_mask(x,self.masks["nonperiodic_mask"],axis=1)),axis=1),axis=0)
+        """
 
         # 2D representations of periodic params
         # split the means into x and y coords [size (batch,p) each]
@@ -325,6 +385,7 @@ class CVAE(tf.keras.Model):
 
 
         simple_cost_recon = tmvn_r2_cost_recon + m1m2_r2_cost_recon + vm_r2_cost_recon + fvm_r2_cost_recon
+        #simple_cost_recon = tmvn_r2_cost_recon  + vm_r2_cost_recon + fvm_r2_cost_recon
 
 
         selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
@@ -332,75 +393,6 @@ class CVAE(tf.keras.Model):
         cost_KL = tf.cast(selfent_q,dtype=tf.float32) - tf.reduce_mean(log_r1_q)
 
         return simple_cost_recon, cost_KL
-
-
-    def old_compute_loss(self, x, y, noiseamp=1.0, ramp = 1.0):
-        
-        # Recasting some things to float32
-        noiseamp = tf.cast(noiseamp, dtype=tf.float32)
-
-        y = tf.cast(y, dtype=tf.float32)
-        y = tf.keras.activations.tanh(y)
-        x = tf.cast(x, dtype=tf.float32)
-        
-        mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
-        gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                      components_distribution=tfd.MultivariateNormalDiag(
-                                          loc=mean_r1,
-                                          scale_diag=scale_r1))
-
-        mean_q, logvar_q = self.encode_q(x=x,y=y)
-        scale_q = self.EPS + tf.sqrt(tf.exp(logvar_q))
-        mvn_q = tfp.distributions.MultivariateNormalDiag(
-            loc=mean_q,
-            scale_diag=scale_q)
-        #mvn_q = tfd.Normal(loc=mean_q,scale=scale_q)
-        z_samp = mvn_q.sample()
-
-
-        mean_r2, logvar_r2, logweight_r2 = self.decode_r2(z=z_samp,y=y)
-        scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
-        
-        extra_width = 10.0
-        tmvn_r2 = tfp.distributions.TruncatedNormal(
-            loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
-            scale=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1),
-            low=-extra_width + ramp*extra_width, high=1.0 + extra_width - ramp*extra_width)
-        tmvn_r2_cost = tmvn_r2.log_prob(tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1))
-        tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_r2_cost,axis=1),axis=0)
-        """
-        tmvn_r2 = tfd.MultivariateNormalDiag(
-            loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
-            scale_diag=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1))
-        tmvn_r2_cost = tmvn_r2.log_prob(tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1))
-        tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tmvn_r2_cost)
-        """
-        
-        vm_r2 = tfp.distributions.VonMises(
-            loc=2.0*np.pi*tf.boolean_mask(tf.squeeze(mean_r2),self.masks["periodic_mask"],axis=1),
-            concentration=tf.math.reciprocal(tf.math.square(tf.boolean_mask(tf.squeeze(2.0*np.pi*scale_r2),self.masks["periodic_mask"],axis=1)))
-        )
-        vm_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tf.math.log(2.0*np.pi) + vm_r2.log_prob(2.0*np.pi*tf.boolean_mask(x,self.masks["periodic_mask"],axis=1)),axis=1),axis=0)
-        simple_cost_recon = tmvn_r2_cost_recon + vm_r2_cost_recon
-
-        # all Gaussian
-        """
-        gm_r2 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r2),
-                                      components_distribution=tfd.MultivariateNormalDiag(
-                                          loc=mean_r2,
-                                          scale_diag=scale_r2))
-        simple_cost_recon = -1.0*tf.reduce_mean(gm_r2.log_prob(x))
-        """
-
-
-        
-        selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
-        log_r1_q = gm_r1.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
-        cost_KL = selfent_q - tf.reduce_mean(log_r1_q)
-
-        return simple_cost_recon, cost_KL, tmvn_r2_cost_recon, vm_r2_cost_recon, tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1), tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1), tf.boolean_mask(tf.squeeze(x),self.masks["nonperiodic_mask"],axis=1), tmvn_r2_cost
-        
 
 
     def gen_samples(self, y, ramp=1.0, nsamples=1000, max_samples=1000):
@@ -468,6 +460,7 @@ class CVAE(tf.keras.Model):
 
             tmvn_x_sample = tmvn_nonperiodic_r2.sample()
             m1m2_x_sample = tf.concat(m1m2_nonperiodic_r2.sample(), axis = 1)
+
             # periodic sample, samples are output on range [-pi,pi] so rescale to [0,1]
             vm_x_sample = tf.math.floormod(vm_r2.sample(),(2.0*np.pi))/(2.0*np.pi)
             # sky sample
@@ -482,69 +475,16 @@ class CVAE(tf.keras.Model):
             
             if i==0:
                 x_sample = tf.gather(tf.concat([m1m2_x_sample,tmvn_x_sample,vm_x_sample,fvm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)
+                #x_sample = tf.gather(tf.concat([tmvn_x_sample,vm_x_sample,fvm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)
 
                 #mean_r2 = tf.concat([mean_np_r2_temp,mean_p_r2_temp,mean_s_r2_temp],axis=1)
                 #logvar_r2 = tf.concat([logvar_np_r2_temp,logvar_p_r2_temp,logvar_s_r2_temp],axis=1)
             else:
                 x_sample = tf.concat([x_sample,tf.gather(tf.concat([m1m2_x_sample,tmvn_x_sample,vm_x_sample,fvm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)], axis = 0)
+                #x_sample = tf.concat([x_sample,tf.gather(tf.concat([tmvn_x_sample,vm_x_sample,fvm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)], axis = 0)
 
                 #mean_r2 = tf.concat([mean_r2,tf.concat([mean_np_r2_temp,mean_p_r2_temp,mean_s_r2_temp],axis=1)],axis=0)
                 #logvar_r2 = tf.concat([logvar_r2,tf.concat([logvar_np_r2_temp,logvar_p_r2_temp,logvar_s_r2_temp],axis=1)],axis=0)
-
-        return x_sample
-
-
-
-    def old_gen_samples(self, y, ramp=1.0, nsamples=1000, max_samples=1000):
-        
-        #y = y/self.params['y_normscale']
-        y = tf.keras.activations.tanh(y)
-        y = tf.tile(y,(max_samples,1,1))
-        samp_iterations = int(nsamples/max_samples)
-        for i in range(samp_iterations):
-            mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-            scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
-            gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                          components_distribution=tfd.MultivariateNormalDiag(
-                                              loc=mean_r1,
-                                              scale_diag=scale_r1))
-            z_samp = gm_r1.sample()
-
-            mean_r2, logvar_r2, logweight_r2 = self.decode_r2(z=z_samp,y=y)
-            scale_r2 = self.EPS + tf.sqrt(tf.exp(logvar_r2))
-            """
-            tmvn_r2 = tfd.MultivariateNormalDiag(
-                loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
-                scale_diag=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1))
-            """
-
-            extra_width = 10.0
-            tmvn_r2 = tfp.distributions.TruncatedNormal(
-                loc=tf.boolean_mask(tf.squeeze(mean_r2),self.masks["nonperiodic_mask"],axis=1),
-                scale=tf.boolean_mask(tf.squeeze(scale_r2),self.masks["nonperiodic_mask"],axis=1),
-                low=-extra_width + ramp*extra_width, high=1.0 + extra_width - ramp*extra_width)
-            
-            vm_r2 = tfp.distributions.VonMises(
-                loc=2.0*np.pi*tf.boolean_mask(tf.squeeze(mean_r2),self.masks["periodic_mask"],axis=1),
-                concentration=tf.math.reciprocal(tf.math.square(tf.boolean_mask(tf.squeeze(2.0*np.pi*scale_r2),self.masks["periodic_mask"],axis=1)))
-            )
-            """
-            gm_r2 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r2),
-                                          components_distribution=tfd.MultivariateNormalDiag(
-                                              loc=mean_r2,
-                                             scale_diag=scale_r2))
-            """
-
-            if i==0:
-                #x_sample = gm_r2.sample()
-                tmvn_x_sample = tmvn_r2.sample()
-                vm_x_sample = tf.math.floormod(vm_r2.sample(),(2.0*np.pi))/(2.0*np.pi)
-                x_sample = tf.gather(tf.concat([tmvn_x_sample,vm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)
-            else:
-                #x_sample = tf.concat([x_sample,gm_r2.sample()],axis=0)
-                tmvn_x_sample = tmvn_r2.sample()
-                vm_x_sample = tf.math.floormod(vm_r2.sample(),(2.0*np.pi))/(2.0*np.pi)
-                x_sample = tf.concat([x_sample,tf.gather(tf.concat([tmvn_x_sample,vm_x_sample],axis=1),self.masks["idx_periodic_mask"],axis=1)],axis=0)
 
         return x_sample
 
