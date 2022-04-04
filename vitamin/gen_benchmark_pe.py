@@ -489,7 +489,7 @@ def run(sampling_frequency=256.0,
     # Set up a PriorDict, which inherits from dict.
     priors = bilby.gw.prior.BBHPriorDict()
     priors.pop('chirp_mass')
-    priors['mass_ratio'] = bilby.gw.prior.Constraint(minimum=bounds['massratio_min'], maximum=bounds['massratio_max'], name='mass_ratio', latex_label='$q$', unit=None)
+    priors['mass_ratio'g] = bilby.gw.prior.Constraint(minimum=bounds['massratio_min'], maximum=bounds['massratio_max'], name='mass_ratio', latex_label='$q$', unit=None)
     #priors['chirp_mass'] = bilby.gw.prior.Constraint(minimum=25, maximum=100, name='chirp_mass', latex_label='$q$', unit=None)
     if np.any([r=='geocent_time' for r in rand_pars]):
         priors['geocent_time'] = bilby.core.prior.Uniform(

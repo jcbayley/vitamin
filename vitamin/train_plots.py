@@ -129,11 +129,18 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.close()
 
 
-def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=None, params = None, masks= None, bounds = None, scale_other_samples = True, unconvert_parameters = None):
+def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None, scale_other_samples = True, unconvert_parameters = None):
     """
     plots the posteriors
     """
 
+    # make save directories
+    directories = {}
+    for dname in ["comparison_posterior", "full_posterior","JS_divergence","samples"]:
+        directories[dname] = os.path.join(config["output"]["output_dir"], dname)
+        if not os.path.isdir(directories[dname]):
+            os.makedirs(directories[dname])
+    
     # trim samples from outside the cube
     mask = []
     for s in samples:
@@ -144,25 +151,22 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
 
     samples = tf.boolean_mask(samples,mask,axis=0)
     print('identified {} good samples'.format(samples.shape[0]))
-    print(np.array(all_other_samples).shape)
+
     if samples.shape[0]<100:
         print('... Bad run, not doing posterior plotting.')
-        return [-1.0] * len(params['samplers'][1:])
+        return [-1.0] * len(config["test"]['samplers'][1:])
     # make numpy arrays
     samples = samples.numpy()
-    #x_truth = x_truth.numpy()
 
-    samples_file = '{}/posterior_samples_epoch_{}_event_{}_normed.txt'.format(run,epoch,idx)
-    np.savetxt(samples_file,samples)
+    #samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_normed.txt'.format(epoch,idx))
+    #np.savetxt(samples_file,samples)
 
     # convert vitamin sample and true parameter back to truths
     if unconvert_parameters is not None:
         vit_samples = unconvert_parameters(samples)
     else:
         vit_samples = samples
-    #x_truth = np.squeeze(unconvert_parameters(np.expand_dims(x_truth, axis=0)), axis=0)
-    print("truth", x_truth)
-    #print("samp_shape",np.shape(vit_samples), np.shape(x_truth))
+        
     # define general plotting arguments
     defaults_kwargs = dict(
                     bins=50, smooth=0.9, label_kwargs=dict(fontsize=16),
@@ -180,144 +184,102 @@ def plot_posterior(samples,x_truth,epoch,idx,run='testing',all_other_samples=Non
     if all_other_samples is not None:
         JS_est = []
         for i, other_samples in enumerate(all_other_samples):
-            true_post = np.zeros([other_samples.shape[0],masks["bilby_ol_len"]])
-            true_x = np.zeros(masks["inf_ol_len"])
-            true_XS = np.zeros([vit_samples.shape[0],masks["inf_ol_len"]])
+            sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["bilby_ol_len"]])
+            true_params = np.zeros(config["masks"]["inf_ol_len"])
+            vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_ol_len"]])
             ol_pars = []
             cnt = 0
-            for inf_idx,bilby_idx in zip(masks["inf_ol_idx"],masks["bilby_ol_idx"]):
-                inf_par = params['inf_pars'][inf_idx]
-                bilby_par = params['bilby_pars'][bilby_idx]
-                true_XS[:,cnt] = vit_samples[:,inf_idx]
-                true_post[:,cnt] = other_samples[:,bilby_idx]
-                true_x[cnt] = x_truth[inf_idx]
-
+            for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
+                inf_par = config["model"]['inf_pars'][inf_idx]
+                bilby_par = config["testing"]['bilby_pars'][bilby_idx]
+                vitamin_samples[:,cnt] = vit_samples[:,inf_idx]
+                sampler_samples[:,cnt] = other_samples[:,bilby_idx]
+                true_params[cnt] = x_truth[inf_idx]
                 ol_pars.append(inf_par)
                 cnt += 1
             parnames = []
-            for k_idx,k in enumerate(params['rand_pars']):
+            for k_idx,k in enumerate(config["data"]['rand_pars']):
                 if np.isin(k, ol_pars):
-                    parnames.append(params['corner_labels'][k])
+                    parnames.append(config["data"]['corner_labels'][k])
 
             # convert to RA
             #vit_samples = convert_hour_angle_to_ra(vit_samples,params,ol_pars)
             #true_x = convert_hour_angle_to_ra(np.reshape(true_x,[1,true_XS.shape[1]]),params,ol_pars).flatten()
             old_true_post = true_post                 
 
-            samples_file = '{}/posterior_samples_epoch_{}_event_{}_vit.txt'.format(run,epoch,idx)
-            np.savetxt(samples_file,true_XS)
+            samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
+            np.savetxt(samples_file,vitamin_samples)
 
             # compute KL estimate
-            idx1 = np.random.randint(0,true_XS.shape[0],3000)
-            idx2 = np.random.randint(0,true_post.shape[0],3000)
+            idx1 = np.random.randint(0,vitamin_samples.shape[0],3000)
+            idx2 = np.random.randint(0,sampler_samples.shape[0],3000)
             temp_JS = []
             SMALL_CONST = 1e-162
             def my_kde_bandwidth(obj, fac=1.0):
                 """We use Scott's Rule, multiplied by a constant factor."""
                 return np.power(obj.n, -1./(obj.d+4)) * fac
 
-            for pr in range(np.shape(true_XS)[1]):
+            for pr in range(np.shape(vitamin_samples)[1]):
                 #try:
-                kdsampp = true_XS[idx1, pr:pr+1][~np.isnan(true_XS[idx1, pr:pr+1])].flatten()
-                kdsampq = true_post[idx1, pr:pr+1][~np.isnan(true_post[idx1, pr:pr+1])].flatten()
+                kdsampp = vitamin_samples[idx1, pr:pr+1][~np.isnan(vitamin_samples[idx1, pr:pr+1])].flatten()
+                kdsampq = sampler_samples[idx1, pr:pr+1][~np.isnan(sampler_samples[idx1, pr:pr+1])].flatten()
                 eval_pointsp = np.linspace(np.min(kdsampp), np.max(kdsampp), len(kdsampp))
                 eval_pointsq = np.linspace(np.min(kdsampq), np.max(kdsampq), len(kdsampq))
                 kde_p = st.gaussian_kde(kdsampp)(eval_pointsp)
                 kde_q = st.gaussian_kde(kdsampq)(eval_pointsq)
-                #kde_q = st.gaussian_kde(kdsampq, bw_method=my_kde_bandwidth)(kdsampq)
-
-                #kl_1 = 1./(len(kdsampp))*np.sum(kde_p(kdsampp)*np.log((kde_p(kdsampp) + SMALL_CONST)/(kde_q(kdsampp) + SMALL_CONST)))
-                #kl_2 = 1./(len(kdsampq))*np.sum(kde_q(kdsampq)*np.log((kde_q(kdsampq) + SMALL_CONST)/(kde_p(kdsampq) + SMALL_CONST)))
                 current_JS = np.power(jensenshannon(kde_p, kde_q),2)
-                #kl_1 = 1./(len(kdsampp))*np.sum(np.log((kde_p(kdsampp) + SMALL_CONST)/(kde_q(kdsampp) + SMALL_CONST)))
-                #kl_2 = 1./(len(kdsampq))*np.sum(np.log((kde_q(kdsampq) + SMALL_CONST)/(kde_p(kdsampq) + SMALL_CONST)))
-                                                                
-                #current_JS = kl_1 + kl_2
-                #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
-                #except:
-                #    current_JS = -1.0
-
+s               #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
                 temp_JS.append(current_JS)
 
             JS_est.append(temp_JS)
 
-            other_samples_file = '{}/posterior_samples_epoch_{}_event_{}_{}.txt'.format(run,epoch,idx,i)
-            np.savetxt(other_samples_file,true_post)
+            other_samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
+            np.savetxt(other_samples_file,sampler_samples)
 
-
-            print("true_samples_shape", np.shape(true_post))
-            if i==0:
-                figure = corner.corner(true_post, **defaults_kwargs,labels=parnames,
-                           color='tab:blue',
-                           show_titles=True, hist_kwargs=hist_kwargs_other)
+            if i == 0:
+                figure = corner.corner(sampler_samples, **defaults_kwargs,labels=parnames,
+                                       color='tab:blue',
+                                       show_titles=True, hist_kwargs=hist_kwargs_other)
             else:
-                """
-                # compute KL estimate
-                idx1 = np.random.randint(0,old_true_post.shape[0],2000)
-                idx2 = np.random.randint(0,true_post.shape[0],2000)
-                
-                try:
-                    current_KL = 0.5*(estimate(old_true_post[idx1,:],true_post[idx2,:],n_jobs=4) + estimate(true_post[idx2,:],old_true_post[idx1,:],n_jobs=4))
-                except:
-                    current_KL = -1.0
-                    pass
-                
-                #current_KL=-1
-                KL_est.append(current_KL)
-                """
-                corner.corner(true_post,**defaults_kwargs,
-                           color='tab:green',
-                           show_titles=True, fig=figure, hist_kwargs=hist_kwargs_other2)
+                corner.corner(sampler_samples,**defaults_kwargs,
+                              color='tab:green',
+                              show_titles=True, fig=figure, hist_kwargs=hist_kwargs_other2)
         
-        JS_file = '{}/JS_divergence_epoch_{}_event_{}_{}.txt'.format(run,epoch,idx,i)
+        JS_file = os.path.join(directories["JS_divergence"],'JS_divergence_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
         np.savetxt(JS_file,JS_est)
 
         for j,JS in enumerate(JS_est):    
             for j1,JS_ind in enumerate(JS):
                 plt.annotate('JS_{} = {:.3f}'.format(parnames[j1],JS_ind),(0.2 + 0.05*j1,0.95-j*0.02 - j1*0.02),xycoords='figure fraction',fontsize=18)
 
-        corner.corner(true_XS,**defaults_kwargs,
+        corner.corner(vitamin_samples,**defaults_kwargs,
                       color='tab:red',
                       fill_contours=False, truths=true_x,
                       show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
-            print('Saved output to %s/comp_posterior_%s_event_%d.png' % (run,epoch,idx))
-            plt.savefig('%s/comp_posterior_%s_event_%d.png' % (run,epoch,idx))
+            print('Saved output to %s/comp_posterior_%s_event_%d.png' % (save_dir,epoch,idx))
+            plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
         else:
-            print('Saved output to %s/comp_posterior_epoch_%d_event_%d.png' % (run,epoch,idx))
-            plt.savefig('%s/comp_posterior_epoch_%d_event_%d.png' % (run,epoch,idx))
+            print('Saved output to %s/comp_posterior_epoch_%d_event_%d.png' % (save_dir,epoch,idx))
+            plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
         return JS_est
 
     else:
         # Get corner parnames to use in plotting labels
         parnames = []
-        for k_idx,k in enumerate(params['rand_pars']):
-            if np.isin(k, params['inf_pars']):
-                parnames.append(params['corner_labels'][k])
-        # un-normalise full inference parameters
-        full_true_x = np.zeros(len(params['inf_pars']))
-        new_samples = np.zeros([samples.shape[0],len(params['inf_pars'])])
-        for inf_par_idx,inf_par in enumerate(params['inf_pars']):
-            new_samples[:,inf_par_idx] = samples[:,inf_par_idx]# * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par+'_min']
-            if x_truth is not None:
-                full_true_x[inf_par_idx] = x_truth[inf_par_idx]# * (bounds[inf_par+'_max'] - bounds[inf_par+'_min'])) + bounds[inf_par + '_min']
-            else:
-                full_true_x = None
-        #new_samples = convert_hour_angle_to_ra(new_samples,params,params['inf_pars'])
-        if full_true_x is not None:
-            print(np.shape(full_true_x))
-            print(samples.shape)
-            #full_true_x = convert_hour_angle_to_ra(np.reshape(full_true_x,[1,samples.shape[1]]),params,params['inf_pars']).flatten()       
+        for k_idx,k in enumerate(config["data"]['rand_pars']):
+            if np.isin(k, config["model"]['inf_pars']):
+                parnames.append(config["data"]['corner_labels'][k])
 
-        figure = corner.corner(new_samples,**defaults_kwargs,labels=parnames,
+        figure = corner.corner(samples,**defaults_kwargs,labels=parnames,
                            color='tab:red',
-                           fill_contours=True, truths=full_true_x,
+                           fill_contours=True, truths=x_truth,
                            show_titles=True, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
-            plt.savefig('%s/full_posterior_%s_event_%d.png' % (run,epoch,idx))
+            plt.savefig(os.path.join(directories["full_posterior"],'full_posterior_{}_event_{}.png'.format(save_dir,epoch,idx)))
         else:
-            plt.savefig('%s/full_posterior_epoch_%d_event_%d.png' % (run,epoch,idx))
+            plt.savefig(os.path.join(directories["full_posterior"],'full_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
     return -1.0
 

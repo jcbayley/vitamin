@@ -43,7 +43,7 @@ def write_version_file(version):
 
     version_file = '.version'
     if os.path.isfile(version_file) is False:
-        with open('vitamin_c/' + version_file, 'w+') as f:
+        with open('vitamin/' + version_file, 'w+') as f:
             f.write('{}: {}'.format(version, git_status))
 
     return version_file
@@ -64,26 +64,25 @@ def readfile(filename):
     return filecontents
 
 
-VERSION = '0.2.10'
+VERSION = '0.3.0'
 version_file = write_version_file(VERSION)
 long_description = get_long_description()
 
 
 setup(
-    name='vitamin_c',
-    version='0.2.10',    
+    name='vitamin',
+    version='0.3.0',    
     description='A user-friendly machine learning Bayesian inference library',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/hagabbar/vitamin_b',
-    author='Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
-    author_email='h.gabbard.1@research.gla.ac.uk',
+    url='https://git.ligo.org/joseph.bayley/vitamin_c',
+    author='Joseph Bayley, Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
+    author_email='joseph.bayley@glasgow.ac.uk',
     license='GNU General Public License v3 (GPLv3)',
-    packages=['vitamin_b','vitamin_b.models','vitamin_b.models.neural_networks',
-              'vitamin_b.params_files'],
-    package_dir={'vitamin_b': 'vitamin_b'},
-    package_data={'vitamin_b': ['params_files/*.json'],
-                  'vitamin_b': [version_file]},
+    packages=['vitamin'],
+    package_dir={'vitamin': 'vitamin'},
+    package_data={'vitamin': ['default_files/bbh.prior',"default_files/config.ini"],
+                  'vitamin': [version_file]},
 
     python_requires='>=3.6', 
     install_requires=['numpy',

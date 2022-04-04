@@ -29,7 +29,6 @@ from contextlib import contextmanager
 import json
 
 from lal import GreenwichMeanSiderealTime
-print("load1")
 
 import skopt
 from skopt import gp_minimize, forest_minimize, dump
@@ -38,17 +37,18 @@ from skopt.plots import plot_convergence
 from skopt.plots import plot_objective, plot_evaluations
 from skopt.utils import use_named_args
 try:
-    from .gen_benchmark_pe import run, gen_real_noise
-    from . import plotting
+    #from .gen_benchmark_pe import run, gen_real_noise
+    #import .plotting
     from . import vitamin_c_fit as vitamin_c
-    from .plotting import prune_samples
+    #from .plotting import prune_samples
 except (ModuleNotFoundError, ImportError):
-    from gen_benchmark_pe import run, gen_real_noise
-    import plotting
+    #from gen_benchmark_pe import run, gen_real_noise
+    #import .plotting
     import vitamin_c_fit as vitamin_c
-    from plotting import prune_samples
+    #from .plotting import prune_samples
 
 # Check for optional basemap installation
+"""
 try:
     from mpl_toolkits.basemap import Basemap
     print("module 'basemap' is installed")
@@ -62,8 +62,7 @@ else:
         from .skyplotting import plot_sky
     except:
         from skyplotting import plot_sky
-print("load3")
-
+"""
 #@use_named_args(dimensions=dimensions)
 def hyperparam_fitness(r1_filter_num, r1_filter_size):
     """ Fitness function used in Gaussian Process hyperparameter optimization 
@@ -708,25 +707,8 @@ def train(resume_training=False, params_dir=None):
     resume_training: bool
         If True, continue training a pre-trained model.
     """
-   
-    global x_data_train, y_data_train, x_data_test, y_data_test, x_data_val, y_data_val, y_data_test_noisefree, XS_all
-    global snrs_test
 
-    # Check for requried parameters files
-    #if params == None or bounds == None or fixed_vals == None:
-    #    print('Missing either params file, bounds file or fixed vals file')
-    #    exit()
-
-    # Load parameters files
-    with open(os.path.join(params_dir, "./params.json"), 'r') as fp:
-        params = json.load(fp)
-    with open(os.path.join(params_dir, "./bounds.json"), 'r') as fp:
-        bounds = json.load(fp)
-    with open(os.path.join(params_dir, "./fixed_vals.json"), 'r') as fp:
-        fixed_vals = json.load(fp)
-
-
-    print('... converted RA bounds to hour angle')
+    vitamin_init = vitamin_parser.Parser(ini_file)
 
     # If resuming training, set KL ramp off
     if resume_training or params['resume_training']:
@@ -734,41 +716,11 @@ def train(resume_training=False, params_dir=None):
         params['ramp'] = False
         print('... resuming training and disabling the ramp')
 
-    params['make_paper_plots'] = False
-    """
-    # load the noisefree training data back in
-    x_data_train, y_data_train, _, snrs_train = load_data(params,bounds,fixed_vals,params['train_set_dir'],params['inf_pars'])
-    print('... loaded in the training data')
-
-    # load the noisefree validation data back in
-    x_data_val, y_data_val, _, snrs_val = load_data(params,bounds,fixed_vals,params['val_set_dir'],params['inf_pars'])
-    print('... loaded in the validation data')
-
-    # load the noisy testing data back in
-    x_data_test, y_data_test_noisefree, y_data_test, snrs_test = load_data(params,bounds,fixed_vals,params['test_set_dir'],params['inf_pars'],test_data=True)
-    print('... loaded in the testing data')
-    for x in x_data_test:
-        print(x)
-
-    # reshape time series arrays for single channel ( N_samples,fs*duration,n_detectors -> (N_samples,fs*duration*n_detectors) )
-    y_data_train = y_data_train.reshape(y_data_train.shape[0]*y_data_train.shape[1],y_data_train.shape[2]*y_data_train.shape[3])
-    y_data_val = y_data_val.reshape(y_data_val.shape[0]*y_data_val.shape[1],y_data_val.shape[2]*y_data_val.shape[3])
-    y_data_test = y_data_test.reshape(y_data_test.shape[0],y_data_test.shape[1]*y_data_test.shape[2])
-    y_data_test_noisefree = y_data_test_noisefree.reshape(y_data_test_noisefree.shape[0],y_data_test_noisefree.shape[1]*y_data_test_noisefree.shape[2])
-    print('... reshaped train,val,test y-data -> (N_samples,fs*duration*n_detectors)')
-    """
-
     # Make directory for plots
     os.system('mkdir -p %s' % (params['plot_dir']))
     print('... make directory for plots {}'.format(params['plot_dir']))
-    os.system('mkdir -p %s/latest_%s' % (params['plot_dir'],params['run_label']))
-    print('... make directory for plots {}/latest_{}'.format(params['plot_dir'],params['run_label']))
-
-    # Save configuration file to public_html directory
-    f = open('%s/latest_%s/params_%s.txt' % (params['plot_dir'],params['run_label'],params['run_label']),"w")
-    f.write( str(params) )
-    f.close()
-    print('... saved config file to {}/latest_{}/params_{}.txt'.format(params['plot_dir'],params['run_label'],params['run_label']))
+    os.system('mkdir -p %s/latest' % (params['plot_dir']))
+    print('... make checkpoint directory {}/latest'.format(params['plot_dir']))
 
     """
     # load up the posterior samples (if they exist)
@@ -879,14 +831,7 @@ def train(resume_training=False, params_dir=None):
         print('... Did a hyperparameter search') 
     else:
     """
-    x_data_train=y_data_train=x_data_val=y_data_val=x_data_test=y_data_test=y_data_test_noisefree=x_data_test=XS_all=snrs_test=None
-    vitamin_c.run_vitc(params, x_data_train, y_data_train,
-                           x_data_val, y_data_val,
-                           x_data_test, y_data_test, y_data_test_noisefree,
-                           "inverse_model_dir_%s/inverse_model.ckpt" % params['run_label'],
-                           x_data_test, bounds, fixed_vals,
-                           XS_all,snrs_test, params_dir = params_dir)
-
+    vitamin_c.run_vitc(vitamin_init)
     print('... completed training') 
     return
 

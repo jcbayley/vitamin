@@ -17,11 +17,16 @@ For installation instructions see
 from __future__ import absolute_import
 import sys
 
-from . import models
-from . import gen_benchmark_pe, plotting
+#from . import models
+from . import generate_data, create_template, plotting
+from . import model
+from . import vitamin_c_fit
 from . import params_files
-from . import make_params_files
-
+from . import make_condor_files
+from . import callbacks
+from . import load_data
+from . import plotting
+from . import templates
 # Check for optional basemap installation
 try:
     from mpl_toolkits.basemap import Basemap
@@ -32,8 +37,7 @@ except (ModuleNotFoundError, ImportError):
 else:
     from .skyplotting import plot_sky
 
-from .models import CVAE_model
-from .models.neural_networks import batch_manager, vae_utils, VI_decoder_r2, VI_encoder_q, VI_encoder_r1 
+from .model import CVAE
 
 from . import run_vitamin
 

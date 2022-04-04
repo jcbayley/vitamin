@@ -1,0 +1,15 @@
+JOB File_0_0_811307748 .//condor/train_run.sub
+RETRY File_0_0_811307748 1
+VARS File_0_0_811307748 start_ind="0"
+JOB File_1_1_244127496 .//condor/train_run.sub
+RETRY File_1_1_244127496 1
+VARS File_1_1_244127496 start_ind="20"
+JOB File_2_2_964232882 .//condor/train_run.sub
+RETRY File_2_2_964232882 1
+VARS File_2_2_964232882 start_ind="40"
+JOB File_3_3_319986641 .//condor/train_run.sub
+RETRY File_3_3_319986641 1
+VARS File_3_3_319986641 start_ind="60"
+JOB File_4_4_576088855 .//condor/train_run.sub
+RETRY File_4_4_576088855 1
+VARS File_4_4_576088855 start_ind="80"

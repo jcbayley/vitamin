@@ -7,7 +7,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 import sys
-import plotting
+from . import plotting 
 
 class PlotCallback(tf.keras.callbacks.Callback):
 
@@ -30,7 +30,6 @@ class PlotCallback(tf.keras.callbacks.Callback):
         self.train_losses[0].append(logs["recon_loss"])
         self.train_losses[1].append(logs["kl_loss"])
 
-        print(logs.keys())
         self.val_losses[2].append(logs["val_total_loss"])
         self.val_losses[0].append(logs["val_recon_loss"])
         self.val_losses[1].append(logs["val_kl_loss"])
@@ -45,13 +44,9 @@ class PlotCallback(tf.keras.callbacks.Callback):
 
 class TrainCallback(tf.keras.callbacks.Callback):
 
-    def __init__(self, checkpoint_path, optimizer, plot_dir, train_dataloader, model):
+    def __init__(self, args, checkpoint_path, optimizer, plot_dir, train_dataloader, model):
         super(TrainCallback, self).__init__()
-        self.ramp_start = 400
-        self.ramp_length = 500
-        self.decay_start = 5000
-        self.decay_length = 3000
-        self.n_cycles = 1
+        self.args = args
         self.model = model
         self.checkpoint_path = checkpoint_path
         self.plot_dir = plot_dir
@@ -79,7 +74,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
         ax[0].plot(data[:,0])
         ax[0].plot(data[:,1])
 
-        fig.savefig(os.path.join(self.plot_dir, "bad_data_plot.png"))
+        fig.savefig(os.path.join(self.args["output_dir"], "bad_data_plot.png"))
         plt.close(fig)
         sys.exit()
 
@@ -100,59 +95,43 @@ class TrainCallback(tf.keras.callbacks.Callback):
         ax[1].set_yscale("symlog")
         ax[1].legend()
         
-        fig.savefig(os.path.join(self.plot_dir, "batch_inf_plot.png"))
+        fig.savefig(os.path.join(self.args["output_dir"], "batch_inf_plot.png"))
         plt.close(fig)
         sys.exit()
         
     def ramp_func(self,epoch):
-        ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
+        ramp = (epoch-self.args["ramp_start"])/(2.0*self.args["ramp_length"])
         #print(epoch,ramp)
         if ramp<0:
             ramp = 0.0
-        elif ramp>=self.n_cycles:
+        elif ramp>=self.args["ramp_n_cycles"]:
             ramp = 1.0
         ramp = min(1.0,2.0*np.remainder(ramp,1.0))
-        if epoch > self.ramp_start + self.ramp_length:
+        if epoch > self.args["ramp_start"] + self.args["ramp_length"]:
             ramp = 1.0
         tf.keras.backend.set_value(self.model.ramp, ramp)
-        #self.model.compile(run_eagerly = False, optimizer = self.optimizer)
 
-    def learning_rate_decay(self,epoch):
-        ramps = np.logspace(-3, 1, self.decay_length)[::-1]
-        if epoch >= self.decay_start + self.decay_length:
-            ramp = ramps[-1]
-        elif epoch > self.decay_start and epoch < self.decay_start + self.decay_length:
-            ramp = ramps[epoch - self.decay_start]
-        else:
-            ramp = 1
-        newlearn = self.model.initial_learning_rate*ramp
-        tf.keras.backend.set_value(self.optimizer.learning_rate, newlearn)
+    def learning_rate_modify(self, epoch, epochs_range = 100, decay_length = 4000, init_rate = 1e-4):
+        dec_factor = 1
+        cycle_factor = 1
+        if epoch > self.args["cycle_lr_start"]:
+            half_fact_arr = np.linspace(1/10, 10, int(self.args["cycle_lr_length"]/2))
+            fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
+            position = np.remainder(epoch - self.args["cycle_lr_start"], self.args["cycle_lr_length"]).astype(int)
+            cycle_factor = fact_arr[position]
 
-    def cyclic_learning_rate(self, epoch, epochs_range = 100):
-
-        half_fact_arr = np.linspace(self.model.initial_learning_rate/10., self.model.initial_learning_rate, int(epochs_range/2))
-        fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
-        start_cycle = self.ramp_start + 10*self.ramp_length
-        if epoch > start_cycle:
-            position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
-            factor = fact_arr[position]
-            tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
-            print("learning_rate:, {}".format(self.optimizer.learning_rate))
-
-    def cyclic_learning_rate_decay(self, epoch, epochs_range = 100, decay_length = 4000):
-
-        half_fact_arr = np.linspace(self.model.initial_learning_rate/10., self.model.initial_learning_rate, int(epochs_range/2))
-        dec_array = np.linspace(1e-2, 1, decay_length)[::-1]
-        fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
-        start_cycle = self.ramp_start + 10*self.ramp_length
-        if epoch > start_cycle:
-            position = np.remainder(epoch - start_cycle, epochs_range).astype(int)
-            decay_pos = epoch - start_cycle
-            if decay_pos > decay_length:
+        if epoch > self.args["decay_lr_start"]:
+            dec_array = np.logspace(-2, 0, self.args["decay_lr_length"])[::-1]
+            decay_pos = epoch - self.args["decay_lr_start"]
+            if decay_pos > self.args["decay_lr_length"]:
                 decay_pos = -1
-            factor = fact_arr[position]*dec_array[decay_pos]
-            tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
-            print("learning_rate:, {}".format(self.optimizer.learning_rate))
+            dec_factor = dec_array[decay_pos]
+
+        new_lr = cycle_factor*dec_factor*self.args["initial_learning_rate"]
+            
+        tf.keras.backend.set_value(self.optimizer.learning_rate, new_lr)
+        print("learning_rate:, {}".format(self.optimizer.learning_rate))
+
 
     def learning_rate_it(self, epoch, epochs_range = 30):
 
@@ -163,10 +142,9 @@ class TrainCallback(tf.keras.callbacks.Callback):
         print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
     def on_epoch_begin(self, epoch, logs = None):
-        self.cyclic_learning_rate_decay(epoch)
-        #self.learning_rate_decay(epoch)
+        self.learning_rate_modify(epoch)
         #self.learning_rate_it(epoch)
-        if epoch > self.ramp_start:
+        if epoch > self.args["ramp_start"]:
             self.ramp_func(epoch)
 
 
@@ -206,16 +184,18 @@ class TrainCallback(tf.keras.callbacks.Callback):
 class TestCallback(tf.keras.callbacks.Callback):
 
 
-    def __init__(self,test_dataset, comp_post_dir, full_post_dir, latent_dir, bilby_samples, paper_plots = False, test_epoch = 500):
+    def __init__(self, config, test_dataset, comp_post_dir, full_post_dir, latent_dir, bilby_samples,test_epoch = 500):
         from vitamin_c_fit import plot_latent, plot_posterior
+        self.config = config
         self.plot_latent = plot_latent
         self.plot_posterior = plot_posterior
         self.test_dataset = test_dataset
-        self.comp_post_dir = comp_post_dir
-        self.full_post_dir = full_post_dir
-        self.latent_dir = latent_dir
+        self.comp_post_dir = os.path.join(config["output"]["output_dir"],"comparison_posteriors")
+        self.full_post_dir = os.path.join(config["output"]["output_dir"],"full_posteriors")
+        self.latent_dir = os.path.join(config["output"]["output_dir"],"latent_plots")
         self.bilby_samples = bilby_samples
-        self.paper_plots = paper_plots
+        self.paper_plots = config["testing"]["make_paper_plots"]
+        self.paper_plot_dir = os.path.join(config["output"]["output_dir"],"paper_plots")
         self.test_epoch = test_epoch
 
     def on_epoch_end(self, epoch, logs = None):
@@ -230,20 +210,16 @@ class TestCallback(tf.keras.callbacks.Callback):
                 end_time_test = time.time()
                 if np.any(np.isnan(samples)):
                     print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
-                    for k,s in enumerate(samples):
-                        if np.any(np.isnan(s)):
-                            print(k,s)
                     KL_est = [-1,-1,-1]
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.model.params['n_samples'],end_time_test - start_time_test))
-                    KL_est = self.plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:],run=self.comp_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks, unconvert_parameters = self.test_dataset.unconvert_parameters)
-                    #_ = self.plot_posterior(samples,self.test_dataset.X[step],epoch,step,run=self.full_post_dir, params = self.model.params, bounds = self.model.bounds, masks = self.model.masks)
-                    #KL_samples.append(KL_est)
+                    KL_est = self.plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:], config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
             if self.paper_plots:
+                # This needs to be checked and rewritten
                 epoch = 'pub_plot'; ramp = 1
-                plotter = plotting.make_plots(self.model.params, None, None, self.test_dataset.X) 
+                plotter = plotting.make_plots(config, None, None, self.test_dataset.X) 
                 # Make p-p plots
-                plotter.plot_pp(self.model, self.test_dataset.Y_noisy, self.test_dataset.X, self.model.params, self.model.bounds, self.model.masks["inf_ol_idx"], self.model.masks["bilby_ol_idx"], self.bilby_samples)
+                plotter.plot_pp(self.model, self.test_dataset.Y_noisy, self.test_dataset.X, config, config["masks"]["inf_ol_idx"], config["masks"]["bilby_ol_idx"], self.bilby_samples)
                 print('... Finished making p-p plots!')
 
                 # Make KL plots
@@ -253,10 +229,10 @@ class TestCallback(tf.keras.callbacks.Callback):
 
 
 class TimeCallback(tf.keras.callbacks.Callback):
-    def __init__(self, save_dir, save_interval, start_epoch = 0):
+    def __init__(self, args, start_epoch = 0):
         self.save_interval = save_interval
-        self.save_dir = save_dir
-        self.fname = os.path.join(self.save_dir, "epochs_times.txt")
+        self.args = args
+        self.fname = os.path.join(self.args["output_dir"], "epochs_times.txt")
         self.start_epoch = start_epoch
         if start_epoch != 0:
             with open(self.fname, "r") as f:
@@ -273,7 +249,7 @@ class TimeCallback(tf.keras.callbacks.Callback):
         temp_time = time.time() - self.epoch_time_start + self.total_elapsed
         self.times.append(temp_time)
 
-        if batch % self.save_interval == 0:
+        if batch % self.args["plot_save_interval"] == 0:
             with open(self.fname, "w") as f:
                 np.savetxt(f, self.times)
 
