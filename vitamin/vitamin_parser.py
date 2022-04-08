@@ -5,6 +5,9 @@ import json
 import importlib.resources as pkg_resources
 from . import templates
 import bilby
+import os 
+from pathlib import Path
+
 
 class InputParser():
 
@@ -17,11 +20,10 @@ class InputParser():
             self.default_ini.read(default_config)
         self.create_config(self.default_ini)
         
-        self.config_file = config_file
+        self.config_file = Path(config_file).resolve()
         if config_file is not None:
             self.ini = configparser.ConfigParser()
             self.ini.read(self.config_file)
-
             self.create_config(self.ini)
         else:
             print("Using default config file")
@@ -40,6 +42,11 @@ class InputParser():
             for key2 in ini_file[key].keys():
                 if key2 in ["shared_network", "output_network"]:
                     self.config[key][key2] = ini_file[key][key2].strip("[").strip("]").split("\n")
+                elif key2 in ["waveform_approximant", "run_tag"]:
+                    self.config[key][key2] = str(ini_file[key][key2]).strip('"')
+                elif key2 in ["output_directory","data_directory", "prior_file"]:
+                    path = Path(str(ini_file[key][key2]).strip('"'))
+                    self.config[key][key2] = str(path.resolve())
                 else:
                     self.config[key][key2] = json.loads(ini_file[key][key2])
         
@@ -70,9 +77,13 @@ class InputParser():
         nonperiodic_nonm1m2_params = copy.copy(nonperiodic_params)
         nonperiodic_nonm1m2_params.remove("mass_1")
         nonperiodic_nonm1m2_params.remove("mass_2")
-        self.config["masks"]["nonperiodic_nonm1m2_mask"], self.config["masks"]["nonperiodic_nonm1m2_idx_mask"], self.config["masks"]["nonperiodic_nonm1m2_len"] = self.get_param_index(nonperiodic_params,nonperiodic_nonm1m2_params)
+        self.config["masks"]["nonperiodicpars_nonm1m2_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_idx_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_len"] = self.get_param_index(nonperiodic_params,nonperiodic_nonm1m2_params)
+        self.config["masks"]["nonperiodic_nonm1m2_mask"], self.config["masks"]["nonperiodic_nonm1m2_idx_mask"], self.config["masks"]["nonperiodic_nonm1m2_len"] = self.get_param_index(self.config["model"]["inf_pars"],nonperiodic_nonm1m2_params)
+
         self.config["masks"]["nonperiodic_m1_mask"], self.config["masks"]["nonperiodic_m1_idx_mask"], self.config["masks"]["nonperiodic_m1_len"] = self.get_param_index(nonperiodic_params,['mass_1'])
         self.config["masks"]["nonperiodic_m2_mask"], self.config["masks"]["nonperiodic_m2_idx_mask"], self.config["masks"]["nonperiodic_m2_len"] = self.get_param_index(nonperiodic_params,['mass_2'])
+
+
 
     def get_bounds(self,):
         self.config["bounds"] = {}

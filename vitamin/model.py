@@ -19,15 +19,18 @@ class CVAE(tf.keras.Model):
         self.x_modes = 1   # hardcoded for testing
         self.x_dim_periodic = int(self.config["masks"]["periodic_len"])
         self.x_dim_nonperiodic = int(self.config["masks"]["nonperiodic_len"])
-        if "ra" in config["data"]["inf_pars"]:
+        if "ra" in config["model"]["inf_pars"]:
             self.x_dim_sky = int(2)
         else:
             self.x_dim_sky = 0
         self.x_dim = self.x_dim_periodic + self.x_dim_nonperiodic + self.x_dim_sky
-        self.y_dim = self.config["data"]["ndata"]
+        self.y_dim = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
         self.n_channels = len(self.config["data"]["detectors"])
         self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
         self.activation_relu = tf.keras.layers.ReLU()
+        self.kernel_initializer = "glorot_uniform"#tf.keras.initializers.HeNormal() 
+        self.bias_initializer = "random_uniform"#tf.keras.initializers.HeNormal() 
+
         self.verbose = verbose
         # consts
         self.EPS = 1e-3
@@ -50,19 +53,19 @@ class CVAE(tf.keras.Model):
 
         # the shared convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        conv = get_network(conv, self.config["model"]["shared_network"])
+        conv = self.get_network(all_input_y, self.config["model"]["shared_network"])
         conv = tf.keras.layers.Flatten()(conv)
 
         # r1 encoder network
-        r1 = get_network(conv, self.config["model"]["output_network"])
-        r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes)(r1)
+        r1 = self.get_network(conv, self.config["model"]["output_network"])
+        r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
 
         # the q encoder network
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        q = get_network(q, self.config["model"]["output_network"])
+        q = self.get_network(q, self.config["model"]["output_network"])
         q = tf.keras.layers.Dense(2*self.z_dim)(q)
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
 
@@ -70,19 +73,19 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        r2 = get_network(r2, self.config["model"]["output_network"])
+        r2 = self.get_network(r2, self.config["model"]["output_network"])
 
         # non periodic outputs
-        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2_nonp)
-        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2_nonp)
+        r2mu_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,activation='sigmoid')(r2)
+        r2logvar_nonperiodic = tf.keras.layers.Dense(self.x_dim_nonperiodic,use_bias=True)(r2)
 
         # periodic outputs
-        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2_p)
-        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2_p)
+        r2mu_periodic = tf.keras.layers.Dense(2*self.x_dim_periodic,use_bias=True)(r2)
+        r2logvar_periodic = tf.keras.layers.Dense(self.x_dim_periodic,use_bias=True)(r2)
 
         # sky outputs (x,y,z)
-        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2_sky)
-        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2_sky)
+        r2mu_sky = tf.keras.layers.Dense(3,use_bias=True)(r2)
+        r2logvar_sky = tf.keras.layers.Dense(1,use_bias=True)(r2)
         # all outputs
         r2 = tf.keras.layers.concatenate([r2mu_nonperiodic,r2mu_periodic,r2mu_sky,r2logvar_nonperiodic,r2logvar_periodic,r2logvar_sky])
 
@@ -206,13 +209,13 @@ class CVAE(tf.keras.Model):
         
         # truncated normal for non-periodic params                      
         tmvn_np_r2 = tfp.distributions.TruncatedNormal(
-            loc=tf.cast(tf.boolean_mask(mean_nonperiodic_r2,self.config["masks"]["nonperiodic_nonm1m2_mask"],axis=1),dtype=tf.float32),
-            scale=tf.cast(tf.boolean_mask(self.EPS + tf.sqrt(tf.exp(logvar_nonperiodic_r2)),self.config["masks"]["nonperiodic_nonm1m2_mask"],axis=1),dtype=tf.float32),
+            loc=tf.cast(tf.boolean_mask(mean_nonperiodic_r2,self.config["masks"]["nonperiodicpars_nonm1m2_mask"],axis=1),dtype=tf.float32),
+            scale=tf.cast(tf.boolean_mask(self.EPS + tf.sqrt(tf.exp(logvar_nonperiodic_r2)),self.config["masks"]["nonperiodicpars_nonm1m2_mask"],axis=1),dtype=tf.float32),
             low=-10.0 + self.ramp*10.0, high=1.0 + 10.0 - self.ramp*10.0)
 
         
         tmvn_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(tmvn_np_r2.log_prob(tf.boolean_mask(x,self.config["masks"]["nonperiodic_nonm1m2_mask"],axis=1)),axis=1),axis=0)
-        m1m2_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(joint_trunc_m1m2.log_prob(tf.boolean_mask(x,self.config["masks"]["m1_mask"],axis=1),tf.boolean_mask(x,self.config["masks"]["m2_mask"],axis=1)),axis=1),axis=0)
+        m1m2_r2_cost_recon = -1.0*tf.reduce_mean(tf.reduce_sum(joint_trunc_m1m2.log_prob(tf.boolean_mask(x,self.config["masks"]["mass_1_mask"],axis=1),tf.boolean_mask(x,self.config["masks"]["mass_2_mask"],axis=1)),axis=1),axis=0)
 
         # 2D representations of periodic params
         # split the means into x and y coords [size (batch,p) each]
@@ -286,8 +289,8 @@ class CVAE(tf.keras.Model):
             m1m2_nonperiodic_r2 = tfp.distributions.JointDistributionCoroutine(model)
 
             tmvn_nonperiodic_r2 = tfp.distributions.TruncatedNormal(
-                loc=tf.cast(tf.boolean_mask(mean_nonperiodic_r2_temp,self.config["masks"]["nonperiodic_nonm1m2_mask"],axis=1),dtype=tf.float32),
-                scale=tf.cast(tf.boolean_mask(self.EPS + tf.sqrt(tf.exp(logvar_nonperiodic_r2_temp)),self.config["masks"]["nonperiodic_nonm1m2_mask"],axis=1),dtype=tf.float32),
+                loc=tf.cast(tf.boolean_mask(mean_nonperiodic_r2_temp,self.config["masks"]["nonperiodicpars_nonm1m2_mask"],axis=1),dtype=tf.float32),
+                scale=tf.cast(tf.boolean_mask(self.EPS + tf.sqrt(tf.exp(logvar_nonperiodic_r2_temp)),self.config["masks"]["nonperiodicpars_nonm1m2_mask"],axis=1),dtype=tf.float32),
                 low=-10.0 + self.ramp*10.0, high=1.0 + 10.0 - self.ramp*10.0)
             
             # periodic z,y, params for vonmises
@@ -378,21 +381,21 @@ class CVAE(tf.keras.Model):
         for layer in layers:
             if layer.split("(")[0] == "Conv1D":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
-                conv = self.ConvBlock(conv, nfilters, filter_size, stride)
+                conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride))
             if layer.split("(")[0] == "ResBlock":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 # add a bottleneck block
-                conv = self.ResBlock(conv, [nfilters, nfilters, nfilters], [1, filter_size])
+                conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride))
             elif layer.split("(")[0] == "Linear":
-                nfilters = layer.split("(")[1].strip(")").split(",")
-                conv = self.LinearBlock(conv, num_neurons)
+                num_neurons = layer.split("(")[1].strip(")")
+                conv = self.LinearBlock(conv, int(num_neurons))
             else:
                 print("No layers saved")
 
         return conv
 
     def ConvBlock(self, input_data, filters, kernel_size, strides):
-        conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.he_initializer)(input_data)
+        conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
         conv = tf.keras.layers.BatchNormalization()(conv)
         conv = self.activation(conv)
 
@@ -400,7 +403,7 @@ class CVAE(tf.keras.Model):
 
     def LinearBlock(self,input_data, num_neurons):
 
-        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.he_initializer)(input_data)
+        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
         out = tf.keras.layers.BatchNormalization()(out)
         return out
 
@@ -410,20 +413,20 @@ class CVAE(tf.keras.Model):
         
         conv_short = input_data
         
-        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same")(input_data)
+        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
         conv = tf.keras.layers.BatchNormalization()(conv)
         conv = self.activation(conv)
         
-        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv)
         conv = tf.keras.layers.BatchNormalization()(conv)
         conv = self.activation(conv)
         
-        conv = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv)
         conv = tf.keras.layers.BatchNormalization()(conv)
         #conv = self.act(conv)
         
         if strides > 1:
-            conv_short = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same")(conv_short)
+            conv_short = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv_short)
             conv_short = tf.keras.layers.BatchNormalization()(conv_short)
             #conv_short = self.act(conv_short)                                                                     
 

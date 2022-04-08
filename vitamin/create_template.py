@@ -26,21 +26,26 @@ class GenerateTemplate():
         """
         self.config = config
         self.save_dir = save_dir
-        if self.config["data"]["use_real_det_noise"]:
+        if self.config["data"]["use_real_detector_noise"]:
             self.real_noise_seg = self.config["data"]["{}_real_noise_seg".format(run_type)] 
 
         self.channel_name = "DCS-CALIB_STRAIN_C01"
+        #self.get_prior()
         
-    def get_prior(self):
-        self.prior = bilby.gw.prior.BBHPriorDict(self.config["data"]["prior_file"])
-        
+    #def get_prior(self):
+    #    self.prior = bilby.gw.prior.BBHPriorDict(self.config["data"]["prior_file"])
+ 
     def get_injection_parameters(self):
-        self.injection_parameters = self.prior.sample()
+        self.injection_parameters = self.config["priors"].sample()
+        conv_params, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
+        self.injection_parameters_list = []
+        for key in self.config["model"]["inf_pars"]:
+            self.injection_parameters_list.append(conv_params[key])
 
     def clear_attributes(self):
         """ Remove attributes to regenerate
         """
-        for key in ["injection_parameters", "waveform_polarisations", "whitened_signals_td", "ifos", "waveform_generator", "snrs"]:
+        for key in ["injection_parameters","injection_parameters_list", "waveform_polarisations", "whitened_signals_td", "ifos", "waveform_generator", "snrs"]:
             if hasattr(self, key):
                 delattr(self, key)
 
@@ -48,20 +53,20 @@ class GenerateTemplate():
         """ Generates a whitened waveforms in Gaussian noise.
         """
 
-        if sampling_frequency>4096:
+        if self.config["data"]["sampling_frequency"]>4096:
             print('EXITING: bilby doesn\'t seem to generate noise above 2048Hz so lower the sampling frequency')
             exit(0)
 
         # compute the number of time domain samples
-        Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
+        self.Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
         
         # define the start time of the timeseries
-        start_time = self.config["data"]["ref_geocent_time"]-self.config["data"]["duration"]/2.0
+        self.start_time = self.config["data"]["ref_geocent_time"]-self.config["data"]["duration"]/2.0
         
         # Fixed arguments passed into the source model 
-        waveform_arguments = dict(waveform_approximant=self.waveform_approximant,
-                                  reference_frequency=self.reference_frequency, 
-                                  minimum_frequency=self.minimum_frequency,
+        waveform_arguments = dict(waveform_approximant=self.config["data"]["waveform_approximant"],
+                                  reference_frequency=self.config["data"]["reference_frequency"], 
+                                  minimum_frequency=self.config["data"]["minimum_frequency"],
                                   maximum_frequency=self.config["data"]["sampling_frequency"]/2.0)
 
         # Create the waveform_generator using a LAL BinaryBlackHole source function
@@ -70,19 +75,32 @@ class GenerateTemplate():
             frequency_domain_source_model=bilby.gw.source.lal_binary_black_hole,
             parameter_conversion=bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters,
             waveform_arguments=waveform_arguments,
-            start_time=start_time)
+            start_time=self.start_time)
         
         # extract waveform from bilby
         self.waveform_generator.parameters = self.injection_parameters
         self.waveform_polarisations = self.waveform_generator.frequency_domain_strain()
-        time_signal = self.waveform_generator.time_domain_strain()
+        #time_signal = self.waveform_generator.time_domain_strain()
         
-    def get_detector_reponse(self,):
+    def get_detector_response(self, frequency_domain_strain = None):
 
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
         
         # If user is specifying PSD files
-        if len(psd_files) > 0:
+        num_psd_files = len(self.config["data"]["psd_files"])
+        if num_psd_files == 0:
+            pass
+        elif num_psd_files == 1:
+            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
+        elif num_psd_files > 1:
             type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
                 if self.type_psd == 'psd':
@@ -92,28 +110,36 @@ class GenerateTemplate():
                 else:
                     print('Could not determine whether psd or asd ...')
                     exit()
-        if real_noise_seg:
-            #load_files, start_times, durations, sample_rates = get_real_noise(params = params, channel_name = "DCS-CALIB_STRAIN_C01", real_noise_seg = real_noise_seg)
-            if not hasattr(self, "noise_examples"):
-                print("Please load some real data using get_real_noise")
-                # need to test this peice of code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            for int_idx,ifo in enumerate(ifos):
-                rand_time = np.random.uniform(start_times[int_idx] + self.config["data"]["duration"], start_times[int_idx] + durations[int_idx] + self.config["data"]["duration"] )
-                temp_ts = self.noise_examples[int_idx].crop(rand_time, rand_time + self.config["data"]["duration"])
-                ifo.strain_data.set_from_gwpy_imeseries(temp_ts)
 
+        if frequency_domain_strain is not None:
+            for int_idx,ifo in enumerate(ifos):
+                ifo.set_strain_data_from_frequency_domain_strain(frequency_domain_strain[int_idx],
+                                                                 sampling_frequency=self.config["data"]["sampling_frequency"],
+                                                                 duration=self.config["data"]["duration"],
+                                                                 start_time=self.start_time)
+            
         else:
-            ifos.set_strain_data_from_power_spectral_densities(
-                sampling_frequency=sampling_frequency, duration=duration,
-                start_time=start_time)
+            if self.config["data"]["use_real_detector_noise"]:
+                #load_files, start_times, durations, sample_rates = get_real_noise(params = params, channel_name = "DCS-CALIB_STRAIN_C01", real_noise_seg = real_noise_seg)
+                if not hasattr(self, "noise_examples"):
+                    print("Please load some real data using get_real_noise")
+                    # need to test this peice of code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    for int_idx,ifo in enumerate(ifos):
+                        rand_time = np.random.uniform(start_times[int_idx] + self.config["data"]["duration"], start_times[int_idx] + durations[int_idx] + self.config["data"]["duration"] )
+                        temp_ts = self.noise_examples[int_idx].crop(rand_time, rand_time + self.config["data"]["duration"])
+                        ifo.strain_data.set_from_gwpy_imeseries(temp_ts)
+            else:
+                ifos.set_strain_data_from_power_spectral_densities(
+                    sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],start_time=self.start_time)
+
+        self.frequency_domain_strain = []
+        for i in range(len(self.config["data"]["detectors"])):
+            self.frequency_domain_strain.append(ifos[i].strain_data.frequency_domain_strain)
 
         # inject signal
-        #ifos.inject_signal(waveform_generator=waveform_generator,
-        #                   parameters=self.injection_parameters)
-
-
-
-    
+        ifos.inject_signal(waveform_generator=self.waveform_generator,
+                           parameters=self.injection_parameters)
+        
         print('... Injected signal')
         whitened_signal_td_all = []
         whitened_h_td_all = [] 
@@ -121,7 +147,7 @@ class GenerateTemplate():
         whiten_data = True
         for i in range(len(self.config["data"]['detectors'])):
             # get frequency domain noise-free signal at detector
-            signal_fd = ifos[i].get_detector_response(freq_signal, self.injection_parameters) 
+            signal_fd = ifos[i].get_detector_response(self.waveform_polarisations, self.injection_parameters) 
             
             # get frequency domain signal + noise at detector
             h_fd = ifos[i].strain_data.frequency_domain_strain
@@ -133,30 +159,31 @@ class GenerateTemplate():
                 #whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    
                 
                 # inverse FFT noise-free signal back to time domain and normalise
-                whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                whitened_signal_td = np.sqrt(2.0*self.Nt)*np.fft.irfft(whitened_signal_fd)
                 
                 # whiten noisy frequency domain signal
                 whitened_h_fd = h_fd/ifos[i].amplitude_spectral_density_array
                 
                 # inverse FFT noisy signal back to time domain and normalise
-                whitened_h_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_h_fd)
+                whitened_h_td = np.sqrt(2.0*self.Nt)*np.fft.irfft(whitened_h_fd)
                 
                 whitened_h_td_all.append([whitened_h_td])
                 whitened_signal_td_all.append([whitened_signal_td])            
             else:
                 whitened_h_td_all.append([h_fd])
                 whitened_signal_td_all.append([signal_fd])
-            
+                    
         print('... Whitened signals')
         self.whitened_signals_td = np.squeeze(np.array(whitened_signal_td_all),axis=1)
         self.whitened_data_td = np.squeeze(np.array(whitened_h_td_all),axis=1)
         self.ifos = ifos
-        self.waveform_generator = waveform_generator
+        #self.waveform_generator = waveform_generator
         self.snrs = [self.ifos[j].meta_data['optimal_SNR'] for j in range(len(self.config["data"]['detectors']))]
 
 
-    def run_pe(self):
+    def run_pe(self, sampler = "dynesty", start_ind = 0):
 
+        label = "bilby_out_{}".format(start_ind)
         try:
             bilby.core.utils.setup_logger(outdir=self.save_dir, label=label)
         except Exception as e:
@@ -166,74 +193,24 @@ class GenerateTemplate():
         
         phase_marginalization=True
         likelihood = bilby.gw.GravitationalWaveTransient(
-            interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,
-            priors=priors)
-
-        # save test waveform information
-        try:
-            os.mkdir('%s' % (self.save_dir+'_waveforms'))
-        except Exception as e:
-            print(e)
-            pass
-
-        if params != None:
-            hf = h5py.File('%s/data_%d.h5py' % (self.save_dir+'_waveforms',int(label.split('_')[-1])),'w')
-            for k, v in params.items():
-                try:
-                    hf.create_dataset(k,data=v)
-                except:
-                    pass
-
-            hf.create_dataset('x_data', data=np.array([temp]))
-            hf.create_dataset('y_data_noisefree', data=test_samples_noisefree)
-            hf.create_dataset('y_data_noisy', data=test_samples_noisy)
-            hf.create_dataset('snrs', data=snr)
-            hf.close()
+            interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,priors=self.config["priors"])
 
         # look for dynesty sampler option
-        print("samplers......", samplers)
         if sampler == "dynesty":
 
             run_startt = time.time()
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.priors, sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1,
-                injection_parameters=self.injection_parameters, outdir=self.save_dir+'_'+samplers[-1], label=label,
-                save='hdf5', plot=True)
+                likelihood=likelihood, priors=self.config["priors"], sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
             run_endt = time.time()
 
             # save test sample waveform
-            hf = h5py.File('%s_%s/%s.h5py' % (self.save_dir,sampler,label), 'w')
-            hf.create_dataset('noisy_waveform', data=test_samples_noisy)
-            hf.create_dataset('noisefree_waveform', data=test_samples_noisefree)
+            self.dynesty = result
 
             # loop over randomised params and save samples
             #for p in inf_pars:
-            for q,qi in result.posterior.items():
-                #if p==q:
-                name = q + '_post'
-                print('saving PE samples for parameter {}'.format(q))
-                hf.create_dataset(name, data=np.array(qi))
-            hf.create_dataset('runtime', data=(run_endt - run_startt))
-            hf.close()
-
-            # return samples if not doing a condor run
-            if condor_run == False:
-                # Make a corner plot.
-                result.plot_corner()
-                # remove unecessary files
-                png_files=glob.glob("%s_dynesty1/*.png*" % (self.save_dir))
-                hdf5_files=glob.glob("%s_dynesty1/*.hdf5*" % (self.save_dir))
-                pickle_files=glob.glob("%s_dynesty1/*.pickle*" % (self.save_dir))
-                resume_files=glob.glob("%s_dynesty1/*.resume*" % (self.save_dir))
-                pkl_files=glob.glob("%s_dynesty1/*.pkl*" % (self.save_dir))
-                filelist = [png_files,pickle_files,resume_files,pkl_files]
-                for file_type in filelist:
-                    for file in file_type:
-                        os.remove(file)
-                print('finished running pe')
-                return test_samples_noisy,test_samples_noisefree,np.array([temp]),snr
+            self.dynesty_runtime = run_endt - run_startt
         else:
             print("Currently only comparing to dynesty")
 
@@ -281,6 +258,6 @@ class GenerateTemplate():
 
 
         self.noise_examples = load_files
-        self.noie_start_times = start_times
+        self.noise_start_times = start_times
         self.noise_durations = durations
         self.noise_sample_rates = sample_rates

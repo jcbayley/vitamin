@@ -13,6 +13,7 @@ import sys
 from sys import exit
 from universal_divergence import estimate
 import natsort
+import tensorflow as tf
 from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
@@ -134,10 +135,12 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     plots the posteriors
     """
 
+    config["data"]['corner_labels'] = config["data"]['rand_pars']
+
     # make save directories
     directories = {}
     for dname in ["comparison_posterior", "full_posterior","JS_divergence","samples"]:
-        directories[dname] = os.path.join(config["output"]["output_dir"], dname)
+        directories[dname] = os.path.join(config["output"]["output_directory"], dname)
         if not os.path.isdir(directories[dname]):
             os.makedirs(directories[dname])
     
@@ -228,7 +231,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                 kde_p = st.gaussian_kde(kdsampp)(eval_pointsp)
                 kde_q = st.gaussian_kde(kdsampq)(eval_pointsq)
                 current_JS = np.power(jensenshannon(kde_p, kde_q),2)
-s               #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
+                #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
                 temp_JS.append(current_JS)
 
             JS_est.append(temp_JS)
@@ -270,7 +273,7 @@ s               #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2
         parnames = []
         for k_idx,k in enumerate(config["data"]['rand_pars']):
             if np.isin(k, config["model"]['inf_pars']):
-                parnames.append(config["data"]['corner_labels'][k])
+                parnames.append(config["data"]['corner_labels'][k_idx])
 
         figure = corner.corner(samples,**defaults_kwargs,labels=parnames,
                            color='tab:red',
@@ -321,3 +324,37 @@ def plot_latent(mu_r1, z_r1, mu_q, z_q, epoch, idx, run='testing'):
     else:
         plt.savefig('%s/latent_epoch_%d_event_%d.png' % (run,epoch,idx))
     plt.close()
+
+def paper_plots(test_dataset, y_data_test, x_data_test, model, params, plot_dir, run, bilby_samples):
+    """ Make publication plots
+    """
+    epoch = 'pub_plot'; ramp = 1
+    plotter = plotting.make_plots(params, None, None, x_data_test) 
+
+    for step, (x_batch_test, y_batch_test) in test_dataset.enumerate():
+        mu_r1, z_r1, mu_q, z_q = model.gen_z_samples(x_batch_test, y_batch_test, nsamples=1000)
+        plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=plot_dir)
+        start_time_test = time.time()
+        samples = model.gen_samples(y_batch_test, ramp=ramp, nsamples=params['n_samples'])
+        end_time_test = time.time()
+        if np.any(np.isnan(samples)):
+            print('Found nans in samples. Not making plots')
+            for k,s in enumerate(samples):
+                if np.any(np.isnan(s)):
+                    print(k,s)
+            KL_est = [-1,-1,-1]
+        else:
+            print('Run {} Testing time elapsed for {} samples: {}'.format(run,params['n_samples'],end_time_test - start_time_test))
+            KL_est = plot_posterior(samples,x_batch_test[0,:],epoch,step,all_other_samples=bilby_samples[:,step,:],run=plot_dir, config=config)
+            _ = plot_posterior(samples,x_batch_test[0,:],epoch,step,run=plot_dir, config=config)
+    print('... Finished making publication plots! Congrats fam.')
+
+    # Make p-p plots
+    plotter.plot_pp(model, y_data_test, x_data_test, params, bounds, inf_ol_idx, bilby_ol_idx)
+    print('... Finished making p-p plots!')
+
+    # Make KL plots
+    plotter.gen_kl_plots(model,y_data_test, x_data_test, params, bounds, inf_ol_idx, bilby_ol_idx)
+    print('... Finished making KL plots!')    
+
+    return

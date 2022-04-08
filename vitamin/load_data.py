@@ -17,7 +17,6 @@ class DataLoader(tf.keras.utils.Sequence):
     def __init__(self, input_dir, config=None, test_set = False, silent = True, val_set = False, num_epoch_load = 4, shuffle=False,channel_name="DCS-CALIB_STRAIN_C01"):
         
         self.config = config
-        self.fixed_vals = fixed_vals
         self.input_dir = input_dir
         self.test_set = test_set
         self.val_set = val_set
@@ -31,10 +30,10 @@ class DataLoader(tf.keras.utils.Sequence):
         self.num_data = len(self.filenames)*self.config["data"]["file_split"]
         self.num_dets = len(self.config["data"]["detectors"])
         self.indices = np.arange(self.num_data)
-        self.data_length = self.config["data"]["sample_rate"]*self.config["data"]["duration"]
+        self.data_length = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
         
         self.chunk_batch = self.config["training"]["chunk_batch"]
-        self.chunk_size = self.batch_size*chunk_batch
+        self.chunk_size = self.batch_size*self.chunk_batch
         self.chunk_iter = 0
         self.max_chunk_num = int(np.floor((self.num_data/self.chunk_size)))
         
@@ -43,7 +42,7 @@ class DataLoader(tf.keras.utils.Sequence):
         # will addthis to init files eventually
         self.channel_name = channel_name
 
-        if self.config["data"]["use_real_det_noise"]:
+        if self.config["data"]["use_real_detector_noise"]:
             self.noise_files = os.listdir(self.config["data"]["noise_set_dir"])
 
     def __len__(self):
@@ -70,7 +69,7 @@ class DataLoader(tf.keras.utils.Sequence):
             # get the filenames which these data indices live, take set to get single file index
             temp_filename_indices = np.array(list(set(np.floor(temp_chunk_indices/self.config["data"]["file_split"])))).astype(int)
             # rewrite the data indices as the index within each file
-            temp_chunk_indices = temp_chunk_indices % self.config["data"]["file_split"]
+            temp_chunk_indices = np.array(temp_chunk_indices % self.config["data"]["file_split"]).astype(int)
             # if the index falls to zero then split as the file is the next one 
             temp_chunk_indices_split = np.split(temp_chunk_indices, np.where(np.diff(temp_chunk_indices) < 0)[0] + 1)
 
@@ -114,7 +113,7 @@ class DataLoader(tf.keras.utils.Sequence):
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
             # add noise here
-            if self.config["data"]["use_real_det_noise"]:
+            if self.config["data"]["use_real_detector_noise"]:
                 Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/self.config["data"]["y_normscale"]
             else:
                 Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/self.config["data"]["y_normscale"]
@@ -144,11 +143,32 @@ class DataLoader(tf.keras.utils.Sequence):
     def get_whitened_signal_response(self, data):
 
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
-        for int_idx,ifo in enumerate(ifos):
-            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
+        num_psd_files = len(self.config["data"]["psd_files"])
+        if num_psd_files == 0:
+            pass
+        elif num_psd_files == 1:
+            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
+        elif num_psd_files > 1:
+            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
 
         ifos.set_strain_data_from_power_spectral_densities(
-            sampling_frequency=self.config["data"]["sample_rate"], duration=self.config["data"]["duration"],
+            sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
             start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
 
         data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
@@ -160,7 +180,7 @@ class DataLoader(tf.keras.utils.Sequence):
                     
             injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
 
-            Nt = self.config["data"]["sample_rate"]*self.config["data"]["duration"]
+            Nt = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
             whitened_signals_td = []
             polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
             for dt in range(len(self.config["data"]['detectors'])):
@@ -187,7 +207,7 @@ class DataLoader(tf.keras.utils.Sequence):
     def get_real_noise(self, segment_duration, segment_range, num_segments):
 
         # compute the number of time domain samples
-        Nt = int(self.config["data"]["sample_rate"]*self.config["data"]["duration"])
+        Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
 
         # Get ifos bilby variable
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]["detectors"])
@@ -245,7 +265,7 @@ class DataLoader(tf.keras.utils.Sequence):
     def load_real_noise(self, num_segments):
 
         # compute the number of time domain samples
-        Nt = int(self.config["data"]["sample_rate"]*self.config["data"]["duration"])
+        Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
 
         # Get ifos bilby variable
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]["detectors"])
@@ -259,7 +279,7 @@ class DataLoader(tf.keras.utils.Sequence):
         for find in file_choice:
             h5py_file = h5py.File(os.path.join(self.config["data"]["noise_set_dir"],find), 'r')
             for ifo_idx,ifo in enumerate(ifos):
-                data[ifo.name].append(TimeSeries(h5py_file["real_noise_samples"][ifo_idx], sample_rate=h5py_file["sample_rate"][ifo_idx], t0=h5py_file["t0"][ifo_idx]))
+                data[ifo.name].append(TimeSeries(h5py_file["real_noise_samples"][ifo_idx], sample_rate=h5py_file["sampling_frequency"][ifo_idx], t0=h5py_file["t0"][ifo_idx]))
 
         rand_times = np.random.uniform(0, 4096, size = (num_segments, len(self.config["data"]["detectors"])))
         fle = 0
@@ -311,10 +331,10 @@ class DataLoader(tf.keras.utils.Sequence):
                 h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
                 # dont like the below code, will rewrite at some point
                 if self.test_set:
-                    data['x_data'].append(h5py_file['x_data'])
+                    data['x_data'].append([h5py_file['x_data']])
                     data['y_data_noisefree'].append([h5py_file['y_data_noisefree']])
                     data['y_data_noisy'].append([h5py_file['y_data_noisy']])
-                    data['rand_pars'] = h5py_file['rand_pars']
+                    #data['rand_pars'] = h5py_file['rand_pars']
                     data['snrs'].append(h5py_file['snrs'])
                 else:
                     data['x_data'].append(h5py_file['x_data'][indices[i]])
@@ -322,7 +342,7 @@ class DataLoader(tf.keras.utils.Sequence):
                         data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
                     else:
                         data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
-                    data['rand_pars'] = [i for i in h5py_file['rand_pars']]
+                    #data['rand_pars'] = [i for i in h5py_file['rand_pars']]
                     #data['snrs'].append(h5py_file['snrs'][indices[i]])
                 if not self.silent:
                     print('...... Loaded file ' + os.path.join(self.input_dir,filename))
@@ -332,6 +352,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
         # concatentation all the x data (parameters) from each of the files
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
+
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
         else:
@@ -377,7 +398,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
 
 
-        if self.config["data"]["use_real_det_noise"] and not self.test_set:
+        if self.config["data"]["use_real_detector_noise"] and not self.test_set:
             real_det_noise= self.load_real_noise(len(data["y_data_noisefree"]))
 
             data["y_data_noise"] = tf.cast(np.array(real_det_noise),dtype=tf.float32)
@@ -390,7 +411,7 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths
         else:
-            if self.config["data"]["use_real_det_noise"]:
+            if self.config["data"]["use_real_detector_noise"]:
                 return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'],data["y_data_noise"]
             else:
                 return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None
@@ -496,10 +517,10 @@ class DataLoader(tf.keras.utils.Sequence):
 
         # Get rid of encoding
         
-        decoded_rand_pars = []
-        for i,k in enumerate(data['rand_pars']):
-            decoded_rand_pars.append(k.decode('utf-8'))
-        
+        #decoded_rand_pars = []
+        #for i,k in enumerate(self.config["data"]['rand_pars']):
+        #    decoded_rand_pars.append(k.decode('utf-8'))
+        decoded_rand_pars = self.config["data"]['rand_pars']
         # extract inference parameters from all source parameters loaded earlier
         # choose the indicies of which parameters to infer
         par_idx = []
@@ -546,11 +567,11 @@ class DataLoader(tf.keras.utils.Sequence):
 
     def randomise_time(self, x):
 
-        old_geocent = x[:,np.array(self.config["masks"]["geocent_mask"]).astype(np.bool)]
+        old_geocent = x[:,np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)]
         new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
         new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
 
-        x[:, np.array(self.config["masks"]["geocent_mask"]).astype(np.bool)] = new_geocent
+        x[:, np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)] = new_geocent
 
         fvec = np.arange(self.data_length/2 + 1)/self.config["data"]['duration']
 
@@ -561,16 +582,87 @@ class DataLoader(tf.keras.utils.Sequence):
         return x, time_correction
         
     def randomise_distance(self,x, y):
-        old_d = x[:, np.array(self.config["masks"]["dist_mask"]).astype(np.bool)]
+        old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
         new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
         new_d = self.config["bounds"]['luminosity_distance_min'] + new_x*(self.config["bounds"]['luminosity_distance_max'] - self.config["bounds"]['luminosity_distance_min'])
         
-        x[:, np.array(self.config["masks"]["dist_mask"]).astype(np.bool)] = new_d
+        x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)] = new_d
                                                            
         dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))
 
         return x, dist_scale
+        
+    def load_bilby_samples(self):
+        """
+        read in pre-computed posterior samples
+        """
+        i_idx = 0
 
+        self.sampler_outputs = {}
+        for sampler in self.config["testing"]['samplers']:
+            if sampler == "vitamin": 
+                continue
+            else:
+                self.sampler_outputs[sampler] = []
+
+        got_samples = False
+        save_dir = os.path.join(self.config["data"]["data_directory"], "test")
+        for sampler in self.config["testing"]['samplers']:
+            if sampler == "vitamin":
+                continue
+            sampler_dir = os.path.join(save_dir, "{}".format(sampler))
+
+            for idx in range(self.config["data"]["n_test_data"]):
+                #filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
+                filename = os.path.join(sampler_dir, "{}_{}.h5py".format("test_outputs",idx))
+                #dataLocations_inner = '%s_%s' % (params['pe_dir'],samp_idx_inner+'2')
+                #filename_inner = '%s/%s_%d.h5py' % (dataLocations_inner,params['bilby_results_label'],i)
+                # If file does not exist, skip to next file
+                if os.path.isfile(filename) == False:
+                    print("no output file for example: {} and sampler: {}".format(idx, sampler))
+                    continue
+                got_samples = True
+                data_temp = {}
+
+                # Retrieve all source parameters to do inference on
+                for q in self.config["testing"]['bilby_pars']:
+                    p = q + '_post'
+                    par_min = q + '_min'
+                    par_max = q + '_max'
+                    with h5py.File(filename, 'r') as hf:
+                        data_temp[p] = hf[p][:]
+            
+                    if p == 'psi_post':
+                        data_temp[p] = np.remainder(data_temp[p],np.pi)
+                    elif p == 'geocent_time_post':
+                        data_temp[p] = data_temp[p] - self.config["data"]['ref_geocent_time']
+                    """
+                    # Convert samples to hour angle if doing pp plot
+                    if p == 'ra_post' and pp_plot:
+                    data_temp[p] = convert_ra_to_hour_angle(data_temp[p], params, None, single=True)
+                    data_temp[p] = (data_temp[p] - bounds[par_min]) / (bounds[par_max] - bounds[par_min])
+                    """            
+                    Nsamp = data_temp[p].shape[0]
+                    #n = n + 1
+                    print('... read in {} samples from {}'.format(Nsamp,filename))
+
+                # place retrieved source parameters in numpy array rather than dictionary
+                j = 0
+                XS = np.zeros((self.config["data"]["n_test_data"], len(data_temp), Nsamp))
+                for p,d in data_temp.items():
+                    XS[idx,j,:] = d
+                    j += 1
+                    
+            if got_samples:
+                Nsamp = np.shape(XS)[-1]
+                # Append test sample posteriors to existing array of other test sample posteriors
+                rand_idx_posterior = np.linspace(0,Nsamp-1,num=self.config["testing"]['n_samples'],dtype=np.int)
+                np.random.shuffle(rand_idx_posterior)
+                
+                self.sampler_outputs[sampler] = XS[:,:,rand_idx_posterior]
+        
+        
+        
 
 
 
@@ -664,95 +756,3 @@ def convert_hour_angle_to_ra(data, config, pars, single=False):
     return data
 
 
-def load_samples(config,sampler,pp_plot=False, bounds=None):
-    """
-    read in pre-computed posterior samples
-    """
-    if type("%s" % config["testing"]['pe_dir']) is str:
-        # load generated samples back in
-        dataLocations = '%s_%s' % (config["testing"]['pe_dir'],sampler)
-        print('... looking in {} for posterior samples'.format(dataLocations))
-    else:
-        print('ERROR: input samples directory not a string')
-        exit(0)
-
-    # Iterate over requested number of testing samples to use
-#    for i in range(params['r']):
-    i = i_idx = 0
-    for samp_idx,samp in enumerate(config["testing"]['samplers'][1:]):
-        if samp == sampler:
-            samp_idx = samp_idx
-            break
-    while i_idx < params['r']:
-        filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
-        for samp_idx_inner in params['samplers'][1:]:
-            inner_file_existance = True
-            if samp_idx_inner == samp_idx:
-                inner_file_existance = os.path.isfile(filename)
-                if inner_file_existance == False:
-                    break
-                else:
-                    continue
-
-            dataLocations_inner = '%s_%s' % (params['pe_dir'],samp_idx_inner+'2')
-            filename_inner = '%s/%s_%d.h5py' % (dataLocations_inner,params['bilby_results_label'],i)
-            # If file does not exist, skip to next file
-            inner_file_existance = os.path.isfile(filename_inner)                
-            if inner_file_existance == False:
-                break
-
-        if inner_file_existance == False:
-            i+=1
-            if i > 500:
-                sys.exit()
-            print('File does not exist for one of the samplers: {}'.format(filename))
-            continue
-        #if not os.path.isfile(filename):
-        #    print('... unable to find file {}. Exiting.'.format(filename))
-        #    exit(0)
-
-        print('... Loading test sample -> ' + filename)
-        data_temp = {}
-        n = 0
-
-        # Retrieve all source parameters to do inference on
-        for q in params['bilby_pars']:
-            p = q + '_post'
-            par_min = q + '_min'
-            par_max = q + '_max'
-            data_temp[p] = h5py.File(filename, 'r')[p][:]
-            
-            if p == 'psi_post':
-                data_temp[p] = np.remainder(data_temp[p],np.pi)
-            elif p == 'geocent_time_post':
-                data_temp[p] = data_temp[p] - params['ref_geocent_time']
-            """
-            # Convert samples to hour angle if doing pp plot
-            if p == 'ra_post' and pp_plot:
-                data_temp[p] = convert_ra_to_hour_angle(data_temp[p], params, None, single=True)
-            data_temp[p] = (data_temp[p] - bounds[par_min]) / (bounds[par_max] - bounds[par_min])
-            """            
-            Nsamp = data_temp[p].shape[0]
-            n = n + 1
-        print('... read in {} samples from {}'.format(Nsamp,filename))
-
-        # place retrieved source parameters in numpy array rather than dictionary
-        j = 0
-        XS = np.zeros((Nsamp,n))
-        for p,d in data_temp.items():
-            XS[:,j] = d
-            j += 1
-        print('... put the samples in an array')
-
-        # Append test sample posteriors to existing array of other test sample posteriors
-        rand_idx_posterior = np.linspace(0,Nsamp-1,num=params['n_samples'],dtype=np.int)
-        np.random.shuffle(rand_idx_posterior)
-        rand_idx_posterior = rand_idx_posterior[:params['n_samples']]
-        
-        if i == 0:
-            XS_all = np.expand_dims(XS[rand_idx_posterior,:], axis=0)
-        else:
-            XS_all = np.vstack((XS_all,np.expand_dims(XS[rand_idx_posterior,:], axis=0)))
-        print('... appended {} samples to the total'.format(params['n_samples']))
-        i+=1; i_idx+=1
-    return XS_all
