@@ -134,6 +134,8 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     """
     plots the posteriors
     """
+    # samples shape [numsamples, numpar]
+    # all other shape [numsamplers, numsamples, numpar]
 
     config["data"]['corner_labels'] = config["data"]['rand_pars']
 
@@ -193,7 +195,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             ol_pars = []
             cnt = 0
             for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
-                inf_par = config["model"]['inf_pars'][inf_idx]
+                inf_par = config["model"]['inf_pars_list'][inf_idx]
                 bilby_par = config["testing"]['bilby_pars'][bilby_idx]
                 vitamin_samples[:,cnt] = vit_samples[:,inf_idx]
                 sampler_samples[:,cnt] = other_samples[:,bilby_idx]
@@ -203,12 +205,12 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             parnames = []
             for k_idx,k in enumerate(config["data"]['rand_pars']):
                 if np.isin(k, ol_pars):
-                    parnames.append(config["data"]['corner_labels'][k])
+                    parnames.append(config["data"]['corner_labels'][k_idx])
 
             # convert to RA
             #vit_samples = convert_hour_angle_to_ra(vit_samples,params,ol_pars)
             #true_x = convert_hour_angle_to_ra(np.reshape(true_x,[1,true_XS.shape[1]]),params,ol_pars).flatten()
-            old_true_post = true_post                 
+            #old_true_post = true_post                 
 
             samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
             np.savetxt(samples_file,vitamin_samples)
@@ -222,10 +224,24 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                 """We use Scott's Rule, multiplied by a constant factor."""
                 return np.power(obj.n, -1./(obj.d+4)) * fac
 
+            #subtract geocent time
+
+            geocent_int = config["model"]['inf_pars_list'].index("geocent_time")
+            vitamin_samples[:, geocent_int] -= config["data"]["ref_geocent_time"]
+            sampler_samples[:, geocent_int] -= config["data"]["ref_geocent_time"]
+
+            phase_marginalisation = True
+            if phase_marginalisation:
+                vitamin_samples = np.delete(vitamin_samples, 2, 1)
+                sampler_samples = np.delete(sampler_samples, 2, 1)
+
+
             for pr in range(np.shape(vitamin_samples)[1]):
                 #try:
+                print("vit", min(vitamin_samples[idx1, pr:pr+1]), max(vitamin_samples[idx1, pr:pr+1]))
+                print("samp", min(sampler_samples[idx1, pr:pr+1]), max(sampler_samples[idx1, pr:pr+1]))
                 kdsampp = vitamin_samples[idx1, pr:pr+1][~np.isnan(vitamin_samples[idx1, pr:pr+1])].flatten()
-                kdsampq = sampler_samples[idx1, pr:pr+1][~np.isnan(sampler_samples[idx1, pr:pr+1])].flatten()
+                kdsampq = sampler_samples[idx2, pr:pr+1][~np.isnan(sampler_samples[idx2, pr:pr+1])].flatten()
                 eval_pointsp = np.linspace(np.min(kdsampp), np.max(kdsampp), len(kdsampp))
                 eval_pointsq = np.linspace(np.min(kdsampq), np.max(kdsampq), len(kdsampq))
                 kde_p = st.gaussian_kde(kdsampp)(eval_pointsp)
@@ -257,7 +273,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
 
         corner.corner(vitamin_samples,**defaults_kwargs,
                       color='tab:red',
-                      fill_contours=False, truths=true_x,
+                      fill_contours=False, truths=true_params,
                       show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
             print('Saved output to %s/comp_posterior_%s_event_%d.png' % (save_dir,epoch,idx))
@@ -272,7 +288,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
         # Get corner parnames to use in plotting labels
         parnames = []
         for k_idx,k in enumerate(config["data"]['rand_pars']):
-            if np.isin(k, config["model"]['inf_pars']):
+            if np.isin(k, config["model"]['inf_pars_list']):
                 parnames.append(config["data"]['corner_labels'][k_idx])
 
         figure = corner.corner(samples,**defaults_kwargs,labels=parnames,
@@ -301,7 +317,12 @@ def plot_latent(mu_r1, z_r1, mu_q, z_q, epoch, idx, run='testing'):
     hist_kwargs = dict(density=True,color='tab:red')
     hist_kwargs_other = dict(density=True,color='tab:blue')
 
-    
+    z_q = np.array(z_q)
+    z_r1 = np.array(z_r1)
+
+    #z_q[np.isinf(z_q)] = np.nan
+    #z_r1[np.isinf(z_r1)] = np.nan
+
     figure = corner.corner(np.array(z_q), **defaults_kwargs,
                            color='tab:blue',
                            show_titles=True, hist_kwargs=hist_kwargs_other)

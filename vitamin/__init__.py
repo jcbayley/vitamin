@@ -17,11 +17,8 @@ For installation instructions see
 from __future__ import absolute_import
 import sys
 
-#from . import models
-from . import generate_data, create_template, plotting
+from . import generate_data, create_template
 from . import model
-#from . import vitamin_c_fit
-from . import params_files
 from . import make_condor_files
 from . import callbacks
 from . import load_data

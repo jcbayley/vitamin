@@ -7,7 +7,7 @@ from . import templates
 import bilby
 import os 
 from pathlib import Path
-
+from .initialise import group_outputs
 
 class InputParser():
 
@@ -31,7 +31,7 @@ class InputParser():
         self.get_priors()
         self.get_masks()
         self.get_bounds()
-
+        
 
     def __getitem__(self, key):
         return self.config[key]
@@ -50,26 +50,27 @@ class InputParser():
                 else:
                     self.config[key][key2] = json.loads(ini_file[key][key2])
         
+        self.config["model"]["inf_pars_list"] = list(self.config["inf_pars"].keys())
 
     def get_masks(self):
 
         self.config["masks"] = {}
 
-        self.config["masks"]["inf_ol_mask"], self.config["masks"]["inf_ol_idx"], self.config["masks"]["inf_ol_len"] = self.get_param_index(self.config["model"]['inf_pars'],self.config["testing"]['bilby_pars'])
-        self.config["masks"]["bilby_ol_mask"], self.config["masks"]["bilby_ol_idx"], self.config["masks"]["bilby_ol_len"] = self.get_param_index(self.config["testing"]['bilby_pars'],self.config["model"]['inf_pars'])
+        self.config["masks"]["inf_ol_mask"], self.config["masks"]["inf_ol_idx"], self.config["masks"]["inf_ol_len"] = self.get_param_index(self.config["model"]['inf_pars_list'],self.config["testing"]['bilby_pars'])
+        self.config["masks"]["bilby_ol_mask"], self.config["masks"]["bilby_ol_idx"], self.config["masks"]["bilby_ol_len"] = self.get_param_index(self.config["testing"]['bilby_pars'],self.config["model"]['inf_pars_list'])
         
         #parameter masks
-        for par in self.config["model"]["inf_pars"]:
-            self.config["masks"]["{}_mask".format(par)], self.config["masks"]["{}_idx_mask".format(par)], self.config["masks"]["{}_len".format(par)] = self.get_param_index(self.config["model"]['inf_pars'],[par])
+        for par in self.config["model"]["inf_pars_list"]:
+            self.config["masks"]["{}_mask".format(par)], self.config["masks"]["{}_idx_mask".format(par)], self.config["masks"]["{}_len".format(par)] = self.get_param_index(self.config["model"]['inf_pars_list'],[par])
 
         all_period_params = ['phase','psi','phi_12','phi_jl']
-        periodic_params = [p for p in self.config["model"]['inf_pars'] if p in all_period_params]
+        periodic_params = [p for p in self.config["model"]['inf_pars_list'] if p in all_period_params]
         all_nonperiod_params = ['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2']
-        nonperiodic_params = [p for p in self.config["model"]['inf_pars'] if p in all_nonperiod_params]
+        nonperiodic_params = [p for p in self.config["model"]['inf_pars_list'] if p in all_nonperiod_params]
 
         # periodic masks
-        self.config["masks"]["periodic_mask"], self.config["masks"]["periodic_idx_mask"], self.config["masks"]["periodic_len"] = self.get_param_index(self.config["model"]['inf_pars'], periodic_params)
-        self.config["masks"]["nonperiodic_mask"], self.config["masks"]["nonperiodic_idx_mask"], self.config["masks"]["nonperiodic_len"] = self.get_param_index(self.config["model"]["inf_pars"],nonperiodic_params)
+        self.config["masks"]["periodic_mask"], self.config["masks"]["periodic_idx_mask"], self.config["masks"]["periodic_len"] = self.get_param_index(self.config["model"]['inf_pars_list'], periodic_params)
+        self.config["masks"]["nonperiodic_mask"], self.config["masks"]["nonperiodic_idx_mask"], self.config["masks"]["nonperiodic_len"] = self.get_param_index(self.config["model"]["inf_pars_list"],nonperiodic_params)
 
         self.config["masks"]["idx_periodic_mask"] = np.argsort(self.config["masks"]["nonperiodic_idx_mask"] + self.config["masks"]["periodic_idx_mask"] + self.config["masks"]["ra_idx_mask"] + self.config["masks"]["dec_idx_mask"])
 
@@ -78,16 +79,17 @@ class InputParser():
         nonperiodic_nonm1m2_params.remove("mass_1")
         nonperiodic_nonm1m2_params.remove("mass_2")
         self.config["masks"]["nonperiodicpars_nonm1m2_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_idx_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_len"] = self.get_param_index(nonperiodic_params,nonperiodic_nonm1m2_params)
-        self.config["masks"]["nonperiodic_nonm1m2_mask"], self.config["masks"]["nonperiodic_nonm1m2_idx_mask"], self.config["masks"]["nonperiodic_nonm1m2_len"] = self.get_param_index(self.config["model"]["inf_pars"],nonperiodic_nonm1m2_params)
+        self.config["masks"]["nonperiodic_nonm1m2_mask"], self.config["masks"]["nonperiodic_nonm1m2_idx_mask"], self.config["masks"]["nonperiodic_nonm1m2_len"] = self.get_param_index(self.config["model"]["inf_pars_list"],nonperiodic_nonm1m2_params)
 
         self.config["masks"]["nonperiodic_m1_mask"], self.config["masks"]["nonperiodic_m1_idx_mask"], self.config["masks"]["nonperiodic_m1_len"] = self.get_param_index(nonperiodic_params,['mass_1'])
         self.config["masks"]["nonperiodic_m2_mask"], self.config["masks"]["nonperiodic_m2_idx_mask"], self.config["masks"]["nonperiodic_m2_len"] = self.get_param_index(nonperiodic_params,['mass_2'])
 
+        self.get_param_order()
 
 
     def get_bounds(self,):
         self.config["bounds"] = {}
-        for par in self.config["model"]["inf_pars"]:
+        for par in self.config["model"]["inf_pars_list"]:
             self.config["bounds"]["{}_max".format(par)] = self.config["priors"][par].maximum
             self.config["bounds"]["{}_min".format(par)] = self.config["priors"][par].minimum
 
@@ -134,3 +136,20 @@ class InputParser():
         return mask, idx, np.sum(mask)
 
     
+    def get_param_order(self):
+        grouped_params = group_outputs(self.config)
+        oldorder = list(self.config["inf_pars"].keys())
+        neworder = []
+        for name, group in grouped_params.items():
+            neworder.extend(group.pars)
+
+        new_order_idx = []
+        for i, par in enumerate(neworder):
+            new_order_idx.append(oldorder.index(par))
+
+        reverse_order_idx = []
+        for i, par in enumerate(oldorder):
+            reverse_order_idx.append(neworder.index(par))
+        
+        self.config["masks"]["group_order_idx"] = new_order_idx
+        self.config["masks"]["ungroup_order_idx"] = reverse_order_idx

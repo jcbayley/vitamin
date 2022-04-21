@@ -66,13 +66,16 @@ def make_train_dag(config, run_type = "training"):
     elif run_type == "real_noise":
         num_files = int(1)
         num_jobs = int(1)
+        p["files_per_job"] = 1
         samplers = [0]
     elif run_type == "validation":
         num_files = int(config["data"]["n_validation_data"]/config["data"]["file_split"])
         num_jobs = 1
+        p["files_per_job"] = 1
         samplers = [0]
     elif run_type == "test":
         num_jobs = config["data"]["n_test_data"]
+        p["files_per_job"] = 1
         samplers = config["testing"]["samplers"]
         samplers.remove("vitamin")
     elif run_type == "real_test":

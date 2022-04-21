@@ -39,7 +39,7 @@ class GenerateTemplate():
         self.injection_parameters = self.config["priors"].sample()
         conv_params, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
         self.injection_parameters_list = []
-        for key in self.config["model"]["inf_pars"]:
+        for key in self.config["model"]["inf_pars_list"]:
             self.injection_parameters_list.append(conv_params[key])
 
     def clear_attributes(self):

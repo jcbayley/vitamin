@@ -1,9 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
-import tensorflow_addons as tfa
-import tensorflow_probability as tfp
-tfd = tfp.distributions
 import time
 from lal import GreenwichMeanSiderealTime
 from astropy.time import Time
@@ -18,18 +14,21 @@ from sys import exit
 from universal_divergence import estimate
 import natsort
 #import plotting
-from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
 #import wandb
 #from wandb.keras import WandbCallback
 import argparse
-from .model import CVAE
+#from keras_adamw import AdamW
 from .vitamin_parser import InputParser
+import tensorflow as tf
+import tensorflow_addons as tfa
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+from tensorflow.keras import regularizers
+from .model import CVAE
 from .callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
 from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
-#from keras_adamw import AdamW
-
 
 def train(config):
 
@@ -37,13 +36,13 @@ def train(config):
     run = time.strftime('%y-%m-%d-%X-%Z')
 
     # define which gpu to use during training
-    gpu_num = str(config["training"]['gpu_num'])   
-    os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
+    #gpu_num = str(vitamin_config["training"]['gpu_num'])   
+    #os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
 
     print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
 
     # Let GPU consumption grow as needed
-    config_gpu = tf.compat.v1.ConfigProto()
+    config_gpu = tf.compat.v1.ConfigProto(device_count = {'GPU': config["training"]["gpu_num"]})
     config_gpu.gpu_options.allow_growth = True
     session = tf.compat.v1.Session(config=config_gpu)
     print('... letting GPU consumption grow as needed')
@@ -57,7 +56,7 @@ def train(config):
     epochs = config["training"]['num_iterations']
     plot_cadence = int(0.5*config["training"]["plot_interval"])
     # Include the epoch in the file name (uses `str.format`)
-    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model.ckpt")
+    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model")
     checkpoint_dir = os.path.dirname(checkpoint_path)
     dirs = [checkpoint_dir]
     for direc in dirs:
@@ -96,10 +95,10 @@ def train(config):
     model = CVAE(config)
     if config["training"]['resume_training']:
         # Load the previously saved weights
-        latest = tf.train.latest_checkpoint(checkpoint_dir)
-        model.load_weights(latest)
+        #latest = tf.train.latest_checkpoint(checkpoint_dir)
+        model.load_weights(checkpoint_path)
         print('... loading in previous model %s' % checkpoint_path)
-        with open(os.path.join(init.args['plot_dir'], "loss.txt"),"r") as f:
+        with open(os.path.join(config["output"]['output_directory'], "loss.txt"),"r") as f:
             start_epoch = len(np.loadtxt(f))
 
     # start the training loop
@@ -131,8 +130,19 @@ def train(config):
         model.encoder_q.summary(print_fn=lambda x: f.write(x + '\n'))
         model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
     
-    
-    callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=100,start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TestCallback(config, test_dataset, bilby_samples, test_epoch = 1000), TimeCallback(config)]
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path,
+        monitor="val_loss",
+        verbose=0,
+        save_best_only=False,
+        save_weights_only=True,
+        mode="auto",
+        save_freq=250,
+        options=None,
+        initial_value_threshold=None,
+    )
+
+    callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TestCallback(config, test_dataset, bilby_samples, test_epoch = config["training"]["test_interval"]), TimeCallback(config), checkpoint]
 
     model.fit(train_dataset, use_multiprocessing = False, workers = 6, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
 

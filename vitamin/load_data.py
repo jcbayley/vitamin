@@ -11,6 +11,7 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
+from .initialise import group_outputs
 
 class DataLoader(tf.keras.utils.Sequence):
 
@@ -44,6 +45,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
         if self.config["data"]["use_real_detector_noise"]:
             self.noise_files = os.listdir(self.config["data"]["noise_set_dir"])
+
 
     def __len__(self):
         """ number of batches per epoch"""
@@ -114,9 +116,9 @@ class DataLoader(tf.keras.utils.Sequence):
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
             # add noise here
             if self.config["data"]["use_real_detector_noise"]:
-                Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/self.config["data"]["y_normscale"]
+                Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/float(self.config["data"]["y_normscale"])
             else:
-                Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/self.config["data"]["y_normscale"]
+                Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/float(self.config["data"]["y_normscale"])
 
         return np.array(Y_noisefree), np.array(X)
 
@@ -176,7 +178,7 @@ class DataLoader(tf.keras.utils.Sequence):
         all_signals = []
             
         for inj in range(len(data["x_data"])):
-            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.config["model"]["inf_pars"])}
+            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.config["model"]["inf_pars_list"])}
                     
             injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
 
@@ -396,17 +398,19 @@ class DataLoader(tf.keras.utils.Sequence):
 
         data["x_data"] = self.convert_parameters(data["x_data"])
 
-
-
+        # reorder parameters so can be grouped into different distributions
+        data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
+        
         if self.config["data"]["use_real_detector_noise"] and not self.test_set:
             real_det_noise= self.load_real_noise(len(data["y_data_noisefree"]))
 
-            data["y_data_noise"] = tf.cast(np.array(real_det_noise),dtype=tf.float32)
+            # cast data to float
+            data["y_data_noise"] = tf.cast(np.array(real_det_noise), tf.float32)
 
         # cast data to float
-        data["x_data"] = tf.cast(data['x_data'],dtype=tf.float32)
-        data["y_data_noisefree"] = tf.cast(data['y_data_noisefree'],dtype=tf.float32)
-        data["y_data_noisy"] = tf.cast(data['y_data_noisy'],dtype=tf.float32)
+        data["x_data"] = tf.cast(data["x_data"], tf.float32)
+        data["y_data_noisefree"] = tf.cast(np.array(data["y_data_noisefree"]), tf.float32)
+        data["y_data_noisy"] = tf.cast(data["y_data_noisy"], tf.float32)
 
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths
@@ -416,14 +420,14 @@ class DataLoader(tf.keras.utils.Sequence):
             else:
                 return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None
 
-
+        
     def convert_parameters(self, x_data):
         # convert the parameters from right ascencsion to hour angle
-        x_data = convert_ra_to_hour_angle(x_data, self.config, self.config["model"]['inf_pars'])
+        x_data = convert_ra_to_hour_angle(x_data, self.config, self.config["model"]['inf_pars_list'])
         
         # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
         
-        for i,k in enumerate(self.config["model"]["inf_pars"]):
+        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             #if k.decode('utf-8')=='psi':
             if k =='psi':
                 psi_idx = i
@@ -444,7 +448,7 @@ class DataLoader(tf.keras.utils.Sequence):
         # normalise to bounds
         #decoded_rand_pars, par_idx = self.get_infer_pars(data)
 
-        for i,k in enumerate(self.config["model"]["inf_pars"]):
+        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             par_min = k + '_min'
             par_max = k + '_max'
             # Ensure that psi is between 0 and pi
@@ -460,7 +464,6 @@ class DataLoader(tf.keras.utils.Sequence):
             #elif k in "mass_2":
                 # mass ratio
             #    x_data[:, i] = (x_data[:, i] - 0.125)/(1 - 0.125)
-            
             else:
                 x_data[:,i] = (x_data[:,i] - self.config["bounds"][par_min]) / (self.config["bounds"][par_max] - self.config["bounds"][par_min])
         
@@ -471,7 +474,7 @@ class DataLoader(tf.keras.utils.Sequence):
         # unnormalise to bounds
         #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
         #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])
-        for i,k in enumerate(self.config["model"]["inf_pars"]):
+        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             par_min = k + '_min'
             par_max = k + '_max'
 
@@ -492,11 +495,11 @@ class DataLoader(tf.keras.utils.Sequence):
 
 
         # convert the parameters from right ascencsion to hour angle
-        x_data = convert_hour_angle_to_ra(x_data, self.config, self.config["model"]['inf_pars'])
+        x_data = convert_hour_angle_to_ra(x_data, self.config, self.config["model"]['inf_pars_list'])
 
         # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
         
-        for i,k in enumerate(self.config["model"]["inf_pars"]):
+        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             if k =='psi':
                 psi_idx = i
             if k =='phase':
@@ -525,7 +528,7 @@ class DataLoader(tf.keras.utils.Sequence):
         # choose the indicies of which parameters to infer
         par_idx = []
         infparlist = ''
-        for k in self.config["model"]["inf_pars"]:
+        for k in self.config["model"]["inf_pars_list"]:
             infparlist = infparlist + k + ', '
             for i,q in enumerate(decoded_rand_pars):
                 if k==q:
@@ -543,10 +546,10 @@ class DataLoader(tf.keras.utils.Sequence):
         new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
         #new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
 
-        #x[:, np.where(np.array(self.params["inf_pars"])=="geocent_time")[0][0]] = new_geocent_time
-        x[:, np.where(np.array(self.config["model"]["inf_pars"])=="ra")[0][0]] = new_ra
-        x[:, np.where(np.array(self.config["model"]["inf_pars"])=="dec")[0][0]] = new_dec
-        x[:, np.where(np.array(self.config["model"]["inf_pars"])=="psi")[0][0]] = new_psi
+        #x[:, np.where(np.array(self.params["inf_pars_list"])=="geocent_time")[0][0]] = new_geocent_time
+        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="ra")[0][0]] = new_ra
+        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="dec")[0][0]] = new_dec
+        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="psi")[0][0]] = new_psi
 
         return x
         
@@ -611,7 +614,7 @@ class DataLoader(tf.keras.utils.Sequence):
             if sampler == "vitamin":
                 continue
             sampler_dir = os.path.join(save_dir, "{}".format(sampler))
-
+            XS = []
             for idx in range(self.config["data"]["n_test_data"]):
                 #filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
                 filename = os.path.join(sampler_dir, "{}_{}.h5py".format("test_outputs",idx))
@@ -631,11 +634,12 @@ class DataLoader(tf.keras.utils.Sequence):
                     par_max = q + '_max'
                     with h5py.File(filename, 'r') as hf:
                         data_temp[p] = hf[p][:]
-            
+
                     if p == 'psi_post':
                         data_temp[p] = np.remainder(data_temp[p],np.pi)
-                    elif p == 'geocent_time_post':
-                        data_temp[p] = data_temp[p] - self.config["data"]['ref_geocent_time']
+                    #elif p == 'geocent_time_post':
+                    #x    data_temp[p] = data_temp[p] - self.config["data"]['ref_geocent_time']
+
                     """
                     # Convert samples to hour angle if doing pp plot
                     if p == 'ra_post' and pp_plot:
@@ -644,22 +648,23 @@ class DataLoader(tf.keras.utils.Sequence):
                     """            
                     Nsamp = data_temp[p].shape[0]
                     #n = n + 1
-                    print('... read in {} samples from {}'.format(Nsamp,filename))
+                print('... read in {} samples from {}'.format(Nsamp,filename))
 
                 # place retrieved source parameters in numpy array rather than dictionary
                 j = 0
-                XS = np.zeros((self.config["data"]["n_test_data"], len(data_temp), Nsamp))
+                XS_temp = np.zeros((Nsamp,len(data_temp)))
                 for p,d in data_temp.items():
-                    XS[idx,j,:] = d
+                    XS_temp[:,j] = d
                     j += 1
-                    
-            if got_samples:
-                Nsamp = np.shape(XS)[-1]
-                # Append test sample posteriors to existing array of other test sample posteriors
+
                 rand_idx_posterior = np.linspace(0,Nsamp-1,num=self.config["testing"]['n_samples'],dtype=np.int)
                 np.random.shuffle(rand_idx_posterior)
-                
-                self.sampler_outputs[sampler] = XS[:,:,rand_idx_posterior]
+
+                XS.append(XS_temp[rand_idx_posterior, :])
+                    
+            if got_samples:
+                # Append test sample posteriors to existing array of other test sample posteriors                
+                self.sampler_outputs[sampler] = np.array(XS)
         
         
         

@@ -22,7 +22,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
         if start_epoch != 0:
             with open(os.path.join(plot_dir, "loss.txt")) as f:
                 losses = np.loadtxt(f)
-            self.train_losses = [list(losses[:,0]),list(losses[:,2]),list(losses[:,2])]
+            self.train_losses = [list(losses[:,0]),list(losses[:,1]),list(losses[:,2])]
             self.val_losses = [list(losses[:,3]),list(losses[:,4]),list(losses[:,5])]
 
     def on_epoch_end(self, epoch, logs = None):
@@ -60,6 +60,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
         self.old_kl_losses = []
         self.old_gauss_losses = []
         self.old_vm_losses = []
+
 
     def inf_data_plot(self):
         """
@@ -176,10 +177,10 @@ class TrainCallback(tf.keras.callbacks.Callback):
         self.gauss_losses = []
         self.vm_losses = []
 
-        if epoch % self.config["training"]['plot_interval'] == 0:
+        #if epoch % self.config["training"]['plot_interval'] == 0:
             # Save the weights using the `checkpoint_path` format
-            self.model.save_weights(self.checkpoint_path)
-            print('... Saved model %s ' % self.checkpoint_path)
+        #    self.model.save_weights(self.checkpoint_path)
+        #    print('... Saved model %s ' % self.checkpoint_path)
 
 class TestCallback(tf.keras.callbacks.Callback):
 
@@ -203,7 +204,13 @@ class TestCallback(tf.keras.callbacks.Callback):
         
         if epoch % self.test_epoch == 0 and epoch != 0:
             for step in range(self.config["data"]["n_test_data"]):
-                mu_r1, z_r1, mu_q, z_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
+                mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
+
+                if np.any(np.isinf(np.exp(logvar_q))):
+                    print("maxminlogvar", tf.reduce_min(logvar_q), tf.reduce_max(logvar_q))
+                if np.any(np.isnan(np.exp(logvar_q))):
+                    print("maxminlogvar", tf.reduce_min(logvar_q), tf.reduce_max(logvar_q))
+
                 plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
                 start_time_test = time.time()
                 samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'])
@@ -214,10 +221,10 @@ class TestCallback(tf.keras.callbacks.Callback):
                     KL_est = [-1,-1,-1]
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.config["testing"]['n_samples'],end_time_test - start_time_test))
-                    if len(np.shape(self.bilby_samples)) == 3:
+                    if len(np.shape(self.bilby_samples)) == 4:
                         KL_est = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:], config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
                     else:
-                        pass
+                        print("not plotting posterior, bilby samples wrong shape")
                         #KL_est = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=None, config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
             if self.paper_plots:
                 # This needs to be checked and rewritten
