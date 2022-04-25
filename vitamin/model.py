@@ -166,7 +166,7 @@ class CVAE(tf.keras.Model):
                 "kl_loss":self.val_kl_loss_metric.result()}
 
     def create_loss_func(self):
-
+        @tf.function
         def loss_func(x, y, noiseamp=1.0, ramp = 1.0):
         
             # Recasting some things to float32
@@ -198,7 +198,9 @@ class CVAE(tf.keras.Model):
             indx = 0
             for group in self.grouped_params.values():
                 dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], EPS = self.EPS, ramp = self.ramp)
-                cost_recon += group.get_cost(dist, x_grouped[indx])
+                cr = group.get_cost(dist, x_grouped[indx])
+                #print(group.pars, cr)
+                cost_recon += cr
                 ind += 2
                 indx += 1
 
@@ -206,7 +208,6 @@ class CVAE(tf.keras.Model):
             selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
             log_r1_q = gm_r1.log_prob(tf.cast(z_samp,dtype=tf.float32))   # evaluate the log prob of r1 at the q samples
             cost_KL = tf.cast(selfent_q,dtype=tf.float32) - tf.reduce_mean(log_r1_q)
-
             return cost_recon, cost_KL
             
         return loss_func
@@ -253,6 +254,7 @@ class CVAE(tf.keras.Model):
         
 
         return sample_func
+
     def gen_z_samples(self, x, y, nsamples=1000):
 
         #y = y/self.params['y_normscale']

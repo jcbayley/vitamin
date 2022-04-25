@@ -180,7 +180,7 @@ class DataLoader(tf.keras.utils.Sequence):
         for inj in range(len(data["x_data"])):
             injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.config["model"]["inf_pars_list"])}
                     
-            injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
+            #injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
 
             Nt = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
             whitened_signals_td = []
@@ -471,6 +471,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
     def unconvert_parameters(self, x_data):
 
+        x_data = np.array(x_data, np.float64)
         # unnormalise to bounds
         #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
         #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])
@@ -491,7 +492,16 @@ class DataLoader(tf.keras.utils.Sequence):
             #    x_data[:,i] = x_data[:, i]*(1 - 0.125) + 0.125
             
             else:
-                x_data[:,i]=x_data[:,i]*(self.config["bounds"][par_max] - self.config["bounds"][par_min]) + self.config["bounds"][par_min]
+                #if par_min == "geocent_time_min":
+                #    print("dat", x_data[:,i])
+                x_data[:,i] = x_data[:,i]*(float(self.config["bounds"][par_max]) - float(self.config["bounds"][par_min])) + float(self.config["bounds"][par_min])
+                #if par_min == "geocent_time_min":
+                #    print("dat", x_data[:,i])
+                #    print("parmin",self.config["bounds"][par_min])
+                #    print("parmax",self.config["bounds"][par_max])
+                #    print("pardiff",self.config["bounds"][par_max]-self.config["bounds"][par_min])
+                #    print("add",np.array(self.config["bounds"][par_min] + 0.18).astype(np.float32))
+
 
 
         # convert the parameters from right ascencsion to hour angle

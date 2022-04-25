@@ -4,6 +4,7 @@ from .vitamin_parser import InputParser
 import os
 import h5py
 import numpy as np
+import bilby
 
 class DataGenerator():
 
@@ -29,6 +30,7 @@ class DataGenerator():
         
         signal_dataset = []
         signal_inj_pars = []
+        signal_inference_pars = []
         signal_snrs = []
         for i in range(int(self.config["data"]["file_split"])):
 
@@ -49,16 +51,18 @@ class DataGenerator():
                 signal_dataset.append(signal.whitened_signals_td)
                 signal_snrs.append(signal.snrs)
             signal_inj_pars.append(signal.injection_parameters_list)
+            signal_inference_pars.append(signal.inference_parameters_list)
 
 
         if self.write_to_file:
             fname = os.path.join(save_dir, "data_{}_{}.h5py".format(start_ind,self.config["data"]['n_{}_data'.format(self.run_type)]))
             with h5py.File(fname, 'w') as hf:
-                hf.create_dataset('x_data', data=signal_inj_pars)
+                hf.create_dataset('x_data', data=signal_inference_pars)
                 if self.config["data"]["save_polarisations"]:
                     hf.create_dataset('y_hplus_hcross', data=signal_dataset)
                 else:
                     hf.create_dataset('y_data_noisefree', data=signal_dataset)
+                hf.create_dataset('inj_pars', data=signal_inj_pars)
                 hf.create_dataset('snrs', data=signal_snrs)
                 hf.close()
         else:
@@ -99,7 +103,7 @@ class DataGenerator():
                 signal.snrs = hf["snrs"]
             signal.generate_polarisations()
             signal.get_detector_response(frequency_domain_strain = signal.frequency_domain_strain)
-            
+            self.write_to_file = False
         else:
             if self.config["data"]["use_real_detector_noise"]:
                 signal.generate_real_noise()
@@ -127,13 +131,17 @@ class DataGenerator():
             with h5py.File(fname, 'w') as hf:
                 hf.create_dataset('noisy_waveform', data=signal.whitened_data_td)
                 hf.create_dataset('noisefree_waveform', data=signal.whitened_signals_td)
-                hf.create_dataset('log_like_eval', data=signal.dynesty.log_likelihood_evaluations) 
-                for q,qi in signal.dynesty.posterior.items():
-                    #if p==q:
+                logl = getattr(signal,sampler).log_likelihood_evaluations
+                if logl is not None:
+                    hf.create_dataset('log_like_eval', data=logl) 
+                print("samp_params",getattr(signal, sampler).posterior.keys())
+                all_posterior_params = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(getattr(signal, sampler).posterior)[0]
+                print("all_params",all_posterior_params.keys())
+                for q,qi in all_posterior_params.items():
                     name = q + '_post'
                     print('saving PE samples for parameter {}'.format(q))
                     hf.create_dataset(name, data=np.array(qi))
-                    hf.create_dataset('run_time', data=signal.dynesty_runtime)
+                hf.create_dataset('run_time', data=getattr(signal,"{}_runtime".format(sampler)))
                 hf.close()
 
 

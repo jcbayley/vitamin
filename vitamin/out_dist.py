@@ -14,21 +14,17 @@ class JointM1M2:
     def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
         mean1, mean2 = tf.split(mean, num_or_size_splits=2, axis=1)
         logvar1, logvar2 = tf.split(logvar, num_or_size_splits=2, axis=1)
-        Root = tfp.distributions.JointDistributionCoroutine.Root 
-        def model():
-            md1 = yield Root(tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean1, dtype=tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar1)),dtype=tf.float32),
-                low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0))
-            
-            md2 = yield tfp.distributions.TruncatedNormal(
+        joint = tfp.distributions.JointDistributionSequential([
+            tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean1,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvar1)),dtype=tf.float32),
+                low=0, high=1),
+            lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean2,dtype=tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar2)),dtype=tf.float32),
-                low=-10.0 + ramp*10.0, high=md1)
-        
-        joint_trunc_m1m2 = tfp.distributions.JointDistributionCoroutine(model)
-        
-        return joint_trunc_m1m2
+                scale=tf.cast(tf.sqrt(tf.exp(logvar2)),dtype=tf.float32),
+                low=0, high=b0),
+        ])
+        return joint
 
     def get_networks(self,):
         mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True)
@@ -41,6 +37,52 @@ class JointM1M2:
 
     def sample(self, dist, max_samples):
         return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+
+
+class JointChirpSymMR:
+
+    def __init__(self, pars):
+        """
+        Joint distribution for Chirpmass and symetric mas ratio
+        """
+        self.pars = pars
+        self.num_pars = len(self.pars)
+        if self.num_pars != 2:
+            raise Exception("Please only use two variables for JointM1M2")
+        self.num_outputs = [self.num_pars,self.num_pars]
+
+    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
+        # this is not working yet
+        mean_q, mean_cm = tf.split(mean, num_or_size_splits=2, axis=1)
+        logvarq, logvarcm = tf.split(logvar, num_or_size_splits=2, axis=1)
+
+        joint = tfp.distributions.JointDistributionSequential([
+            tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean_q,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
+                low=0, high=1),
+            lambda b0: tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean_cm,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
+                low=0, high=1),
+        ])
+        return joint
+
+    def get_networks(self,):
+        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True)
+        logvar = tf.keras.layers.Dense(2,use_bias=True)
+        return mean, logvar
+
+    def get_cost(self, dist, x):
+        # x = q , chirp mass
+        x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+        #locinf = np.where(np.isinf(dist.log_prob(x1, x2).numpy()))[0]
+        #print("infvals",x1.numpy()[locinf], x2.numpy()[locinf])
+        return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
+
+    def sample(self, dist, max_samples):
+        return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+
 
 class TruncatedNormal:
 

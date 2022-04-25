@@ -162,7 +162,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
         return [-1.0] * len(config["test"]['samplers'][1:])
     # make numpy arrays
     samples = samples.numpy()
-
+    #print(np.min(samples, axis=0), np.max(samples, axis = 0))
     #samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_normed.txt'.format(epoch,idx))
     #np.savetxt(samples_file,samples)
 
@@ -197,8 +197,16 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
                 inf_par = config["model"]['inf_pars_list'][inf_idx]
                 bilby_par = config["testing"]['bilby_pars'][bilby_idx]
-                vitamin_samples[:,cnt] = vit_samples[:,inf_idx]
-                sampler_samples[:,cnt] = other_samples[:,bilby_idx]
+                #print(inf_par, np.min(vit_samples[:, inf_idx]), np.max(vit_samples[:,inf_idx]))
+                if inf_par == "geocent_time":
+                    vitamin_samples[:,cnt] = vit_samples[:,inf_idx] - config["data"]["ref_geocent_time"]
+                    sampler_samples[:,cnt] = other_samples[:,bilby_idx] - config["data"]["ref_geocent_time"]
+                elif inf_par == "phase":
+                    continue
+                else:
+                    vitamin_samples[:,cnt] = vit_samples[:,inf_idx]
+                    sampler_samples[:,cnt] = other_samples[:,bilby_idx]
+
                 true_params[cnt] = x_truth[inf_idx]
                 ol_pars.append(inf_par)
                 cnt += 1
@@ -224,22 +232,12 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                 """We use Scott's Rule, multiplied by a constant factor."""
                 return np.power(obj.n, -1./(obj.d+4)) * fac
 
-            #subtract geocent time
-
-            geocent_int = config["model"]['inf_pars_list'].index("geocent_time")
-            vitamin_samples[:, geocent_int] -= config["data"]["ref_geocent_time"]
-            sampler_samples[:, geocent_int] -= config["data"]["ref_geocent_time"]
-
-            phase_marginalisation = True
-            if phase_marginalisation:
-                vitamin_samples = np.delete(vitamin_samples, 2, 1)
-                sampler_samples = np.delete(sampler_samples, 2, 1)
 
 
             for pr in range(np.shape(vitamin_samples)[1]):
                 #try:
-                print("vit", min(vitamin_samples[idx1, pr:pr+1]), max(vitamin_samples[idx1, pr:pr+1]))
-                print("samp", min(sampler_samples[idx1, pr:pr+1]), max(sampler_samples[idx1, pr:pr+1]))
+                #print("vit", pr, min(vitamin_samples[idx1, pr:pr+1]), max(vitamin_samples[idx1, pr:pr+1]))
+                #print("samp", pr, min(sampler_samples[idx1, pr:pr+1]), max(sampler_samples[idx1, pr:pr+1]))
                 kdsampp = vitamin_samples[idx1, pr:pr+1][~np.isnan(vitamin_samples[idx1, pr:pr+1])].flatten()
                 kdsampq = sampler_samples[idx2, pr:pr+1][~np.isnan(sampler_samples[idx2, pr:pr+1])].flatten()
                 eval_pointsp = np.linspace(np.min(kdsampp), np.max(kdsampp), len(kdsampp))
@@ -276,10 +274,10 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                       fill_contours=False, truths=true_params,
                       show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
-            print('Saved output to %s/comp_posterior_%s_event_%d.png' % (save_dir,epoch,idx))
+            print('Saved output to', os.path.join(directories["comparison_posterior"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
             plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
         else:
-            print('Saved output to %s/comp_posterior_epoch_%d_event_%d.png' % (save_dir,epoch,idx))
+            print('Saved output to ', os.path.join(directories["comparison_posterior"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
             plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
         return JS_est

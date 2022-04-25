@@ -38,8 +38,12 @@ class GenerateTemplate():
     def get_injection_parameters(self):
         self.injection_parameters = self.config["priors"].sample()
         conv_params, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
-        self.injection_parameters_list = []
+        self.inference_parameters_list = []
         for key in self.config["model"]["inf_pars_list"]:
+            self.inference_parameters_list.append(conv_params[key])
+
+        self.injection_parameters_list = []
+        for key in self.injection_parameters.keys():
             self.injection_parameters_list.append(conv_params[key])
 
     def clear_attributes(self):
@@ -211,6 +215,24 @@ class GenerateTemplate():
             # loop over randomised params and save samples
             #for p in inf_pars:
             self.dynesty_runtime = run_endt - run_startt
+
+
+        elif sampler == "nessai":
+
+            run_startt = time.time()
+            # Run sampler dynesty 1 sampler
+
+            result = bilby.run_sampler(
+                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
+            run_endt = time.time()
+
+            # save test sample waveform
+            self.nessai = result
+
+            # loop over randomised params and save samples
+            #for p in inf_pars:
+            self.nessai_runtime = run_endt - run_startt
+
         else:
             print("Currently only comparing to dynesty")
 
