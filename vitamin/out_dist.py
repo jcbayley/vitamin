@@ -4,7 +4,7 @@ import numpy as np
 
 class JointM1M2:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         self.pars = pars
         if self.pars[0] == "mass_2":
             self.order_flipped = True
@@ -63,10 +63,11 @@ class JointM1M2:
 
 class JointChirpmassMR:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         """
         Joint distribution for Chirpmass and symetric mas ratio
         """
+        self.config = config
         self.pars = pars
         if self.pars[0] == "chirp_mass":
             self.order_flipped = True
@@ -79,6 +80,18 @@ class JointChirpmassMR:
         self.num_outputs = [self.num_pars,self.num_pars]
         self.get_cost = self.cost_setup()
         self.sample = self.sample_setup()
+
+    def Mconstrainm1(self, q_norm, m):
+        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        num = (q*m*m)**(3./5.)
+        den = (m*(1 + q))**(1./5.)
+        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+
+    def Mconstrainm2(self, q_norm, m):
+        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        num = ((1/q)*m*m)**(3./5.)
+        den = (m*(1 + 1/q))**(1./5.)
+        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
 
     def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
         # this is not working yet
@@ -93,7 +106,8 @@ class JointChirpmassMR:
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_cm,dtype=tf.float32),
                 scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
-                low=0, high=1),
+                low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
+                high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
         ])
         return joint
 
@@ -126,7 +140,7 @@ class JointChirpmassMR:
 
 class TruncatedNormal:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [self.num_pars, self.num_pars]
@@ -153,7 +167,7 @@ class TruncatedNormal:
 
 class VonMises:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [2*self.num_pars, self.num_pars]
@@ -187,7 +201,7 @@ class VonMises:
 
 class JointVonMisesFisher:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
@@ -238,7 +252,7 @@ class JointVonMisesFisher:
 
 class JointPowerSpherical:
 
-    def __init__(self, pars):
+    def __init__(self, pars, config):
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:

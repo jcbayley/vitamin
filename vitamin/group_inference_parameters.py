@@ -16,7 +16,8 @@ def group_outputs(config):
         pars = [par for par, val in inf_pars.items() if val == dist]
         num_pars = len(pars)
         if dist in available_dists.keys():
-            output_dists[dist] = available_dists[dist](pars)
+            output_dists[dist] = available_dists[dist](pars, config)
+
         else:
             raise Exception("No available distribution of that Name, available names: {}".format(available_dists.keys()))
 

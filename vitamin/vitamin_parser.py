@@ -83,6 +83,7 @@ class InputParser():
 
         self.config["masks"]["idx_periodic_mask"] = np.argsort(self.config["masks"]["nonperiodic_idx_mask"] + self.config["masks"]["periodic_idx_mask"] + self.config["masks"]["ra_idx_mask"] + self.config["masks"]["dec_idx_mask"])
 
+        """
         # non periodic masks
         
         nonperiodic_nonm1m2_params = copy.copy(nonperiodic_params)
@@ -93,13 +94,13 @@ class InputParser():
 
         self.config["masks"]["nonperiodic_m1_mask"], self.config["masks"]["nonperiodic_m1_idx_mask"], self.config["masks"]["nonperiodic_m1_len"] = self.get_param_index(nonperiodic_params,['mass_1'])
         self.config["masks"]["nonperiodic_m2_mask"], self.config["masks"]["nonperiodic_m2_idx_mask"], self.config["masks"]["nonperiodic_m2_len"] = self.get_param_index(nonperiodic_params,['mass_2'])
-        
+        """
         self.get_param_order()
 
 
     def get_bounds(self,):
         self.config["bounds"] = {}
-        for par in self.config["model"]["inf_pars_list"]:
+        for par in self.config["priors"]:
             self.config["bounds"]["{}_max".format(par)] = self.config["priors"][par].maximum
             self.config["bounds"]["{}_min".format(par)] = self.config["priors"][par].minimum
 
