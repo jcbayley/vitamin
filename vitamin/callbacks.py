@@ -185,7 +185,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
 class TestCallback(tf.keras.callbacks.Callback):
 
 
-    def __init__(self, config, test_dataset, bilby_samples,test_epoch = 500):
+    def __init__(self, config, test_dataset, bilby_samples):
         self.config = config
         self.test_dataset = test_dataset
         self.comp_post_dir = os.path.join(config["output"]["output_directory"],"comparison_posteriors")
@@ -198,11 +198,10 @@ class TestCallback(tf.keras.callbacks.Callback):
             if not os.path.isdir(direc):
                 os.makedirs(direc)
 
-        self.test_epoch = test_epoch
 
     def on_epoch_end(self, epoch, logs = None):
         
-        if epoch % self.test_epoch == 0 and epoch != 0:
+        if epoch % self.config["training"]["test_interval"] == 0 and epoch != 0:
             for step in range(self.config["data"]["n_test_data"]):
                 mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
 

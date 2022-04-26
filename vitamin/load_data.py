@@ -59,6 +59,7 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.test_set:
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.truths = self.load_waveforms(self.filenames, None)
         else:
+
             if self.chunk_iter >= self.max_chunk_num:
                 print("Reached maximum number of chunks, restarting index and shuffling files")
                 self.chunk_iter = 0
@@ -325,7 +326,7 @@ class DataLoader(tf.keras.utils.Sequence):
         y_data_noisy     : waveform with noise
         """
 
-        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': [], 'y_hplus_hcross': []}
+        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': [], 'y_hplus_hcross': [], 'injection_parameters_keys': [], 'injection_parameters_values': [], 'inference_parameters_keys': []}
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
         for i,filename in enumerate(filenames):
@@ -336,6 +337,9 @@ class DataLoader(tf.keras.utils.Sequence):
                     data['x_data'].append([h5py_file['x_data']])
                     data['y_data_noisefree'].append([h5py_file['y_data_noisefree']])
                     data['y_data_noisy'].append([h5py_file['y_data_noisy']])
+                    data['injection_parameters_keys'] = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                    data['injection_parameters_values'].append([h5py_file['injection_parameters_values']])
+                    data['inference_parameters_keys'] = [st.decode() for st in h5py_file['inference_parameters_keys']]
                     #data['rand_pars'] = h5py_file['rand_pars']
                     data['snrs'].append(h5py_file['snrs'])
                 else:
@@ -344,6 +348,9 @@ class DataLoader(tf.keras.utils.Sequence):
                         data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
                     else:
                         data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
+                    data['injection_parameters_keys'] = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                    data['injection_parameters_values'].append([h5py_file['injection_parameters_values'][indices[i]]])
+                    data['inference_parameters_keys'] = [st.decode() for st in h5py_file['inference_parameters_keys']]
                     #data['rand_pars'] = [i for i in h5py_file['rand_pars']]
                     #data['snrs'].append(h5py_file['snrs'][indices[i]])
                 if not self.silent:
@@ -351,9 +358,28 @@ class DataLoader(tf.keras.utils.Sequence):
             except OSError:
                 print('Could not load requested file: {}'.format(filename))
                 continue
-
+                
+                
         # concatentation all the x data (parameters) from each of the files
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
+        if self.test_set:
+            data['injection_parameters_values'] = np.array(data['injection_parameters_values']).squeeze()
+        else:
+            data['injection_parameters_values'] = np.concatenate(np.array(data['injection_parameters_values']).squeeze(), axis=0).squeeze()
+
+        if self.config["model"]["inf_pars_list"] != data["inference_parameters_keys"]:
+            reorder_xdata = []
+            for injpar in self.config["model"]["inf_pars_list"]:
+                if injpar not in data["injection_parameters_keys"]:
+                    raise Exception("No parameter names {} in save data".format(injpar))
+                reorder_xdata.append(np.where(injpar == np.array(data["injection_parameters_keys"]))[0][0])
+            data["x_data"] = data["injection_parameters_values"][:,reorder_xdata]
+        else:
+            self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
+            # reorder x parameters into params['infer_pars'] order
+            data["x_data"] = data['x_data'][:,self.par_idx]
+
+
 
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
@@ -363,9 +389,6 @@ class DataLoader(tf.keras.utils.Sequence):
             else:
                 data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
 
-        self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
-        # reorder x parameters into params['infer_pars'] order
-        data["x_data"] = data['x_data'][:,self.par_idx]
         
         if self.test_set:
             truths = copy.copy(data["x_data"])

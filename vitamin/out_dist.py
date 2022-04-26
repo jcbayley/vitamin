@@ -6,22 +6,31 @@ class JointM1M2:
 
     def __init__(self, pars):
         self.pars = pars
+        if self.pars[0] == "mass_2":
+            self.order_flipped = True
+        elif self.pars[0] == "mass_1":
+            self.order_flipped = False
+
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
             raise Exception("Please only use two variables for JointM1M2")
         self.num_outputs = [self.num_pars,self.num_pars]
+        self.get_cost = self.cost_setup()
+        self.sample = self.sample_setup()
+        self.Root = tfp.distributions.JointDistributionCoroutine.Root
 
     def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
         mean1, mean2 = tf.split(mean, num_or_size_splits=2, axis=1)
         logvar1, logvar2 = tf.split(logvar, num_or_size_splits=2, axis=1)
+
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean1,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvar1)),dtype=tf.float32),
+                loc=tf.cast(mean1, tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvar1)), tf.float32),
                 low=0, high=1),
             lambda b0: tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean2,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvar2)),dtype=tf.float32),
+                loc=tf.cast(mean2, tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvar2)), tf.float32),
                 low=0, high=b0),
         ])
         return joint
@@ -31,13 +40,26 @@ class JointM1M2:
         logvar = tf.keras.layers.Dense(2,use_bias=True)
         return mean, logvar
 
-    def get_cost(self, dist, x):
-        x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
-        return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
+    def cost_setup(self):
+        if self.order_flipped:
+            def get_cost(dist, x):
+                x2, x1 = tf.split(x, num_or_size_splits=2, axis=1)
+                return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
+        else:
+            def get_cost(dist, x):
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
 
-    def sample(self, dist, max_samples):
-        return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+        return get_cost
 
+    def sample_setup(self):
+        if self.order_flipped:
+            def sample(dist, max_samples):
+                return tf.squeeze(tf.flip(tf.transpose(dist.sample(), [1, 0, 2]), axis=0), 2)
+        else:
+            def sample(dist, max_samples):
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+        return sample
 
 class JointChirpmassMR:
 
@@ -46,10 +68,17 @@ class JointChirpmassMR:
         Joint distribution for Chirpmass and symetric mas ratio
         """
         self.pars = pars
+        if self.pars[0] == "chirp_mass":
+            self.order_flipped = True
+        elif self.pars[0] == "mass_ratio":
+            self.order_flipped = False
+
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
             raise Exception("Please only use two variables for JointM1M2")
         self.num_outputs = [self.num_pars,self.num_pars]
+        self.get_cost = self.cost_setup()
+        self.sample = self.sample_setup()
 
     def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
         # this is not working yet
@@ -73,15 +102,26 @@ class JointChirpmassMR:
         logvar = tf.keras.layers.Dense(2,use_bias=True)
         return mean, logvar
 
-    def get_cost(self, dist, x):
-        # x = q , chirp mass
-        x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
-        #locinf = np.where(np.isinf(dist.log_prob(x1, x2).numpy()))[0]
-        #print("infvals",x1.numpy()[locinf], x2.numpy()[locinf])
-        return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
+    def cost_setup(self):
+        if self.order_flipped:
+            def get_cost(dist, x):
+                x2, x1 = tf.split(x, num_or_size_splits=2, axis=1)
+                return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
+        else:
+            def get_cost(dist, x):
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
 
-    def sample(self, dist, max_samples):
-        return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+        return get_cost
+
+    def sample_setup(self):
+        if self.order_flipped:
+            def sample(dist, max_samples):
+                return tf.squeeze(tf.flip(tf.transpose(dist.sample(), [1, 0, 2]), axis=0), 2)
+        else:
+            def sample(dist, max_samples):
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
+        return sample
 
 
 class TruncatedNormal:

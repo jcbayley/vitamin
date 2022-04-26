@@ -143,13 +143,19 @@ def train(config):
         initial_value_threshold=None,
     )
 
+
     callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), checkpoint]
+
     if config["training"]["test_interval"] is not None:
         callbacks.append(TestCallback(config, test_dataset, bilby_samples, test_epoch = config["training"]["test_interval"]))
-
+        
+    if config["training"]["tensorboard_log"]:
+        logdir = os.path.join(config["output"]["output_directory"], "profile")
+        if not os.path.isdir(logdir):
+            os.makedirs(logdir)
+        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir = logdir,histogram_freq = 50,profile_batch = 200))
+    
     model.fit(train_dataset, use_multiprocessing = False, workers = 6, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
-
-    #model.fit_generator(data_gen_wrap, use_multiprocessing = False, workers = 6,epochs = 10000, callbacks = callbacks, shuffle = False, validation_data = valdata_gen_wrap, max_queue_size = 100)
 
 
 if __name__ == "__main__":
