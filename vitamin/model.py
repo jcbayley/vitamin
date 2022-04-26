@@ -25,6 +25,7 @@ class CVAE(tf.keras.Model):
         self.activation_relu = tf.keras.layers.ReLU()
         self.kernel_initializer = "glorot_uniform"#tf.keras.initializers.HeNormal() 
         self.bias_initializer = "zeros"#tf.keras.initializers.HeNormal() 
+        self.bias_initializer_2 = tf.keras.initializers.HeNormal() 
 
         self.verbose = verbose
         # consts
@@ -57,7 +58,10 @@ class CVAE(tf.keras.Model):
 
         # r1 encoder network
         r1 = self.get_network(conv, self.config["model"]["output_network"])
-        r1 = tf.keras.layers.Dense(2*self.z_dim*self.n_modes + self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
+        r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2)(r1)
+        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
+        r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
+        r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
 
         # the q encoder network
@@ -65,7 +69,9 @@ class CVAE(tf.keras.Model):
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
         q = self.get_network(q, self.config["model"]["output_network"])
-        q = tf.keras.layers.Dense(2*self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(q)
+        qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2)(q)
+        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(q)
+        q = tf.keras.layers.concatenate([qmu,qlogvar])
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
 
         # the r2 decoder network
@@ -306,7 +312,7 @@ class CVAE(tf.keras.Model):
             if layer.split("(")[0] == "Conv1D":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride))
-            if layer.split("(")[0] == "ResBlock":
+            elif layer.split("(")[0] == "ResBlock":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 # add a bottleneck block
                 conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride))

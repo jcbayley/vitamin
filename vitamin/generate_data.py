@@ -62,7 +62,9 @@ class DataGenerator():
                     hf.create_dataset('y_hplus_hcross', data=signal_dataset)
                 else:
                     hf.create_dataset('y_data_noisefree', data=signal_dataset)
-                hf.create_dataset('inj_pars', data=signal_inj_pars)
+                hf.create_dataset('injection_parameters_values', data=signal_inj_pars)
+                hf.create_dataset('injection_parameters_keys', data=signal.injection_parameters_keys)
+                hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
                 hf.create_dataset('snrs', data=signal_snrs)
                 hf.close()
         else:
@@ -122,6 +124,7 @@ class DataGenerator():
                     hf.create_dataset('frequency_domain_strain', data=signal.frequency_domain_strain)
                     hf.create_dataset('injection_parameters_values', data=[val for val in signal.injection_parameters.values()])
                     hf.create_dataset('injection_parameters_keys', data=[key for key in signal.injection_parameters.keys()])
+                    hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
                     hf.create_dataset('snrs', data=signal.snrs)
                     hf.close()
 

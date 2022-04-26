@@ -9,6 +9,7 @@ import bilby
 import os 
 from pathlib import Path
 from .initialise import group_outputs
+import regex
 
 class InputParser():
 
@@ -45,7 +46,7 @@ class InputParser():
                 self.config.setdefault(key,{})
             for key2 in ini_file[key].keys():
                 if key2 in ["shared_network", "output_network"]:
-                    self.config[key][key2] = ini_file[key][key2].strip("[").strip("]").split("\n")
+                    self.config[key][key2] = [mod.strip("\n") for mod in regex.split(r"\s*,\s*(?![^(]*\))", ini_file[key][key2].strip("[").strip("]"))]
                 elif key2 in ["waveform_approximant", "run_tag"]:
                     self.config[key][key2] = str(ini_file[key][key2]).strip('"')
                 elif key2 in ["output_directory","data_directory", "prior_file"]:
@@ -79,7 +80,7 @@ class InputParser():
         self.config["masks"]["idx_periodic_mask"] = np.argsort(self.config["masks"]["nonperiodic_idx_mask"] + self.config["masks"]["periodic_idx_mask"] + self.config["masks"]["ra_idx_mask"] + self.config["masks"]["dec_idx_mask"])
 
         # non periodic masks
-        """
+        
         nonperiodic_nonm1m2_params = copy.copy(nonperiodic_params)
         nonperiodic_nonm1m2_params.remove("mass_1")
         nonperiodic_nonm1m2_params.remove("mass_2")
@@ -88,7 +89,7 @@ class InputParser():
 
         self.config["masks"]["nonperiodic_m1_mask"], self.config["masks"]["nonperiodic_m1_idx_mask"], self.config["masks"]["nonperiodic_m1_len"] = self.get_param_index(nonperiodic_params,['mass_1'])
         self.config["masks"]["nonperiodic_m2_mask"], self.config["masks"]["nonperiodic_m2_idx_mask"], self.config["masks"]["nonperiodic_m2_len"] = self.get_param_index(nonperiodic_params,['mass_2'])
-        """
+        
         self.get_param_order()
 
 
