@@ -13,7 +13,9 @@ from .initialise import group_outputs
 class InputParser():
 
     def __init__(self, config_file = None, **args):
-
+        """
+        Create a configuration, either default configuration or input config file
+        """
         self.config = {}
         self.default_prior = "BBHPriorDict"
         self.default_ini = configparser.ConfigParser()
@@ -21,12 +23,14 @@ class InputParser():
             self.default_ini.read(default_config)
         self.create_config(self.default_ini)
         
-        self.config_file = Path(config_file).resolve()
+
         if config_file is not None:
+            self.config_file = Path(config_file).resolve()
             self.ini = configparser.ConfigParser()
             self.ini.read(self.config_file)
             self.create_config(self.ini)
         else:
+            self.config_file = None
             print("Using default config file")
             
         self.get_priors()
@@ -104,13 +108,14 @@ class InputParser():
         if "prior_file" in self.config["data"].keys():
             priors = d[self.default_prior](self.config["data"]["prior_file"])
             # set geocent time from other input pars
-            priors['geocent_time'] = bilby.core.prior.Uniform(
-                minimum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.35,
-                maximum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.15,
-                name='geocent_time', latex_label='$t_c$', unit='$s$')
         else:
-            priors = s[self.default_prior]
+            priors = d[self.default_prior]()
             print("No prior file, using default prior")
+
+        priors['geocent_time'] = bilby.core.prior.Uniform(
+            minimum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.35,
+            maximum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.15,
+            name='geocent_time', latex_label='$t_c$', unit='$s$')
 
         self.config["priors"] = priors
             

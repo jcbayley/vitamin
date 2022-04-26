@@ -39,10 +39,13 @@ def train(config):
     #gpu_num = str(vitamin_config["training"]['gpu_num'])   
     #os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
 
-    print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
-
+    try:
+        print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
+    except:
+        print("No CUDA devices")
+        
     # Let GPU consumption grow as needed
-    config_gpu = tf.compat.v1.ConfigProto(device_count = {'GPU': config["training"]["gpu_num"]})
+    config_gpu = tf.compat.v1.ConfigProto()
     config_gpu.gpu_options.allow_growth = True
     session = tf.compat.v1.Session(config=config_gpu)
     print('... letting GPU consumption grow as needed')
@@ -75,20 +78,18 @@ def train(config):
     if not make_paper_plots:
         train_dataset = DataLoader(training_directory,config = config) 
         validation_dataset = DataLoader(validation_directory,config=config,val_set = True)
+        train_dataset.load_next_chunk()
+        validation_dataset.load_next_chunk()
 
-    test_dataset = DataLoader(test_directory,config=config, test_set = True)
+    if config["training"]["test_interval"] is not None:
+        test_dataset = DataLoader(test_directory,config=config, test_set = True)
+        test_dataset.load_bilby_samples()
 
-    print("Loading intitial data...")
-    train_dataset.load_next_chunk()
-    validation_dataset.load_next_chunk()
-    test_dataset.load_next_chunk()
-    test_dataset.load_bilby_samples()
-
-    # load precomputed samples
-    bilby_samples = []
-    for sampler in config["testing"]["samplers"][1:]:
-        bilby_samples.append(test_dataset.sampler_outputs[sampler])
-    bilby_samples = np.array(bilby_samples)
+        # load precomputed samples
+        bilby_samples = []
+        for sampler in config["testing"]["samplers"][1:]:
+            bilby_samples.append(test_dataset.sampler_outputs[sampler])
+        bilby_samples = np.array(bilby_samples)
 
     start_epoch = 0
     
@@ -142,7 +143,9 @@ def train(config):
         initial_value_threshold=None,
     )
 
-    callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TestCallback(config, test_dataset, bilby_samples, test_epoch = config["training"]["test_interval"]), TimeCallback(config), checkpoint]
+    callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), checkpoint]
+    if config["training"]["test_interval"] is not None:
+        callbacks.append(TestCallback(config, test_dataset, bilby_samples, test_epoch = config["training"]["test_interval"]))
 
     model.fit(train_dataset, use_multiprocessing = False, workers = 6, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
 

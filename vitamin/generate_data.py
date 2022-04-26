@@ -152,9 +152,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Input files and options')
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
     parser.add_argument('--run-type', metavar='r', type=str, help='training/validation/test')
-    parser.add_argument('--num-files', metavar='r', type=int, help='number of files to generate')
-    parser.add_argument('--start-ind', metavar='s', type=int, help='index for file label, i.e. set which batch for running through condor')
-    parser.add_argument('--sampler', type=str, help='which sampler to compare to')
+    parser.add_argument('--num-files', metavar='r', type=int, help='number of files to generate', default = 1000)
+    parser.add_argument('--start-ind', metavar='s', type=int, help='index for file label, i.e. set which batch for running through condor', default=0)
+    parser.add_argument('--sampler', type=str, help='which sampler to compare to', default="dynesty")
 
     args = parser.parse_args()
     vitamin_config = InputParser(args.ini_file)

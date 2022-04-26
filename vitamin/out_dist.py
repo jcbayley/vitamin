@@ -39,7 +39,7 @@ class JointM1M2:
         return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
 
 
-class JointChirpSymMR:
+class JointChirpmassMR:
 
     def __init__(self, pars):
         """
