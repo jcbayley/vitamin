@@ -55,7 +55,7 @@ class JointM1M2:
     def sample_setup(self):
         if self.order_flipped:
             def sample(dist, max_samples):
-                return tf.squeeze(tf.flip(tf.transpose(dist.sample(), [1, 0, 2]), axis=0), 2)
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[::-1], 2)
         else:
             def sample(dist, max_samples):
                 return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
@@ -131,7 +131,7 @@ class JointChirpmassMR:
     def sample_setup(self):
         if self.order_flipped:
             def sample(dist, max_samples):
-                return tf.squeeze(tf.flip(tf.transpose(dist.sample(), [1, 0, 2]), axis=0), 2)
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[::-1], 2)
         else:
             def sample(dist, max_samples):
                 return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)

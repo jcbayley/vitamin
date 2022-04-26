@@ -514,8 +514,8 @@ class DataLoader(tf.keras.utils.Sequence):
             elif par_min=='phase_min':
                 x_data[:,i] = x_data[:,i]*np.pi
             elif par_min == "ra_min":
-                ramin = convert_ra_to_hour_angle(self.config["bounds"][par_min], self.config, self.config["model"]['inf_pars_list'])
-                ramax = convert_ra_to_hour_angle(self.config["bounds"][par_max], self.config, self.config["model"]['inf_pars_list'])
+                ramin = convert_ra_to_hour_angle(float(self.config["bounds"][par_min]), self.config, self.config["model"]['inf_pars_list'])
+                ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
                 x_data[:,i] = x_data[:,i]*(ramax - ramin) + ramax
 
             #elif k in "mass_1":
@@ -650,13 +650,14 @@ class DataLoader(tf.keras.utils.Sequence):
             else:
                 self.sampler_outputs[sampler] = []
 
+        self.samples_available = []
         got_samples = False
         save_dir = os.path.join(self.config["data"]["data_directory"], "test")
         for sampler in self.config["testing"]['samplers']:
             if sampler == "vitamin":
                 continue
             sampler_dir = os.path.join(save_dir, "{}".format(sampler))
-            XS = []
+            XS = np.zeros((self.config["data"]["n_test_data"], self.config["testing"]["n_samples"], len(self.config["testing"]['bilby_pars'])))
             for idx in range(self.config["data"]["n_test_data"]):
                 #filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
                 filename = os.path.join(sampler_dir, "{}_{}.h5py".format("test_outputs",idx))
@@ -666,6 +667,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 if os.path.isfile(filename) == False:
                     print("no output file for example: {} and sampler: {}".format(idx, sampler))
                     continue
+                self.samples_available.append(idx)
                 got_samples = True
                 data_temp = {}
 
@@ -702,7 +704,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 rand_idx_posterior = np.linspace(0,Nsamp-1,num=self.config["testing"]['n_samples'],dtype=np.int)
                 np.random.shuffle(rand_idx_posterior)
 
-                XS.append(XS_temp[rand_idx_posterior, :])
+                XS[idx] = XS_temp[rand_idx_posterior, :]
                     
             if got_samples:
                 # Append test sample posteriors to existing array of other test sample posteriors                

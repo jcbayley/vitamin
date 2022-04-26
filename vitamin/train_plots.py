@@ -274,11 +274,11 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                       fill_contours=False, truths=true_params,
                       show_titles=True, fig=figure, hist_kwargs=hist_kwargs)
         if epoch == 'pub_plot':
-            print('Saved output to', os.path.join(directories["comparison_posterior"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
-            plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
+            print('Saved output to', os.path.join(directories["comparison_posteriors"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
+            plt.savefig(os.path.join(directories["comparison_posteriors"],'comp_posterior_{}_event_{}.png'.format(epoch,idx)))
         else:
-            print('Saved output to ', os.path.join(directories["comparison_posterior"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
-            plt.savefig(os.path.join(directories["comparison_posterior"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
+            print('Saved output to ', os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
+            plt.savefig(os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
         return JS_est
 

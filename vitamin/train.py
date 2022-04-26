@@ -83,6 +83,7 @@ def train(config):
 
     if config["training"]["test_interval"] != False:
         test_dataset = DataLoader(test_directory,config=config, test_set = True)
+        test_dataset.load_next_chunk()
         test_dataset.load_bilby_samples()
 
         # load precomputed samples

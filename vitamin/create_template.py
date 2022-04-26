@@ -36,6 +36,10 @@ class GenerateTemplate():
     #    self.prior = bilby.gw.prior.BBHPriorDict(self.config["data"]["prior_file"])
  
     def get_injection_parameters(self):
+        """
+        Get the injection parameters from the prior distribution
+        Also get the parameters for inference to save
+        """
         self.injection_parameters = self.config["priors"].sample()
         self.injection_parameters, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
 
@@ -50,14 +54,14 @@ class GenerateTemplate():
             self.injection_parameters_list.append(self.injection_parameters[key])
 
     def clear_attributes(self):
-        """ Remove attributes to regenerate
+        """ Remove attributes to regenerate data
         """
         for key in ["injection_parameters","injection_parameters_list", "waveform_polarisations", "whitened_signals_td", "ifos", "waveform_generator", "snrs"]:
             if hasattr(self, key):
                 delattr(self, key)
 
     def generate_polarisations(self):
-        """ Generates a whitened waveforms in Gaussian noise.
+        """ Generates the polarisations of signal to be combined later.
         """
 
         if self.config["data"]["sampling_frequency"]>4096:
@@ -90,10 +94,13 @@ class GenerateTemplate():
         #time_signal = self.waveform_generator.time_domain_strain()
         
     def get_detector_response(self, frequency_domain_strain = None):
-
+        """
+        Gets the whitened signal from polarisations
+        """
+        # initialise the interferometers
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
         
-        # If user is specifying PSD files
+        # If user is specifying PSD file (bit of a messy section, will update)
         num_psd_files = len(self.config["data"]["psd_files"])
         if num_psd_files == 0:
             pass
@@ -118,6 +125,7 @@ class GenerateTemplate():
                     print('Could not determine whether psd or asd ...')
                     exit()
 
+        # if strain privided set the strain from this
         if frequency_domain_strain is not None:
             for int_idx,ifo in enumerate(ifos):
                 ifo.set_strain_data_from_frequency_domain_strain(frequency_domain_strain[int_idx],
@@ -189,7 +197,10 @@ class GenerateTemplate():
 
 
     def run_pe(self, sampler = "dynesty", start_ind = 0):
-
+        """
+        Run traditional PE on the saved waveform
+        Current options are dynesty and nessai
+        """
         label = "bilby_out_{}".format(start_ind)
         try:
             bilby.core.utils.setup_logger(outdir=self.save_dir, label=label)
@@ -197,7 +208,7 @@ class GenerateTemplate():
             print(e)
             pass
 
-        
+        # initialise likelihood
         phase_marginalization=True
         likelihood = bilby.gw.GravitationalWaveTransient(
             interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,priors=self.config["priors"])
@@ -237,10 +248,12 @@ class GenerateTemplate():
             self.nessai_runtime = run_endt - run_startt
 
         else:
-            print("Currently only comparing to dynesty")
+            print("Currently only comparing to dynesty or nessai please choose one of these")
 
     def get_real_noise(self,):
-
+        """
+        Get a segment of real noise
+        """
         # compute the number of time domain samples
         Nt = int(self.config["data"]["sample_rate"]*self.config["data"]["duration"])
 
