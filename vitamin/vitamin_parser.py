@@ -8,7 +8,7 @@ from . import templates
 import bilby
 import os 
 from pathlib import Path
-from .initialise import group_outputs
+from .group_inference_parameters import group_outputs
 import regex
 
 class InputParser():

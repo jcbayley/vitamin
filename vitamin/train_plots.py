@@ -141,7 +141,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
 
     # make save directories
     directories = {}
-    for dname in ["comparison_posterior", "full_posterior","JS_divergence","samples"]:
+    for dname in ["comparison_posteriors", "full_posteriors","JS_divergence","samples"]:
         directories[dname] = os.path.join(config["output"]["output_directory"], dname)
         if not os.path.isdir(directories[dname]):
             os.makedirs(directories[dname])

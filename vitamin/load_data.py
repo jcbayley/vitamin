@@ -11,7 +11,7 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
-from .initialise import group_outputs
+from .group_inference_parameters import group_outputs
 
 class DataLoader(tf.keras.utils.Sequence):
 
@@ -480,7 +480,12 @@ class DataLoader(tf.keras.utils.Sequence):
                 #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
             elif par_min=='phase_min':
                 x_data[:,i] = x_data[:,i]/np.pi
-            
+      
+            elif par_min == "ra_min":
+                ramin = convert_ra_to_hour_angle(float(self.config["bounds"][par_min]), self.config, self.config["model"]['inf_pars_list'])
+                ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
+                x_data[:,i] = (x_data[:,i] - ramin) / (ramax - ramin)
+
             #elif k in "mass_1":
                 #chirm mass
             #    x_data[:, i] = (x_data[:, i] - min_chirp)/(max_chirp - min_chirp)
@@ -489,7 +494,7 @@ class DataLoader(tf.keras.utils.Sequence):
             #    x_data[:, i] = (x_data[:, i] - 0.125)/(1 - 0.125)
             else:
                 x_data[:,i] = (x_data[:,i] - self.config["bounds"][par_min]) / (self.config["bounds"][par_max] - self.config["bounds"][par_min])
-        
+
         return x_data
 
     def unconvert_parameters(self, x_data):
@@ -508,6 +513,10 @@ class DataLoader(tf.keras.utils.Sequence):
                 #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
             elif par_min=='phase_min':
                 x_data[:,i] = x_data[:,i]*np.pi
+            elif par_min == "ra_min":
+                ramin = convert_ra_to_hour_angle(self.config["bounds"][par_min], self.config, self.config["model"]['inf_pars_list'])
+                ramax = convert_ra_to_hour_angle(self.config["bounds"][par_max], self.config, self.config["model"]['inf_pars_list'])
+                x_data[:,i] = x_data[:,i]*(ramax - ramin) + ramax
 
             #elif k in "mass_1":
             #    x_data[:,i] = x_data[:, i]*(max_chirp - min_chirp) + min_chirp
@@ -759,9 +768,12 @@ def convert_ra_to_hour_angle(data, config, pars, single=False):
     except NameError:
         print('...... RA is fixed. Not converting RA to hour angle.')
     else:
-        # Iterate over all training samples and convert to hour angle
-        for i in range(data.shape[0]):
-            data[i,ra_idx] = t - data[i,ra_idx]
+        if type(data) == float:
+            data = t - data
+        else:
+            # Iterate over all training samples and convert to hour angle
+            for i in range(data.shape[0]):
+                data[i,ra_idx] = t - data[i,ra_idx]
 
     return data
 

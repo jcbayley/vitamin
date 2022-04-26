@@ -20,6 +20,7 @@ import sys
 from . import generate_data, create_template
 from . import model
 from . import make_condor_files
+from . import initialise_directory
 from . import callbacks
 from . import load_data
 from . import plotting
@@ -40,7 +41,7 @@ from .model import CVAE
 
 #from . import run_vitamin
 
-__version__ = "0.2.10"
+__version__ = "0.3.0"
 __author__ = 'Joseph Bayley, Hunter Gabbard'
 __credits__ = 'University of Glasgow'
 

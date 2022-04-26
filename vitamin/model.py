@@ -7,7 +7,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 import sys
-from .initialise import group_outputs
+from .group_inference_parameters import group_outputs
 
 class CVAE(tf.keras.Model):
     """Convolutional variational autoencoder."""

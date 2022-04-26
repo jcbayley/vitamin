@@ -81,7 +81,7 @@ def train(config):
         train_dataset.load_next_chunk()
         validation_dataset.load_next_chunk()
 
-    if config["training"]["test_interval"] is not None:
+    if config["training"]["test_interval"] != False:
         test_dataset = DataLoader(test_directory,config=config, test_set = True)
         test_dataset.load_bilby_samples()
 
@@ -121,7 +121,7 @@ def train(config):
         exit()
 
     # compile and build the model (hardcoded values will change soon)
-    model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
+    model.compile(run_eagerly = None, optimizer = optimizer, loss = model.compute_loss)
 
     #model([test_data, test_pars])
     #model.build([(None, 1024,2), (None, 15)])
@@ -146,8 +146,8 @@ def train(config):
 
     callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), checkpoint]
 
-    if config["training"]["test_interval"] is not None:
-        callbacks.append(TestCallback(config, test_dataset, bilby_samples, test_epoch = config["training"]["test_interval"]))
+    if config["training"]["test_interval"] != False:
+        callbacks.append(TestCallback(config, test_dataset, bilby_samples))
         
     if config["training"]["tensorboard_log"]:
         logdir = os.path.join(config["output"]["output_directory"], "profile")
