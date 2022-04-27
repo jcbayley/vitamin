@@ -181,7 +181,7 @@ setup(
                       'webencodings',
                       'Werkzeug',
                       'wrapt',
-                      ],
+                      'natsort'],
 
     classifiers=[
         'Development Status :: 1 - Planning',
