@@ -182,7 +182,8 @@ setup(
                       'Werkzeug',
                       'wrapt',
                       'natsort',
-                      'regex'],
+                      'regex',
+                      'tensorflow_addons'],
 
     classifiers=[
         'Development Status :: 1 - Planning',
