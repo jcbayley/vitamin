@@ -12,20 +12,9 @@ stages:
     - python -c "import vitamin"
 
 
-# test basic setup on python3
-basic-3.7:
-#  <<: *test-python
-  image: python:3.7
-  script:
-    - pip install -r requirements.txt
-    - python setup.py install
-
-
 pages:
   stage: build
   image: python
-  dependencies:
-    - python-3.7
   script:
   - pip install sphinx sphinx-bootstrap-theme sphinx_rtd_theme nbsphinx 
   - pip install -r requirements.txt
