@@ -1,5 +1,5 @@
 import argparse
-from .vitamin_parser import InputParser
+from ..vitamin_parser import InputParser
 import os
 import random
 import stat
@@ -83,13 +83,10 @@ def make_train_dag(config, run_type = "training"):
     dag_filename = "{}/{}.dag".format(p["condor_dir"],comment)
 
     with open(dag_filename,'w') as f:
-        seeds = []
-        for i in range(num_jobs):
-            seeds.append(random.randint(1,1e9))
         for i in range(num_jobs):
             for j in range(len(samplers)):
                 comment = "File_{}".format(i)
-                uid = seeds[i]
+                uid = random.randint(1,1e9)
                 jobid = "{}_{}_{}".format(comment,i,uid)
                 job_string = "JOB {} {}\n".format(jobid,run_sub_filename)
                 retry_string = "RETRY {} 1\n".format(jobid)
@@ -106,7 +103,7 @@ def make_train_dag(config, run_type = "training"):
 def make_executable(p):
     with open(p["exec"], "w")as f:
         f.write("#!/usr/bin/bash\n")
-        args = "python -m vitamin.generate_data --start-ind ${{1}} --num-files {} --run-type {} --ini-file {}".format( p["files_per_job"], p["run_type"],p["config_file"])
+        args = "python -m vitamin.gw.generate_data --start-ind ${{1}} --num-files {} --run-type {} --ini-file {}".format( p["files_per_job"], p["run_type"],p["config_file"])
         if p["run_type"] == "test":
             args += " --sampler ${2}"
         f.write(args + "\n")

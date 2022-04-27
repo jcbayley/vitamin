@@ -11,7 +11,7 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
-from .group_inference_parameters import group_outputs
+from ..group_inference_parameters import group_outputs
 
 class DataLoader(tf.keras.utils.Sequence):
 
@@ -78,8 +78,8 @@ class DataLoader(tf.keras.utils.Sequence):
 
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
-            #self.chunk_size = len(self.X)
-            #self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
+            self.chunk_size = len(self.X)
+            self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
             end_load = time.time()
             print("load_time chunk {}: {}".format(self.chunk_iter, end_load - start_load))
 
@@ -512,15 +512,7 @@ class DataLoader(tf.keras.utils.Sequence):
             #    x_data[:,i] = x_data[:, i]*(1 - 0.125) + 0.125
             
             else:
-                #if par_min == "geocent_time_min":
-                #    print("dat", x_data[:,i])
                 x_data[:,i] = x_data[:,i]*(float(self.config["bounds"][par_max]) - float(self.config["bounds"][par_min])) + float(self.config["bounds"][par_min])
-                #if par_min == "geocent_time_min":
-                #    print("dat", x_data[:,i])
-                #    print("parmin",self.config["bounds"][par_min])
-                #    print("parmax",self.config["bounds"][par_max])
-                #    print("pardiff",self.config["bounds"][par_max]-self.config["bounds"][par_min])
-                #    print("add",np.array(self.config["bounds"][par_min] + 0.18).astype(np.float32))
 
 
 
@@ -636,13 +628,14 @@ class DataLoader(tf.keras.utils.Sequence):
             else:
                 self.sampler_outputs[sampler] = []
 
-        self.samples_available = []
+        self.samples_available = {}
         got_samples = False
         save_dir = os.path.join(self.config["data"]["data_directory"], "test")
         for sampler in self.config["testing"]['samplers']:
             if sampler == "vitamin":
                 continue
             sampler_dir = os.path.join(save_dir, "{}".format(sampler))
+            samp_available_temp = []
             XS = np.zeros((self.config["data"]["n_test_data"], self.config["testing"]["n_samples"], len(self.config["testing"]['bilby_pars'])))
             for idx in range(self.config["data"]["n_test_data"]):
                 #filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
@@ -653,7 +646,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 if os.path.isfile(filename) == False:
                     print("no output file for example: {} and sampler: {}".format(idx, sampler))
                     continue
-                self.samples_available.append(idx)
+                samp_available_temp.append(idx)
                 got_samples = True
                 data_temp = {}
 
@@ -691,7 +684,8 @@ class DataLoader(tf.keras.utils.Sequence):
                 np.random.shuffle(rand_idx_posterior)
 
                 XS[idx] = XS_temp[rand_idx_posterior, :]
-                    
+                self.samples_available[sampler] = samp_available_temp
+
             if got_samples:
                 # Append test sample posteriors to existing array of other test sample posteriors                
                 self.sampler_outputs[sampler] = np.array(XS)

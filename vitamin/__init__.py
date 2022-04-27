@@ -17,15 +17,12 @@ For installation instructions see
 from __future__ import absolute_import
 import sys
 
-from . import generate_data, create_template
 from . import model
-from . import make_condor_files
+from . import gw
 from . import initialise_directory
 from . import callbacks
-from . import load_data
 from . import plotting
 from . import templates
-from . import train
 
 # Check for optional basemap installation
 try:

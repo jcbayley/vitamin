@@ -189,6 +189,8 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     if all_other_samples is not None:
         JS_est = []
         for i, other_samples in enumerate(all_other_samples):
+            if np.all(other_samples) == 0:
+                continue
             sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["bilby_ol_len"]])
             true_params = np.zeros(config["masks"]["inf_ol_len"])
             vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_ol_len"]])

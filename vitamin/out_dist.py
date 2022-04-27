@@ -26,11 +26,11 @@ class JointM1M2:
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean1, tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvar1)), tf.float32),
+                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar1)), tf.float32),
                 low=0, high=1),
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean2, tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvar2)), tf.float32),
+                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar2)), tf.float32),
                 low=0, high=b0),
         ])
         return joint
@@ -54,8 +54,10 @@ class JointM1M2:
 
     def sample_setup(self):
         if self.order_flipped:
+            # reverse the order of the two parmaeters when sampling
             def sample(dist, max_samples):
-                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[::-1], 2)
+                # transpose amd squeeze to get [samples, parameters]
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[:,::-1], 2)
         else:
             def sample(dist, max_samples):
                 return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
@@ -82,12 +84,15 @@ class JointChirpmassMR:
         self.sample = self.sample_setup()
 
     def Mconstrainm1(self, q_norm, m):
+        """Contraint for the chirp mass based on maxmium mass of m1
+        """
         q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
         num = (q*m*m)**(3./5.)
         den = (m*(1 + q))**(1./5.)
         return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
 
     def Mconstrainm2(self, q_norm, m):
+        """Contraint for the chirp mass based on minimum mass of m2"""
         q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
         num = ((1/q)*m*m)**(3./5.)
         den = (m*(1 + 1/q))**(1./5.)
@@ -101,17 +106,18 @@ class JointChirpmassMR:
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_q,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
+                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
                 low=0, high=1),
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_cm,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
+                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
                 low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
                 high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
         ])
         return joint
 
     def get_networks(self,):
+        # setup network for joint sitribution
         mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True)
         logvar = tf.keras.layers.Dense(2,use_bias=True)
         return mean, logvar
@@ -119,6 +125,7 @@ class JointChirpmassMR:
     def cost_setup(self):
         if self.order_flipped:
             def get_cost(dist, x):
+                # reverse order of true parmaeters to estimate logprob
                 x2, x1 = tf.split(x, num_or_size_splits=2, axis=1)
                 return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
         else:
@@ -130,8 +137,10 @@ class JointChirpmassMR:
 
     def sample_setup(self):
         if self.order_flipped:
+            # reverse order of samples based on inputs
             def sample(dist, max_samples):
-                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[::-1], 2)
+                # transpose amd squeeze to get [samples, parameters]
+                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[:,::-1], 2)
         else:
             def sample(dist, max_samples):
                 return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)

@@ -1,6 +1,6 @@
 from .create_template import GenerateTemplate
 import argparse
-from .vitamin_parser import InputParser
+from ..vitamin_parser import InputParser
 import os
 import h5py
 import numpy as np

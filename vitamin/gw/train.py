@@ -1,33 +1,30 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import time
-from lal import GreenwichMeanSiderealTime
-from astropy.time import Time
-from astropy import coordinates as coord
-import corner
 import os
 import shutil
 import h5py
 import json
 import sys
 from sys import exit
+import time
+import argparse
+from ..vitamin_parser import InputParser
+import matplotlib.pyplot as plt
+import numpy as np
+from lal import GreenwichMeanSiderealTime
+from astropy.time import Time
+from astropy import coordinates as coord
+import corner
 from universal_divergence import estimate
 import natsort
-#import plotting
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
-#import wandb
-#from wandb.keras import WandbCallback
-import argparse
 #from keras_adamw import AdamW
-from .vitamin_parser import InputParser
 import tensorflow as tf
 import tensorflow_addons as tfa
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 from tensorflow.keras import regularizers
-from .model import CVAE
-from .callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
+from ..model import CVAE
+from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
 from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
 
 def train(config):
@@ -36,13 +33,13 @@ def train(config):
     run = time.strftime('%y-%m-%d-%X-%Z')
 
     # define which gpu to use during training
-    #gpu_num = str(vitamin_config["training"]['gpu_num'])   
-    #os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
-
     try:
+        #gpu_num = str(vitamin_config["training"]['gpu_num'])   
+        #os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
         print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
     except:
         print("No CUDA devices")
+
         
     # Let GPU consumption grow as needed
     config_gpu = tf.compat.v1.ConfigProto()

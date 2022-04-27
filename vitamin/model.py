@@ -151,8 +151,9 @@ class CVAE(tf.keras.Model):
                 #"gauss_loss":self.gauss_loss_metric.result(),
                 #"vm_loss":self.vm_loss_metric.result()}
 
-        return r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost
+        #return r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost
 
+    #@tf.function
     def test_step(self, data):
         """Executes one test step and returns the loss.                                                        
         This function computes the loss and gradients (used for validation data)
