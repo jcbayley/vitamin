@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.make_params_files &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.make_params_files</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.make_params_files</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Script used to generate run parameters json files</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">json</span>
+
+<span class="c1"># Source parameter values to use if chosen to be fixed</span>
+<span class="n">fixed_vals</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;mass_1&#39;</span><span class="p">:</span><span class="mf">50.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__mass_1&#39;</span><span class="p">:</span><span class="s1">&#39;m1 fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;mass_2&#39;</span><span class="p">:</span><span class="mf">50.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__mass_2&#39;</span><span class="p">:</span><span class="s1">&#39;m2 fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;mc&#39;</span><span class="p">:</span><span class="kc">None</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__mc&#39;</span><span class="p">:</span> <span class="s1">&#39;chirp mass fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;geocent_time&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__geocent_time&#39;</span><span class="p">:</span> <span class="s1">&#39;time of coalescence fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phase&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__phase&#39;</span><span class="p">:</span> <span class="s1">&#39;phase fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ra&#39;</span><span class="p">:</span><span class="mf">1.375</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__ra&#39;</span><span class="p">:</span> <span class="s1">&#39;right ascension fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;dec&#39;</span><span class="p">:</span><span class="o">-</span><span class="mf">1.2108</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__dec&#39;</span><span class="p">:</span> <span class="s1">&#39;declination fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;psi&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__psi&#39;</span><span class="p">:</span> <span class="s1">&#39;psi fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;theta_jn&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__theta_jn&#39;</span><span class="p">:</span> <span class="s1">&#39;inclination angle fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;luminosity_distance&#39;</span><span class="p">:</span><span class="mf">2000.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__luminosity_distance&#39;</span><span class="p">:</span> <span class="s1">&#39;luminosity distance fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;a_1&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__a1&#39;</span><span class="p">:</span> <span class="s1">&#39;a1 fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;a_2&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__a2&#39;</span><span class="p">:</span> <span class="s1">&#39;a2 fixed value&#39;</span><span class="p">,</span>
+	    <span class="s1">&#39;tilt_1&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__tilt1&#39;</span><span class="p">:</span> <span class="s1">&#39;tilt_1 fixed value&#39;</span><span class="p">,</span>
+	    <span class="s1">&#39;tilt_2&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__tilt_2&#39;</span><span class="p">:</span> <span class="s1">&#39;tilt_2 fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phi_12&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__phi_12&#39;</span><span class="p">:</span> <span class="s1">&#39;phi_12 fixed value&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phi_jl&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__phi_jl&#39;</span><span class="p">:</span> <span class="s1">&#39;phi_jl fixed value&#39;</span><span class="p">}</span>                                                
+
+
+<span class="c1"># arbitrary value for normalization of timeseries (Don&#39;t change this)</span>
+<span class="n">y_normscale</span> <span class="o">=</span> <span class="mi">16</span><span class="c1">#16.638832624721797</span>
+
+<span class="c1">##########################</span>
+<span class="c1"># Main tunable variables</span>
+<span class="c1">##########################</span>
+<span class="n">sampling_rate</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">duration</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">ndata</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sampling_rate</span><span class="o">*</span><span class="n">duration</span><span class="p">)</span>
+<span class="n">save_polarisations</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">det</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;H1&#39;</span><span class="p">,</span><span class="s1">&#39;L1&#39;</span><span class="p">]</span>                                                            
+<span class="c1">#psd_files=[&#39;cuda_11_env/lib/python3.6/site-packages/bilby/gw/detector/noise_curves/aLIGO_O4_high_asd.txt&#39;] </span>
+<span class="n">psd_files</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;/home/joseph.bayley/projects/o4_online_pe_mdc/data/asd_files/aLIGO_O4_high_asd.txt&quot;</span><span class="p">]</span>
+<span class="n">rand_pars</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;mass_1&#39;</span><span class="p">,</span><span class="s1">&#39;mass_2&#39;</span><span class="p">,</span><span class="s1">&#39;luminosity_distance&#39;</span><span class="p">,</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span><span class="s1">&#39;phase&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;theta_jn&#39;</span><span class="p">,</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span><span class="s1">&#39;a_1&#39;</span><span class="p">,</span><span class="s1">&#39;a_2&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_1&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_2&#39;</span><span class="p">,</span><span class="s1">&#39;phi_12&#39;</span><span class="p">,</span><span class="s1">&#39;phi_jl&#39;</span><span class="p">,</span><span class="s1">&#39;ra&#39;</span><span class="p">,</span><span class="s1">&#39;dec&#39;</span><span class="p">]</span>                                   
+<span class="n">bilby_pars</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;mass_1&#39;</span><span class="p">,</span><span class="s1">&#39;mass_2&#39;</span><span class="p">,</span><span class="s1">&#39;luminosity_distance&#39;</span><span class="p">,</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span><span class="s1">&#39;theta_jn&#39;</span><span class="p">,</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span><span class="s1">&#39;a_1&#39;</span><span class="p">,</span><span class="s1">&#39;a_2&#39;</span><span class="p">,</span>
+          <span class="s1">&#39;tilt_1&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_2&#39;</span><span class="p">,</span><span class="s1">&#39;phi_12&#39;</span><span class="p">,</span><span class="s1">&#39;phi_jl&#39;</span><span class="p">,</span><span class="s1">&#39;ra&#39;</span><span class="p">,</span><span class="s1">&#39;dec&#39;</span><span class="p">]</span>
+<span class="n">inf_pars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;mass_1&#39;</span><span class="p">,</span><span class="s1">&#39;mass_2&#39;</span><span class="p">,</span><span class="s1">&#39;luminosity_distance&#39;</span><span class="p">,</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span><span class="s1">&#39;phase&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;theta_jn&#39;</span><span class="p">,</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span><span class="s1">&#39;a_1&#39;</span><span class="p">,</span><span class="s1">&#39;a_2&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_1&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_2&#39;</span><span class="p">,</span><span class="s1">&#39;phi_12&#39;</span><span class="p">,</span><span class="s1">&#39;phi_jl&#39;</span><span class="p">,</span><span class="s1">&#39;ra&#39;</span><span class="p">,</span><span class="s1">&#39;dec&#39;</span><span class="p">]</span>
+<span class="c1">#rand_pars = [&quot;mass_1&quot;,&quot;mass_2&quot;,&quot;luminosity_distance&quot;,&quot;geocent_time&quot;,&quot;phase&quot;,&quot;theta_jn&quot;,&quot;psi&quot;,&quot;ra&quot;,&quot;dec&quot;,&quot;a_1&quot;,&quot;a_2&quot;,&quot;tilt_1&quot;,&quot;tilt_2&quot;,&quot;phi_12&quot;,&quot;phi_jl&quot;]</span>
+<span class="c1">#bilby_pars = [&quot;mass_1&quot;,&quot;mass_2&quot;,&quot;luminosity_distance&quot;,&quot;geocent_time&quot;,&quot;theta_jn&quot;,&quot;psi&quot;,&quot;ra&quot;,&quot;dec&quot;,&quot;a_1&quot;,&quot;a_2&quot;,&quot;tilt_1&quot;,&quot;tilt_2&quot;,&quot;phi_12&quot;,&quot;phi_jl&quot;]</span>
+<span class="c1">#inf_pars = [&quot;mass_1&quot;,&quot;mass_2&quot;,&quot;luminosity_distance&quot;,&quot;geocent_time&quot;,&quot;phase&quot;,&quot;theta_jn&quot;,&quot;psi&quot;,&quot;ra&quot;,&quot;dec&quot;,&quot;a_1&quot;,&quot;a_2&quot;,&quot;tilt_1&quot;,&quot;tilt_2&quot;,&quot;phi_12&quot;,&quot;phi_jl&quot;]</span>
+<span class="n">batch_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">512</span><span class="p">)</span>                                                                 
+<span class="n">weight_init</span> <span class="o">=</span> <span class="s1">&#39;xavier&#39;</span>                                                            
+<span class="n">n_modes</span><span class="o">=</span><span class="mi">32</span><span class="p">;</span> <span class="n">n_modes_q</span><span class="o">=</span><span class="mi">1</span>                                                                      
+<span class="n">initial_training_rate</span><span class="o">=</span><span class="mf">1e-4</span>                                                     
+<span class="n">batch_norm</span><span class="o">=</span><span class="kc">False</span>                                                                
+
+<span class="c1"># FYI, each item in lists below correspond to each layer in networks (i.e. first item first layer)</span>
+<span class="c1"># pool size and pool stride should be same number in each layer</span>
+<span class="n">n_filters_r1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">]</span>                                                        
+<span class="n">n_filters_r2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">]</span>                                                        
+<span class="n">n_filters_q</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">32</span><span class="p">]</span>                                                         
+<span class="n">filter_size_r1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span>                                                         
+<span class="n">filter_size_r2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span>                                                        
+<span class="n">filter_size_q</span> <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span>                                                          
+<span class="n">drate</span> <span class="o">=</span> <span class="mf">0.0</span>                                                                    
+<span class="n">maxpool_r1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>                                                             
+<span class="n">conv_strides_r1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                        
+<span class="n">pool_strides_r1</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">conv_dilations_r1</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                        
+<span class="n">maxpool_r2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>                                                             
+<span class="n">conv_strides_r2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                        
+<span class="n">pool_strides_r2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">conv_dilations_r2</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                        
+<span class="n">maxpool_q</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>                                                              
+<span class="n">conv_strides_q</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                         
+<span class="n">pool_strides_q</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span> 
+<span class="n">conv_dilations_q</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>                                                        
+<span class="n">n_fc</span> <span class="o">=</span> <span class="mi">1024</span>                                                                      
+<span class="n">z_dimension</span><span class="o">=</span><span class="mi">15</span>                                                                  
+<span class="n">n_weights_r1</span> <span class="o">=</span> <span class="p">[</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">]</span>                                                     
+<span class="n">n_weights_r2</span> <span class="o">=</span> <span class="p">[</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">]</span>                                                     
+<span class="n">n_weights_q</span> <span class="o">=</span> <span class="p">[</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">,</span><span class="n">n_fc</span><span class="p">]</span>                                                      
+<span class="c1">##########################</span>
+<span class="c1"># Main tunable variables</span>
+<span class="c1">##########################</span>
+
+<span class="c1">#############################</span>
+<span class="c1"># optional tunable variables</span>
+<span class="c1">#############################</span>
+<span class="n">run_label</span> <span class="o">=</span> <span class="s1">&#39;vitamin_c_run4_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sampling_rate</span><span class="p">,</span> <span class="n">duration</span><span class="p">)</span><span class="c1">#&#39;demo_%ddet_%dpar_%dHz_hour_angle_with_late_kl_start&#39; % (len(det),len(rand_pars),ndata) </span>
+<span class="n">gpu_num</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">append_string</span> <span class="o">=</span> <span class="s2">&quot;full_param&quot;</span>
+<span class="c1"># 1024 Hz label</span>
+<span class="c1">#bilby_results_label = &#39;weichangfeng_theta_jn_issue&#39;                                             </span>
+<span class="c1"># 256 Hz label</span>
+<span class="n">bilby_results_label</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_full_15par_</span><span class="si">{}</span><span class="s1">det_</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">det</span><span class="p">),</span> <span class="n">append_string</span><span class="p">)</span>
+
+<span class="n">r</span> <span class="o">=</span> <span class="mi">10</span> <span class="c1"># 251                                                         </span>
+<span class="n">pe_test_num</span> <span class="o">=</span> <span class="mi">10</span>                                                               
+<span class="n">tot_dataset_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e7</span><span class="p">)</span>    
+
+<span class="n">tset_split</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e3</span><span class="p">)</span>                                                           
+<span class="n">save_interval</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+<span class="n">plot_interval</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>                                                        
+<span class="n">num_iterations</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mi">25000</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span> <span class="c1"># 12500 for Green et al.                                                       </span>
+<span class="n">ref_geocent_time</span><span class="o">=</span><span class="mi">1325029268</span> <span class="c1">#1126259642.5                                                   </span>
+<span class="n">load_chunk_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">2e4</span><span class="p">)</span>                                                           
+<span class="n">samplers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;vitamin&#39;</span><span class="p">,</span><span class="s1">&#39;dynesty&#39;</span><span class="p">]</span>                                                  
+<span class="n">val_dataset_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e3</span><span class="p">)</span>
+
+<span class="c1"># Directory variables</span>
+<span class="n">plot_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/public_html/CBC/vitamin_O4/BBH_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_</span><span class="si">{}</span><span class="s1">/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sampling_rate</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">run_label</span><span class="p">,</span> <span class="n">append_string</span><span class="p">)</span>  
+
+<span class="c1"># Training/testing for 1024 Hz full par case</span>
+<span class="c1">#train_set_dir=&#39;/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/training_sets_3det_15par_1024Hz/tset_tot-10000000_split-1000_O4PSDH1L1_AdvVirgoPSD&#39;</span>
+<span class="c1">#val_set_dir=&#39;./validation_sets_3det_15par_1024Hz/tset_tot-1000_split-1000&#39;</span>
+<span class="c1">#test_set_dir = &#39;/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/test_sets/1024_khz_spins_included_15par/test_waveforms&#39;</span>
+<span class="c1">#pe_dir=&#39;/home/hunter.gabbard/CBC/public_VItamin/provided_models/vitamin_b/vitamin_b/test_sets/1024_khz_spins_included_15par/test&#39;</span>
+
+<span class="n">numdet</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">det</span><span class="p">)</span>
+<span class="n">real_noise</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="c1"># default training/testing directories</span>
+<span class="k">if</span> <span class="n">real_noise</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">save_polarisations</span><span class="p">:</span>
+        <span class="n">train_set_dir</span> <span class="o">=</span> <span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/training_polarisations_realnoise_</span><span class="si">{}</span><span class="s1">det_</span><span class="si">{}</span><span class="s1">par_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_</span><span class="si">{}</span><span class="s1">/tset_tot-</span><span class="si">{}</span><span class="s1">_split-</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">append_string</span><span class="p">,</span><span class="n">tot_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">train_set_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/training_sets_realnoise_</span><span class="si">%d</span><span class="s1">det_</span><span class="si">%d</span><span class="s1">par_</span><span class="si">%d</span><span class="s1">Hz_</span><span class="si">%d</span><span class="s1">s_fullparam/tset_tot-</span><span class="si">%d</span><span class="s1">_split-</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">tot_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span>
+    <span class="n">noise_set_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/training_noise_realnoise_</span><span class="si">%d</span><span class="s1">det_</span><span class="si">%d</span><span class="s1">Hz_</span><span class="si">%d</span><span class="s1">s/tset_tot-</span><span class="si">%d</span><span class="s1">_split-</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">tot_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span>
+    <span class="n">val_set_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/validation_sets_realnoise_</span><span class="si">{}</span><span class="s1">det_</span><span class="si">{}</span><span class="s1">par_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_</span><span class="si">{}</span><span class="s1">/tset_tot-</span><span class="si">{}</span><span class="s1">_split-</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">append_string</span><span class="p">,</span><span class="n">val_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span> 
+    <span class="n">test_set_dir</span> <span class="o">=</span> <span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/</span><span class="si">%s</span><span class="s1">/test_waveforms&#39;</span> <span class="o">%</span> <span class="n">bilby_results_label</span>
+    <span class="n">pe_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/test_sets_realnoise/</span><span class="si">%s</span><span class="s1">/test&#39;</span> <span class="o">%</span> <span class="n">bilby_results_label</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">save_polarisations</span><span class="p">:</span>
+        <span class="n">train_set_dir</span> <span class="o">=</span> <span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/training_polarisations_gaussnoise_</span><span class="si">{}</span><span class="s1">det_</span><span class="si">{}</span><span class="s1">par_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_</span><span class="si">{}</span><span class="s1">/tset_tot-</span><span class="si">{}</span><span class="s1">_split-</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">append_string</span><span class="p">,</span><span class="n">tot_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">train_set_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/training_sets_gaussnoise_</span><span class="si">%d</span><span class="s1">det_</span><span class="si">%d</span><span class="s1">par_</span><span class="si">%d</span><span class="s1">Hz_</span><span class="si">%d</span><span class="s1">s_fullparam/tset_tot-</span><span class="si">%d</span><span class="s1">_split-</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">tot_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span>
+    <span class="n">val_set_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/validation_sets_gaussnoise_</span><span class="si">{}</span><span class="s1">det_</span><span class="si">{}</span><span class="s1">par_</span><span class="si">{}</span><span class="s1">Hz_</span><span class="si">{}</span><span class="s1">s_</span><span class="si">{}</span><span class="s1">/tset_tot-</span><span class="si">{}</span><span class="s1">_split-</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">numdet</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">rand_pars</span><span class="p">),</span><span class="n">sampling_rate</span><span class="p">,</span><span class="n">duration</span><span class="p">,</span><span class="n">append_string</span><span class="p">,</span><span class="n">val_dataset_size</span><span class="p">,</span><span class="n">tset_split</span><span class="p">)</span> 
+    <span class="n">test_set_dir</span> <span class="o">=</span> <span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/</span><span class="si">%s</span><span class="s1">/test_waveforms&#39;</span> <span class="o">%</span> <span class="n">bilby_results_label</span>
+    <span class="n">pe_dir</span><span class="o">=</span><span class="s1">&#39;/home/joseph.bayley/data/CBC/O4/test_sets_gaussnoise/</span><span class="si">%s</span><span class="s1">/test&#39;</span> <span class="o">%</span> <span class="n">bilby_results_label</span>
+
+
+
+<span class="c1"># Prior bounds on source parameters, changed to match bilby default</span>
+<span class="n">bounds</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;mass_1_min&#39;</span><span class="p">:</span><span class="mf">10.0</span><span class="p">,</span> <span class="s1">&#39;mass_1_max&#39;</span><span class="p">:</span><span class="mf">100.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__mass_1&#39;</span><span class="p">:</span> <span class="s1">&#39;mass 1 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;mass_2_min&#39;</span><span class="p">:</span><span class="mf">10.0</span><span class="p">,</span> <span class="s1">&#39;mass_2_max&#39;</span><span class="p">:</span><span class="mf">100.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__mass_2&#39;</span><span class="p">:</span> <span class="s1">&#39;mass 2 constraints&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;chirpmass_min&#39;:10.0, &#39;chirpmass_max&#39;:100.0,</span>
+        <span class="c1">#&#39;__definition__chirpmass&#39;: &#39;chirp mass range&#39;,</span>
+        <span class="s1">&#39;massratio_min&#39;</span><span class="p">:</span><span class="mf">0.125</span><span class="p">,</span> <span class="s1">&#39;massratio_max&#39;</span><span class="p">:</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__massratio&#39;</span><span class="p">:</span> <span class="s1">&#39;mass ratio range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;M_min&#39;</span><span class="p">:</span><span class="mf">70.0</span><span class="p">,</span> <span class="s1">&#39;M_max&#39;</span><span class="p">:</span><span class="mf">160.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__M&#39;</span><span class="p">:</span> <span class="s1">&#39;total mass range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;geocent_time_min&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">duration</span><span class="o">/</span><span class="mf">2.</span> <span class="o">-</span> <span class="mf">0.35</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span><span class="s1">&#39;geocent_time_max&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">duration</span><span class="o">/</span><span class="mf">2.</span> <span class="o">-</span> <span class="mf">0.15</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="s1">&#39;__definition__geocent_time&#39;</span><span class="p">:</span> <span class="s1">&#39;time of coalescence range (s from center of data timespan)&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phase_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;phase_max&#39;</span><span class="p">:</span><span class="mf">2.0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__phase&#39;</span><span class="p">:</span> <span class="s1">&#39;phase range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ra_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;ra_max&#39;</span><span class="p">:</span><span class="mf">2.0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__ra&#39;</span><span class="p">:</span> <span class="s1">&#39;right ascension range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;dec_min&#39;</span><span class="p">:</span><span class="o">-</span><span class="mf">0.5</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="s1">&#39;dec_max&#39;</span><span class="p">:</span><span class="mf">0.5</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__dec&#39;</span><span class="p">:</span> <span class="s1">&#39;declination range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;psi_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;psi_max&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__psi&#39;</span><span class="p">:</span> <span class="s1">&#39;psi range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;theta_jn_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;theta_jn_max&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__theta_jn&#39;</span><span class="p">:</span> <span class="s1">&#39;inclination angle range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;a_1_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;a_1_max&#39;</span><span class="p">:</span><span class="mf">0.99</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__a_1&#39;</span><span class="p">:</span> <span class="s1">&#39;a1 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;a_2_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;a_2_max&#39;</span><span class="p">:</span><span class="mf">0.99</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__a_2&#39;</span><span class="p">:</span> <span class="s1">&#39;a2 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;tilt_1_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;tilt_1_max&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__tilt1&#39;</span><span class="p">:</span> <span class="s1">&#39;tilt1 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;tilt_2_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;tilt_2_max&#39;</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__tilt2&#39;</span><span class="p">:</span> <span class="s1">&#39;tilt2 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phi_12_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;phi_12_max&#39;</span><span class="p">:</span><span class="mf">2.0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__phi12&#39;</span><span class="p">:</span> <span class="s1">&#39;phi12 range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;phi_jl_min&#39;</span><span class="p">:</span><span class="mf">0.0</span><span class="p">,</span> <span class="s1">&#39;phi_jl_max&#39;</span><span class="p">:</span><span class="mf">2.0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="s1">&#39;__definition_phijl&#39;</span><span class="p">:</span> <span class="s1">&#39;phijl range&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;luminosity_distance_min&#39;</span><span class="p">:</span><span class="mf">100.0</span><span class="p">,</span> <span class="s1">&#39;luminosity_distance_max&#39;</span><span class="p">:</span><span class="mf">5000.0</span><span class="p">,</span>
+        <span class="s1">&#39;__definition__luminosity_distance&#39;</span><span class="p">:</span> <span class="s1">&#39;luminosity distance range&#39;</span><span class="p">}</span>
+
+
+
+
+
+<span class="c1">#############################</span>
+<span class="c1"># optional tunable variables</span>
+
+<span class="c1"># Function for getting list of parameters that need to be fed into the models</span>
+<div class="viewcode-block" id="get_params"><a class="viewcode-back" href="../../vitamin.html#vitamin.make_params_files.get_params">[docs]</a><span class="k">def</span> <span class="nf">get_params</span><span class="p">():</span>
+
+    <span class="c1"># Define dictionary to store values used in rest of code </span>
+    <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">val_dataset_size</span> <span class="o">=</span> <span class="n">val_dataset_size</span><span class="p">,</span>
+        <span class="n">__definition__val_dataset_size</span><span class="o">=</span><span class="s1">&#39;validation dataset total size&#39;</span><span class="p">,</span>
+        <span class="n">bilby_pars</span><span class="o">=</span><span class="n">bilby_pars</span><span class="p">,</span>
+        <span class="n">__definition__bilby_pars</span><span class="o">=</span><span class="s1">&#39;parameters for bilby to infer&#39;</span><span class="p">,</span>
+        <span class="n">vitamin_c</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">__definition__vitamin_c</span><span class="o">=</span><span class="s1">&#39;If True, use new vitamin_c version of code with keras&#39;</span><span class="p">,</span>
+        <span class="n">parallel_conv</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__parallel_conv</span><span class="o">=</span><span class="s1">&#39;if true analyse detectors separately in convolutions, otherwise as channels&#39;</span><span class="p">,</span>
+        <span class="n">extra_lr_decay_factor</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__extra_decay_factor</span><span class="o">=</span><span class="s1">&#39;Use an extra decay factor of 0.96 after every load iteration&#39;</span><span class="p">,</span>
+        <span class="n">n_KLzsamp</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">__definition_n_KLzsamp</span><span class="o">=</span><span class="s1">&#39;The number of samples to use to perfrom MonteCarlo integration over z to compute the KL&#39;</span><span class="p">,</span>
+        <span class="n">twod_conv</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__twod_conv</span><span class="o">=</span><span class="s1">&#39;if true treat the detectors as an extra image dimension otherwise as channels&#39;</span><span class="p">,</span>
+        <span class="n">n_modes_q</span><span class="o">=</span><span class="n">n_modes_q</span><span class="p">,</span>
+        <span class="n">__definition__n_modes_q</span><span class="o">=</span><span class="s1">&#39;number of modes in Gaussian mixture model for the q distribution&#39;</span><span class="p">,</span>
+        <span class="n">conv_dilations_r1</span><span class="o">=</span><span class="n">conv_dilations_r1</span><span class="p">,</span>
+        <span class="n">__definition__conv_dilations_r1</span><span class="o">=</span><span class="s1">&#39;size of convolutional dilation to use in r1 network&#39;</span><span class="p">,</span>
+        <span class="n">conv_dilations_r2</span><span class="o">=</span><span class="n">conv_dilations_r2</span><span class="p">,</span>
+        <span class="n">__definition__conv_dilations_r2</span><span class="o">=</span><span class="s1">&#39;size of convolutional dilation to use in r2 network&#39;</span><span class="p">,</span>
+        <span class="n">conv_dilations_q</span><span class="o">=</span><span class="n">conv_dilations_q</span><span class="p">,</span>
+        <span class="n">__definition__conv_dilations_q</span><span class="o">=</span><span class="s1">&#39;size of convolutional dilation to use in q network&#39;</span><span class="p">,</span> 
+        <span class="n">hour_angle_range</span><span class="o">=</span><span class="p">[</span><span class="o">-</span><span class="mf">3.813467684252483</span><span class="p">,</span><span class="mf">2.469671758574231</span><span class="p">],</span>
+        <span class="n">__definition__hour_angle_range</span><span class="o">=</span><span class="s1">&#39;min and max range of hour angle space&#39;</span><span class="p">,</span>
+        <span class="n">save_polarisations</span> <span class="o">=</span> <span class="n">save_polarisations</span><span class="p">,</span>
+        <span class="n">__definition__save_polarisations</span> <span class="o">=</span> <span class="s1">&#39;Save the polarisations for the training data if true (detector waveforms if not)&#39;</span><span class="p">,</span>
+        <span class="n">use_real_det_noise</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__use_real_det_noise</span><span class="o">=</span><span class="s1">&#39;If True, use real detector noise around reference time&#39;</span><span class="p">,</span>
+        <span class="n">real_noise_time_range</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1126051217</span><span class="p">,</span> <span class="mi">1137254417</span><span class="p">],</span>
+        <span class="n">__definition__real_noise_time_range</span> <span class="o">=</span> <span class="s1">&#39;time range to produce real noise samples over&#39;</span><span class="p">,</span>
+        <span class="n">use_real_events</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;GW150914&#39;</span><span class="p">],</span> <span class="c1"># e.g. &#39;GW150914&#39;</span>
+        <span class="n">__definition__use_real_events</span><span class="o">=</span><span class="s1">&#39;list containing real ligo events to be analyzed&#39;</span><span class="p">,</span>
+        <span class="n">convert_to_hour_angle</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__convert_to_hour_angle</span><span class="o">=</span><span class="s1">&#39;If True, convert RA to hour angle during trianing and testing&#39;</span><span class="p">,</span>
+        <span class="n">make_corner_plots</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                               
+        <span class="n">__definition__make_corner_plots</span><span class="o">=</span><span class="s1">&#39;if True, make corner plots&#39;</span><span class="p">,</span>
+        <span class="n">make_paper_plots</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>                                               
+        <span class="n">__definition__make_paper_plots</span><span class="o">=</span><span class="s1">&#39;if True, make paper plots&#39;</span><span class="p">,</span>
+        <span class="n">make_kl_plot</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>                                                    
+        <span class="n">__definition__make_kl_plot</span><span class="o">=</span><span class="s1">&#39;If True, go through kl plotting function&#39;</span><span class="p">,</span>
+        <span class="n">make_pp_plot</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>                                                    
+        <span class="n">__definition__make_pp_plot</span><span class="o">=</span><span class="s1">&#39;If True, go through pp plotting function&#39;</span><span class="p">,</span>
+        <span class="n">make_loss_plot</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                                 
+        <span class="n">__definition__make_loss_plot</span><span class="o">=</span><span class="s1">&#39;If True, generate loss plot from previous plot data&#39;</span><span class="p">,</span>
+        <span class="n">Make_sky_plot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>                                                    
+        <span class="n">__definition__make_sky_plot</span><span class="o">=</span><span class="s1">&#39;If True, generate sky plots on corner plots&#39;</span><span class="p">,</span>
+        <span class="n">hyperparam_optim</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>                                               
+        <span class="n">__definition__hyperparam_optim</span><span class="o">=</span><span class="s1">&#39;optimize hyperparameters for model during training using gaussian process minimization&#39;</span><span class="p">,</span>
+        <span class="n">resume_training</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>                                                  
+        <span class="n">__definition___resume_training</span><span class="o">=</span><span class="s1">&#39;if True, resume training of a model from saved checkpoint&#39;</span><span class="p">,</span>
+        <span class="n">load_by_chunks</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                                  
+        <span class="n">__definition__load_by_chunks</span><span class="o">=</span><span class="s1">&#39;if True, load training samples by a predefined chunk size rather than all at once&#39;</span><span class="p">,</span>	
+        <span class="n">ramp</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                                            
+        <span class="n">__definition__ramp</span><span class="o">=</span><span class="s1">&#39;# if true, apply linear ramp to KL loss&#39;</span><span class="p">,</span>
+        <span class="n">print_values</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                                                      
+        <span class="n">__definition__print_values</span><span class="o">=</span><span class="s1">&#39;# optionally print loss values every report interval&#39;</span><span class="p">,</span>
+        <span class="n">by_channel</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                                      
+        <span class="n">__definition__by_channel</span><span class="o">=</span><span class="s1">&#39;if True, do convolutions as seperate 1-D channels, if False, stack training samples as 2-D images (n_detectors,(duration*sampling_frequency))&#39;</span><span class="p">,</span>
+        <span class="n">load_plot_data</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">__definition__load_plot_data</span><span class="o">=</span><span class="s1">&#39;Use plotting data which has already been generated&#39;</span><span class="p">,</span>
+        <span class="n">doPE</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>                                                            
+        <span class="n">__definition__doPE</span><span class="o">=</span><span class="s1">&#39;if True then do bilby PE when generating new testing samples&#39;</span><span class="p">,</span>
+        <span class="n">gpu_num</span><span class="o">=</span><span class="n">gpu_num</span><span class="p">,</span>                                                              
+        <span class="n">__definition__gpu_num</span><span class="o">=</span><span class="s1">&#39;gpu number run is running on&#39;</span><span class="p">,</span>
+        <span class="n">ndata</span> <span class="o">=</span> <span class="n">ndata</span><span class="p">,</span>                                                          
+        <span class="n">__definition__ndata</span><span class="o">=</span><span class="s1">&#39;number of data points (number of data points, = to sampling frequency if 1s duration)&#39;</span><span class="p">,</span>
+        <span class="n">sample_rate</span> <span class="o">=</span> <span class="n">sampling_rate</span><span class="p">,</span>                                                          
+        <span class="n">__definition__sample_rate</span><span class="o">=</span><span class="s1">&#39;sampling frequency (number of data points, = to sampling frequency if 1s duration)&#39;</span><span class="p">,</span>
+        <span class="n">run_label</span><span class="o">=</span><span class="n">run_label</span><span class="p">,</span>                                                    
+        <span class="n">__definition__run_label</span><span class="o">=</span><span class="s1">&#39;label of run&#39;</span><span class="p">,</span>
+        <span class="n">bilby_results_label</span><span class="o">=</span><span class="n">bilby_results_label</span><span class="p">,</span>                                
+        <span class="n">__definition__bilby_result_label</span><span class="o">=</span><span class="s1">&#39;label given to bilby results directory&#39;</span><span class="p">,</span>
+        <span class="n">tot_dataset_size</span> <span class="o">=</span> <span class="n">tot_dataset_size</span><span class="p">,</span> 
+        <span class="n">__definition__tot_dataset_size</span><span class="o">=</span><span class="s1">&#39;total number of training samples available to use&#39;</span><span class="p">,</span>                                   
+        <span class="n">tset_split</span> <span class="o">=</span> <span class="n">tset_split</span><span class="p">,</span>
+        <span class="n">__definition__tset_split</span><span class="o">=</span><span class="s1">&#39;number of training samples in each training data file&#39;</span><span class="p">,</span>                                                
+        <span class="n">plot_dir</span><span class="o">=</span><span class="n">plot_dir</span><span class="p">,</span>
+        <span class="n">__definition__plot_dir</span><span class="o">=</span><span class="s1">&#39;output directory to save results plots&#39;</span><span class="p">,</span>
+
+        <span class="c1"># Gaussian Process automated hyperparameter tunning variables</span>
+        <span class="n">hyperparam_optim_stop</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">5e5</span><span class="p">),</span>                                     
+        <span class="n">__definition__hyperparam_optim_stop</span><span class="o">=</span><span class="s1">&#39;stopping iteration of hyperparameter optimizer per call&#39;</span><span class="p">,</span> 
+        <span class="n">hyperparam_n_call</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>                                                 
+        <span class="n">__definition__hyperparam_n_call</span><span class="o">=</span><span class="s1">&#39;number of hyperparameter optimization calls&#39;</span><span class="p">,</span>
+        
+        <span class="n">load_chunk_size</span> <span class="o">=</span> <span class="n">load_chunk_size</span><span class="p">,</span>
+        <span class="n">__definition__load_chunk_size</span><span class="o">=</span><span class="s1">&#39;Number of training samples to load in at a time.&#39;</span><span class="p">,</span>                                      
+        <span class="n">load_iteration</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">load_chunk_size</span> <span class="o">*</span> <span class="mi">25</span><span class="p">)</span><span class="o">/</span><span class="n">batch_size</span><span class="p">),</span>                
+        <span class="n">__definition__load_iteration</span><span class="o">=</span><span class="s1">&#39;How often to load another chunk of training samples&#39;</span><span class="p">,</span>
+        <span class="n">weight_init</span> <span class="o">=</span> <span class="n">weight_init</span><span class="p">,</span>
+        <span class="n">__definition__weight_init</span><span class="o">=</span><span class="s1">&#39;[xavier,VarianceScaling,Orthogonal]. Network model weight initialization (default is xavier)&#39;</span><span class="p">,</span>                                           
+        <span class="n">n_samples</span> <span class="o">=</span> <span class="mi">8000</span><span class="p">,</span>                                                        
+        <span class="n">__definition__n_samples</span><span class="o">=</span><span class="s1">&#39;number of posterior samples to save per reconstruction upon inference (default 3000)&#39;</span><span class="p">,</span>
+        <span class="n">num_iterations</span><span class="o">=</span><span class="n">num_iterations</span><span class="p">,</span>                                              
+        <span class="n">__definition__num_iterations</span><span class="o">=</span><span class="s1">&#39;total number of iterations before ending training of model&#39;</span><span class="p">,</span>
+        <span class="n">initial_training_rate</span><span class="o">=</span><span class="n">initial_training_rate</span><span class="p">,</span>
+        <span class="n">__definition__initial_training_rate</span><span class="o">=</span><span class="s1">&#39;initial training rate for ADAM optimiser inference model (inverse reconstruction)&#39;</span><span class="p">,</span>                         
+        <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+        <span class="n">__definition__batch_size</span><span class="o">=</span><span class="s1">&#39; Number training samples shown to neural network per iteration&#39;</span><span class="p">,</span>                                                  
+        <span class="n">batch_norm</span><span class="o">=</span><span class="n">batch_norm</span><span class="p">,</span>
+        <span class="n">__definition__batch_norm</span><span class="o">=</span><span class="s1">&#39;if true, do batch normalization in all layers of neural network&#39;</span><span class="p">,</span>                                                  
+        <span class="n">report_interval</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>                                                    
+        <span class="n">__definition__report_interval</span><span class="o">=</span><span class="s1">&#39;interval at which to save objective function values and optionally print info during training&#39;</span><span class="p">,</span>
+        <span class="n">n_modes</span><span class="o">=</span><span class="n">n_modes</span><span class="p">,</span>
+        <span class="n">__definition__n_modes</span><span class="o">=</span><span class="s1">&#39;number of modes in Gaussian mixture model (ideal 7, but may go higher/lower)&#39;</span><span class="p">,</span>                                                     
+
+        <span class="c1"># FYI, each item in lists below correspond to each layer in networks (i.e. first item first layer)</span>
+        <span class="c1"># pool size and pool stride should be same number in each layer</span>
+        <span class="n">n_filters_r1</span> <span class="o">=</span> <span class="n">n_filters_r1</span><span class="p">,</span>
+        <span class="n">__definition__n_filters_r1</span><span class="o">=</span><span class="s1">&#39;number of convolutional filters to use in r1 network (must be divisible by 3)&#39;</span><span class="p">,</span>                                         
+        <span class="n">n_filters_r2</span> <span class="o">=</span> <span class="n">n_filters_r2</span><span class="p">,</span>
+        <span class="n">__definition__n_filters_r2</span><span class="o">=</span><span class="s1">&#39;number of convolutional filters to use in r2 network (must be divisible by 3)&#39;</span><span class="p">,</span>                                         
+        <span class="n">n_filters_q</span> <span class="o">=</span> <span class="n">n_filters_q</span><span class="p">,</span>
+        <span class="n">__definition__n_filters_q</span><span class="o">=</span><span class="s1">&#39;number of convolutional filters to use in q network  (must be divisible by 3)&#39;</span><span class="p">,</span>                                           
+        <span class="n">filter_size_r1</span> <span class="o">=</span> <span class="n">filter_size_r1</span><span class="p">,</span>  
+        <span class="n">__definition__filter_size_r1</span><span class="o">=</span><span class="s1">&#39;size of convolutional fitlers in r1 network&#39;</span><span class="p">,</span>                                   
+        <span class="n">filter_size_r2</span> <span class="o">=</span> <span class="n">filter_size_r2</span><span class="p">,</span>   
+        <span class="n">__definition__filter_size_r2</span><span class="o">=</span><span class="s1">&#39;size of convolutional filters in r2 network&#39;</span><span class="p">,</span>                                  
+        <span class="n">filter_size_q</span> <span class="o">=</span> <span class="n">filter_size_q</span><span class="p">,</span>
+        <span class="n">__definition__filter_size_q</span><span class="o">=</span><span class="s1">&#39;size of convolutional filters in q network&#39;</span><span class="p">,</span>                                       
+        <span class="n">drate</span> <span class="o">=</span> <span class="n">drate</span><span class="p">,</span>  
+        <span class="n">__definition__drate</span><span class="o">=</span><span class="s1">&#39;dropout rate to use in fully-connected layers&#39;</span><span class="p">,</span>                                                     
+        <span class="n">maxpool_r1</span> <span class="o">=</span> <span class="n">maxpool_r1</span><span class="p">,</span>                                            
+        <span class="n">__definition__maxpool_r1</span><span class="o">=</span><span class="s1">&#39;size of maxpooling to use in r1 network&#39;</span><span class="p">,</span> 
+        <span class="n">conv_strides_r1</span> <span class="o">=</span> <span class="n">conv_strides_r1</span><span class="p">,</span>
+        <span class="n">__definition__conv_strides_r1</span><span class="o">=</span><span class="s1">&#39;size of convolutional stride to use in r1 network&#39;</span><span class="p">,</span>                                   
+        <span class="n">pool_strides_r1</span> <span class="o">=</span> <span class="n">pool_strides_r1</span><span class="p">,</span>                                   
+        <span class="n">__definition_pool_strides_r1</span><span class="o">=</span><span class="s1">&#39;size of max pool stride to use in r1 network&#39;</span><span class="p">,</span>
+        <span class="n">maxpool_r2</span> <span class="o">=</span> <span class="n">maxpool_r2</span><span class="p">,</span>       
+        <span class="n">__definition_maxpool_r2</span><span class="o">=</span><span class="s1">&#39;size of max pooling to use in r2 network&#39;</span><span class="p">,</span>                                      
+        <span class="n">conv_strides_r2</span> <span class="o">=</span> <span class="n">conv_strides_r2</span><span class="p">,</span>
+        <span class="n">__definition__conv_strides_r2</span><span class="o">=</span><span class="s1">&#39;size of convolutional stride in r2 network&#39;</span><span class="p">,</span>                                   
+        <span class="n">pool_strides_r2</span> <span class="o">=</span> <span class="n">pool_strides_r2</span><span class="p">,</span>                                   
+        <span class="n">__definition__pool_strides_r2</span><span class="o">=</span><span class="s1">&#39;size of max pool stride in r2 network&#39;</span><span class="p">,</span>
+        <span class="n">maxpool_q</span> <span class="o">=</span> <span class="n">maxpool_q</span><span class="p">,</span>  
+        <span class="n">__definition__maxpool_q</span><span class="o">=</span><span class="s1">&#39;size of max pooling to use in q network&#39;</span><span class="p">,</span>                                             
+        <span class="n">conv_strides_q</span> <span class="o">=</span> <span class="n">conv_strides_q</span><span class="p">,</span>  
+        <span class="n">__definition__conv_strides_q</span><span class="o">=</span><span class="s1">&#39;size of convolutional stride to use in q network&#39;</span><span class="p">,</span>                                   
+        <span class="n">pool_strides_q</span> <span class="o">=</span> <span class="n">pool_strides_q</span><span class="p">,</span>                                     
+        <span class="n">__definition__pool_strides_q</span><span class="o">=</span><span class="s1">&#39;size of max pool stride to use in q network&#39;</span><span class="p">,</span>
+        <span class="n">ramp_start</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>                                                       
+        <span class="n">__definition__ramp_start</span><span class="o">=</span><span class="s1">&#39;starting iteration of KL divergence ramp&#39;</span><span class="p">,</span>
+        <span class="n">ramp_end</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>                                                  
+        <span class="n">__definition__ramp_end</span><span class="o">=</span><span class="s1">&#39;ending iteration of KL divergence ramp&#39;</span><span class="p">,</span>
+        <span class="n">save_interval</span><span class="o">=</span><span class="n">save_interval</span><span class="p">,</span> 
+        <span class="n">__definition__save_interval</span><span class="o">=</span><span class="s1">&#39;number of iterations to save model&#39;</span><span class="p">,</span>                                           
+        <span class="n">plot_interval</span><span class="o">=</span><span class="n">plot_interval</span><span class="p">,</span>                                     
+        <span class="n">__definition__plot_interval</span><span class="o">=</span><span class="s1">&#39;number of iterations to plot validation results corner plots&#39;</span><span class="p">,</span>       
+        <span class="n">z_dimension</span><span class="o">=</span><span class="n">z_dimension</span><span class="p">,</span>                                              
+        <span class="n">__definition__z_dimension</span><span class="o">=</span><span class="s1">&#39;number of latent space dimensions of model&#39;</span><span class="p">,</span>
+        <span class="n">n_weights_r1</span> <span class="o">=</span> <span class="n">n_weights_r1</span><span class="p">,</span>                                         
+        <span class="n">__definition__n_weights_r1</span><span class="o">=</span><span class="s1">&#39;number fully-connected neurons in layers of encoders and decoders in the r1 model&#39;</span><span class="p">,</span>
+        <span class="n">n_weights_r2</span> <span class="o">=</span> <span class="n">n_weights_r2</span><span class="p">,</span>
+        <span class="n">__definition__n_weights_r2</span><span class="o">=</span><span class="s1">&#39;number fully-connected neurons in layers of encoders and decoders in the r2 model&#39;</span><span class="p">,</span>                                         
+        <span class="n">n_weights_q</span> <span class="o">=</span> <span class="n">n_weights_q</span><span class="p">,</span>                                           
+        <span class="n">__definition__n_weights_q</span><span class="o">=</span><span class="s1">&#39;number fully-connected neurons in layers of encoders and decoders in the q model&#39;</span><span class="p">,</span>
+        <span class="n">duration</span> <span class="o">=</span> <span class="n">duration</span><span class="p">,</span>                                                         
+        <span class="n">__definition__duration</span><span class="o">=</span><span class="s1">&#39;length of training/validation/test sample time series in seconds&#39;</span><span class="p">,</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">r</span><span class="p">,</span>     
+        <span class="n">__definition__r</span><span class="o">=</span><span class="s1">&#39;number of GW timeseries to use for testing.&#39;</span><span class="p">,</span>                                                             
+        <span class="n">rand_pars</span><span class="o">=</span><span class="n">rand_pars</span><span class="p">,</span>                                                    
+        <span class="n">__definition__rand_pars</span><span class="o">=</span><span class="s1">&#39;parameters to randomize (those not listed here are fixed otherwise)&#39;</span><span class="p">,</span>
+        <span class="n">corner_labels</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;mass_1&#39;</span><span class="p">:</span> <span class="s1">&#39;$m_</span><span class="si">{1}</span><span class="s1">\,(\mathrm</span><span class="si">{M}</span><span class="s1">_{\odot})$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;mass_2&#39;</span><span class="p">:</span> <span class="s1">&#39;$m_</span><span class="si">{2}</span><span class="s1">\,(\mathrm</span><span class="si">{M}</span><span class="s1">_{\odot})$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;luminosity_distance&#39;</span><span class="p">:</span> <span class="s1">&#39;$d_{\mathrm</span><span class="si">{L}</span><span class="s1">}\,(\mathrm</span><span class="si">{Mpc}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;geocent_time&#39;</span><span class="p">:</span> <span class="s1">&#39;$t_</span><span class="si">{0}</span><span class="s1">\,(\mathrm</span><span class="si">{seconds}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;phase&#39;</span><span class="p">:</span> <span class="s1">&#39;${\phi}$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;theta_jn&#39;</span><span class="p">:</span> <span class="s1">&#39;$\Theta_</span><span class="si">{jn}</span><span class="s1">\,(\mathrm</span><span class="si">{rad}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;psi&#39;</span><span class="p">:</span> <span class="s1">&#39;${\psi}$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;ra&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;${\alpha}\,(\mathrm</span><span class="si">{rad}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;dec&#39;</span><span class="p">:</span> <span class="s1">&#39;${\delta}\,(\mathrm</span><span class="si">{rad}</span><span class="s1">)$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;a_1&#39;</span><span class="p">:</span> <span class="s1">&#39;$</span><span class="si">{a_1}</span><span class="s1">$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;a_2&#39;</span><span class="p">:</span> <span class="s1">&#39;$</span><span class="si">{a_2}</span><span class="s1">$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;tilt_1&#39;</span><span class="p">:</span> <span class="s1">&#39;${\Theta_</span><span class="si">{1}</span><span class="s1">}$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;tilt_2&#39;</span><span class="p">:</span> <span class="s1">&#39;${\Theta_</span><span class="si">{2}</span><span class="s1">}$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;phi_12&#39;</span><span class="p">:</span> <span class="s1">&#39;${\phi_</span><span class="si">{12}</span><span class="s1">}$&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;phi_jl&#39;</span><span class="p">:</span> <span class="s1">&#39;${\phi_</span><span class="si">{jl}</span><span class="s1">}$&#39;</span><span class="p">},</span>
+
+        <span class="n">__definition__corner_labels</span><span class="o">=</span><span class="s1">&#39;latex source parameter labels for plotting&#39;</span><span class="p">,</span>
+        <span class="n">ref_geocent_time</span><span class="o">=</span><span class="n">ref_geocent_time</span><span class="p">,</span>                                      
+        <span class="n">__definition__ref_geocent_time</span><span class="o">=</span><span class="s1">&#39;reference gps time (not advised to change this)&#39;</span><span class="p">,</span>
+        <span class="n">training_data_seed</span><span class="o">=</span><span class="mi">43</span><span class="p">,</span>                                                 
+        <span class="n">__definition__training_data_seed</span><span class="o">=</span><span class="s1">&#39;tensorflow training random seed number&#39;</span><span class="p">,</span>
+        <span class="n">testing_data_seed</span><span class="o">=</span><span class="mi">44</span><span class="p">,</span>                                                   
+        <span class="n">__definition__testing_data_seed</span><span class="o">=</span><span class="s1">&#39; tensorflow testing random seed number&#39;</span><span class="p">,</span>
+        <span class="n">validation_data_seed</span><span class="o">=</span><span class="mi">45</span><span class="p">,</span>
+        <span class="n">__definition__validation_data_seed</span><span class="o">=</span><span class="s1">&#39;Seed for validation data&#39;</span><span class="p">,</span>
+        <span class="n">inf_pars</span><span class="o">=</span><span class="n">inf_pars</span><span class="p">,</span>        
+        <span class="n">__definition__inf_pars</span><span class="o">=</span><span class="s1">&#39;parameters to infer&#39;</span><span class="p">,</span>                                              
+        <span class="n">train_set_dir</span><span class="o">=</span><span class="n">train_set_dir</span><span class="p">,</span>
+        <span class="n">__definition__train_set_dir</span><span class="o">=</span><span class="s1">&#39;location of training set directory&#39;</span><span class="p">,</span>
+        <span class="n">noise_set_dir</span><span class="o">=</span><span class="n">noise_set_dir</span><span class="p">,</span>
+        <span class="n">__definition__noise_set_dir</span><span class="o">=</span><span class="s1">&#39;location of training real noise set directory&#39;</span><span class="p">,</span>
+        <span class="n">val_set_dir</span><span class="o">=</span><span class="n">val_set_dir</span><span class="p">,</span>
+        <span class="n">__definition__val_set_dir</span><span class="o">=</span><span class="s1">&#39;location of validation set directory&#39;</span><span class="p">,</span>
+        <span class="n">test_set_dir</span><span class="o">=</span><span class="n">test_set_dir</span><span class="p">,</span>
+        <span class="n">__definition__test_set_dir</span><span class="o">=</span><span class="s1">&#39;location of test set directory waveforms&#39;</span><span class="p">,</span>
+        <span class="n">pe_dir</span><span class="o">=</span><span class="n">pe_dir</span><span class="p">,</span>
+        <span class="n">__definition__pe_dir</span><span class="o">=</span><span class="s1">&#39;location of test set directory Bayesian PE samples. Set to None if you do not want to use posterior samples when training.&#39;</span><span class="p">,</span>
+        <span class="n">KL_cycles</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>                                                          
+        <span class="n">__definition__KL_cycles</span><span class="o">=</span><span class="s1">&#39; number of cycles to repeat for the KL approximation&#39;</span><span class="p">,</span>
+        <span class="n">samplers</span><span class="o">=</span><span class="n">samplers</span><span class="p">,</span>       
+        <span class="n">__definition__samplers</span><span class="o">=</span><span class="s1">&#39;Samplers to use when comparing ML results (vitamin is ML approach) dynesty,ptemcee,cpnest,emcee&#39;</span><span class="p">,</span>                                               
+        <span class="n">figure_sampler_names</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;VItamin&#39;</span><span class="p">,</span> <span class="s1">&#39;Dynesty&#39;</span><span class="p">,</span> <span class="s1">&#39;Ptemcee&#39;</span><span class="p">,</span> <span class="s1">&#39;CPNest&#39;</span><span class="p">,</span> <span class="s1">&#39;Emcee&#39;</span><span class="p">],</span>
+        <span class="n">__definition__figure_sampler_names</span><span class="o">=</span><span class="s1">&#39;matplotlib figure sampler labels (e.g. [ptemcee,CPNest,emcee])&#39;</span><span class="p">,</span>
+        <span class="n">y_normscale</span> <span class="o">=</span> <span class="n">y_normscale</span><span class="p">,</span>
+        <span class="n">__definition__y_normscale</span><span class="o">=</span><span class="s1">&#39;arbitrary normalization factor on all time series waveforms (helps convergence in training)&#39;</span><span class="p">,</span>
+        <span class="n">gauss_pars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;luminosity_distance&#39;</span><span class="p">,</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span><span class="s1">&#39;theta_jn&#39;</span><span class="p">,</span><span class="s1">&#39;a_1&#39;</span><span class="p">,</span><span class="s1">&#39;a_2&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_1&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_2&#39;</span><span class="p">,</span><span class="s1">&#39;ra&#39;</span><span class="p">,</span><span class="s1">&#39;dec&#39;</span><span class="p">,</span><span class="s1">&#39;phase&#39;</span><span class="p">,</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span><span class="s1">&#39;phi_12&#39;</span><span class="p">,</span><span class="s1">&#39;phi_jl&#39;</span><span class="p">],</span>         
+        <span class="n">__definition__gauss_pars</span><span class="o">=</span><span class="s1">&#39;parameters that require a truncated gaussian distribution&#39;</span><span class="p">,</span>
+        <span class="n">vonmise_pars</span><span class="o">=</span><span class="p">[],</span>                                        
+        <span class="n">__definition__vonmises_pars</span><span class="o">=</span><span class="s1">&#39;parameters that get wrapped on the 1D parameter&#39;</span><span class="p">,</span> 
+        <span class="n">sky_pars</span><span class="o">=</span><span class="p">[],</span>                                              
+        <span class="n">__definition__sky_pars</span><span class="o">=</span><span class="s1">&#39;sky parameters&#39;</span><span class="p">,</span>
+        <span class="n">det</span><span class="o">=</span><span class="n">det</span><span class="p">,</span>
+        <span class="n">__definition__det</span><span class="o">=</span><span class="s1">&#39;LIGO detectors to perform analysis on (default is 3detector H1,L1,V1)&#39;</span><span class="p">,</span>
+        <span class="n">psd_files</span><span class="o">=</span><span class="n">psd_files</span><span class="p">,</span>
+        <span class="n">__definition__psd_files</span><span class="o">=</span><span class="s1">&#39;User may specficy their own psd files for each detector. Must be bilby compatible .txt files. If specifying your own files, do so for each detector. If list is empty, default Bilby PSD values will be used for each detector. &#39;</span><span class="p">,</span>
+        <span class="n">weighted_pars</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">__definition__weighted_pars</span><span class="o">=</span><span class="s1">&#39;set to None if not using, parameters to weight during training&#39;</span><span class="p">,</span>
+        <span class="n">weighted_pars_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>                       
+        <span class="n">__definition__weighted_pars_factor</span><span class="o">=</span><span class="s1">&#39;factor by which to weight weighted parameters&#39;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">params</span></div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="c1"># Save training/test parameters of run if files do not already exist</span>
+    <span class="n">params</span><span class="o">=</span><span class="n">get_params</span><span class="p">()</span>
+
+    <span class="n">out_dir</span> <span class="o">=</span> <span class="s2">&quot;./params_files_</span><span class="si">{}</span><span class="s2">Hz_</span><span class="si">{}</span><span class="s2">s_polarisation&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;sample_rate&quot;</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="s2">&quot;duration&quot;</span><span class="p">])</span>
+    
+    <span class="c1"># Make directory containing params files</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">out_dir</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">FileExistsError</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;directory &#39;params_files&#39; already exists&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Overwriting .json files in directory ...&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">out_dir</span><span class="p">))</span>
+    <span class="c1"># Generate params files</span>
+    <span class="c1">#if not os.path.isfile(&#39;./params_files/params.json&#39;):</span>
+    
+    <span class="c1"># save params json file</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">/params.json&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">out_dir</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+        
+    <span class="c1">#if not os.path.isfile(&#39;./params_files/bounds.json&#39;):</span>
+    
+    <span class="c1"># save bounds json file</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">/bounds.json&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">out_dir</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+        
+    <span class="c1">#if not os.path.isfile(&#39;./params_files/fixed_vals.json&#39;):</span>
+    
+    <span class="c1"># save fixed vals json file</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">/fixed_vals.json&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">out_dir</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">fixed_vals</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -29,7 +29,7 @@ class DataGenerator():
         signal = GenerateTemplate(config=self.config, run_type = self.run_type, save_dir = save_dir)
         
         signal_dataset = []
-        signal_inj_pars = []
+        signal_inj_pars = {}
         signal_inference_pars = []
         signal_snrs = []
         for i in range(int(self.config["data"]["file_split"])):
@@ -50,21 +50,26 @@ class DataGenerator():
                 signal.get_detector_response()
                 signal_dataset.append(signal.whitened_signals_td)
                 signal_snrs.append(signal.snrs)
-            signal_inj_pars.append(signal.injection_parameters_list)
-            signal_inference_pars.append(signal.inference_parameters_list)
+            for key, value in signal.injection_parameters.items():
+                signal_inj_pars.setdefault(key, [])
+                signal_inj_pars[key].append(value)
 
 
         if self.write_to_file:
             fname = os.path.join(save_dir, "data_{}_{}.h5py".format(start_ind,self.config["data"]['n_{}_data'.format(self.run_type)]))
             with h5py.File(fname, 'w') as hf:
-                hf.create_dataset('x_data', data=signal_inference_pars)
                 if self.config["data"]["save_polarisations"]:
                     hf.create_dataset('y_hplus_hcross', data=signal_dataset)
                 else:
                     hf.create_dataset('y_data_noisefree', data=signal_dataset)
-                hf.create_dataset('injection_parameters_values', data=signal_inj_pars)
-                hf.create_dataset('injection_parameters_keys', data=signal.injection_parameters_keys)
-                hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
+                inj_keys = []
+                inj_vals = []
+                for key, value in signal_inj_pars.items():
+                    inj_keys.append(key)
+                    inj_vals.append(value)
+                hf.create_dataset('injection_parameters_values', data=inj_vals)
+                hf.create_dataset('injection_parameters_keys', data=inj_keys)
+                #hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
                 hf.create_dataset('snrs', data=signal_snrs)
                 hf.close()
         else:
@@ -93,7 +98,6 @@ class DataGenerator():
         if os.path.isfile(fname):
             with h5py.File(fname,'r') as hf:
                 print(hf.keys())
-                signal.injection_parameters_list = np.array(hf["x_data"])
                 signal.whitened_signal_td = np.array(hf["y_data_noisefree"])
                 signal.whitened_data_td = np.array(hf["y_data_noisy"])
                 signal.frequency_domain_strain = np.array(hf["frequency_domain_strain"])
@@ -102,7 +106,7 @@ class DataGenerator():
                 signal.injection_parameters = {}
                 for k in range(len(inj_keys)):
                     signal.injection_parameters[inj_keys[k].decode()] = inj_vals[k]
-                signal.snrs = hf["snrs"]
+                #signal.snrs = hf["snrs"]
             signal.generate_polarisations()
             signal.get_detector_response(frequency_domain_strain = signal.frequency_domain_strain)
             self.write_to_file = False
@@ -118,13 +122,17 @@ class DataGenerator():
                 print("Generated: %s ..." % (fname))
                 # Save generated testing samples in h5py format
                 with h5py.File(fname,'w') as hf:
-                    hf.create_dataset('x_data', data=signal.injection_parameters_list)
                     hf.create_dataset('y_data_noisefree', data=signal.whitened_signals_td)
                     hf.create_dataset('y_data_noisy', data=signal.whitened_data_td)
                     hf.create_dataset('frequency_domain_strain', data=signal.frequency_domain_strain)
-                    hf.create_dataset('injection_parameters_values', data=[val for val in signal.injection_parameters.values()])
-                    hf.create_dataset('injection_parameters_keys', data=[key for key in signal.injection_parameters.keys()])
-                    hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
+                    inj_keys = []
+                    inj_vals = []
+                    for key, value in signal.injection_parameters.items():
+                        inj_keys.append(key)
+                        inj_vals.append(value)
+                    hf.create_dataset('injection_parameters_values', data=inj_vals)
+                    hf.create_dataset('injection_parameters_keys', data=inj_keys)
+                    #hf.create_dataset('inference_parameters_keys', data=self.config["model"]["inf_pars_list"])
                     hf.create_dataset('snrs', data=signal.snrs)
                     hf.close()
 

@@ -1,0 +1,39 @@
+stages:
+  - test
+  - build
+
+.test-python: &test-python
+  stage: test
+  image: python
+  script:
+    - python setup.py install
+    - ls
+    - cd
+    - python -c "import vitamin"
+
+
+# test basic setup on python3
+basic-3.7:
+#  <<: *test-python
+  image: python:3.7
+  script:
+    - pip install -r requirements.txt
+    - python setup.py install
+
+
+pages:
+  stage: build
+  image: python
+  dependencies:
+    - python-3.7
+  script:
+  - pip install sphinx sphinx-bootstrap-theme sphinx_rtd_theme nbsphinx 
+  - pip install -r requirements.txt
+  - python setup.py install
+  - sphinx-build -b html . public
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+  only:
+  - master

@@ -37,7 +37,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.chunk_size = self.batch_size*self.chunk_batch
         self.chunk_iter = 0
         self.max_chunk_num = int(np.floor((self.num_data/self.chunk_size)))
-        
+
         self.num_epoch_load = self.config["training"]["num_epoch_load"]
         self.epoch_iter = 0
         # will addthis to init files eventually
@@ -78,8 +78,8 @@ class DataLoader(tf.keras.utils.Sequence):
 
             self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
-            self.chunk_size = len(self.X)
-            self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
+            #self.chunk_size = len(self.X)
+            #self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
             end_load = time.time()
             print("load_time chunk {}: {}".format(self.chunk_iter, end_load - start_load))
 
@@ -326,33 +326,38 @@ class DataLoader(tf.keras.utils.Sequence):
         y_data_noisy     : waveform with noise
         """
 
-        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'rand_pars': [], 'snrs': [], 'y_hplus_hcross': [], 'injection_parameters_keys': [], 'injection_parameters_values': [], 'inference_parameters_keys': []}
+        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'snrs': [], 'y_hplus_hcross': []}
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
+        injpar_order = []
         for i,filename in enumerate(filenames):
             try:
                 h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
                 # dont like the below code, will rewrite at some point
                 if self.test_set:
-                    data['x_data'].append([h5py_file['x_data']])
                     data['y_data_noisefree'].append([h5py_file['y_data_noisefree']])
                     data['y_data_noisy'].append([h5py_file['y_data_noisy']])
-                    data['injection_parameters_keys'] = [st.decode() for st in h5py_file['injection_parameters_keys']]
-                    data['injection_parameters_values'].append([h5py_file['injection_parameters_values']])
-                    data['inference_parameters_keys'] = [st.decode() for st in h5py_file['inference_parameters_keys']]
-                    #data['rand_pars'] = h5py_file['rand_pars']
                     data['snrs'].append(h5py_file['snrs'])
+                    injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                    injection_parameters_values = np.array(h5py_file['injection_parameters_values'])
+
+                    self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                    # reorder injection parameters into inference parameters order
+                    data["x_data"].append([injection_parameters_values[self.par_idx]])
+
                 else:
-                    data['x_data'].append(h5py_file['x_data'][indices[i]])
                     if self.config["data"]["save_polarisations"]:
                         data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
                     else:
                         data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
-                    data['injection_parameters_keys'] = [st.decode() for st in h5py_file['injection_parameters_keys']]
-                    data['injection_parameters_values'].append([h5py_file['injection_parameters_values'][indices[i]]])
-                    data['inference_parameters_keys'] = [st.decode() for st in h5py_file['inference_parameters_keys']]
-                    #data['rand_pars'] = [i for i in h5py_file['rand_pars']]
-                    #data['snrs'].append(h5py_file['snrs'][indices[i]])
+                    injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                    injection_parameters_values = np.array(h5py_file['injection_parameters_values'])[:, indices[i]]
+
+                    self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                    # reorder injection parameters into inference parameters order
+                    data["x_data"].append(np.array(injection_parameters_values[self.par_idx].T))
+
+
                 if not self.silent:
                     print('...... Loaded file ' + os.path.join(self.input_dir,filename))
             except OSError:
@@ -361,25 +366,8 @@ class DataLoader(tf.keras.utils.Sequence):
                 
                 
         # concatentation all the x data (parameters) from each of the files
+
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
-        if self.test_set:
-            data['injection_parameters_values'] = np.array(data['injection_parameters_values']).squeeze()
-        else:
-            data['injection_parameters_values'] = np.concatenate(np.array(data['injection_parameters_values']).squeeze(), axis=0).squeeze()
-
-        if self.config["model"]["inf_pars_list"] != data["inference_parameters_keys"]:
-            reorder_xdata = []
-            for injpar in self.config["model"]["inf_pars_list"]:
-                if injpar not in data["injection_parameters_keys"]:
-                    raise Exception("No parameter names {} in save data".format(injpar))
-                reorder_xdata.append(np.where(injpar == np.array(data["injection_parameters_keys"]))[0][0])
-            data["x_data"] = data["injection_parameters_values"][:,reorder_xdata]
-        else:
-            self.decoded_rand_pars, self.par_idx = self.get_infer_pars(data)
-            # reorder x parameters into params['infer_pars'] order
-            data["x_data"] = data['x_data'][:,self.par_idx]
-
-
 
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
@@ -558,25 +546,23 @@ class DataLoader(tf.keras.utils.Sequence):
         return x_data
 
     
-    def get_infer_pars(self,data):
+    def get_infer_pars(self,inference_parameters, injection_parameters):
 
         # Get rid of encoding
         
-        #decoded_rand_pars = []
-        #for i,k in enumerate(self.config["data"]['rand_pars']):
-        #    decoded_rand_pars.append(k.decode('utf-8'))
-        decoded_rand_pars = self.config["data"]['rand_pars']
         # extract inference parameters from all source parameters loaded earlier
         # choose the indicies of which parameters to infer
         par_idx = []
-        infparlist = ''
-        for k in self.config["model"]["inf_pars_list"]:
-            infparlist = infparlist + k + ', '
-            for i,q in enumerate(decoded_rand_pars):
-                if k==q:
-                    par_idx.append(i)
+        for k in inference_parameters:
+            if k in injection_parameters:
+                for i,q in enumerate(injection_parameters):
+                    if k==q:
+                        par_idx.append(i)
+            else:
+                raise Exception("Inference parameter not available in injection parameters, please convert injection parameters")
+                    
         
-        return decoded_rand_pars, par_idx
+        return par_idx
 
 
     def randomise_extrinsic_parameters(self, x):

@@ -50,12 +50,7 @@ def make_train_dag(config, run_type = "training"):
         if not os.path.exists(direc):
             os.makedirs(direc)
 
-    comment = "{}_run".format(run_type)
-    run_sub_filename = os.path.join(p["condor_dir"], "{}.sub".format(comment))
-    write_subfile(run_sub_filename,p,comment)
-    make_executable(p)
 
-    dag_filename = "{}/{}.dag".format(p["condor_dir"],comment)
     if run_type == "training":
         num_files = int(config["data"]["n_training_data"]/config["data"]["file_split"])
         num_jobs = int(num_files/p["files_per_job"])
@@ -71,7 +66,7 @@ def make_train_dag(config, run_type = "training"):
     elif run_type == "validation":
         num_files = int(config["data"]["n_validation_data"]/config["data"]["file_split"])
         num_jobs = 1
-        p["files_per_job"] = 1
+        p["files_per_job"] = num_files
         samplers = [0]
     elif run_type == "test":
         num_jobs = config["data"]["n_test_data"]
@@ -80,6 +75,12 @@ def make_train_dag(config, run_type = "training"):
         samplers.remove("vitamin")
     elif run_type == "real_test":
         num_jobs = 1
+
+    comment = "{}_run".format(run_type)
+    run_sub_filename = os.path.join(p["condor_dir"], "{}.sub".format(comment))
+    write_subfile(run_sub_filename,p,comment)
+    make_executable(p)
+    dag_filename = "{}/{}.dag".format(p["condor_dir"],comment)
 
     with open(dag_filename,'w') as f:
         seeds = []

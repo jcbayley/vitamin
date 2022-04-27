@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.make_condor_files &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.make_condor_files</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.make_condor_files</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">.vitamin_parser</span> <span class="kn">import</span> <span class="n">InputParser</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">stat</span>
+
+<div class="viewcode-block" id="create_dirs"><a class="viewcode-back" href="../../vitamin.html#vitamin.make_condor_files.create_dirs">[docs]</a><span class="k">def</span> <span class="nf">create_dirs</span><span class="p">(</span><span class="n">dirs</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">dirs</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span> 
+                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="nb">print</span> <span class="o">&gt;&gt;</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s2">&quot;Could not create directory </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All directories exist&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="write_subfile"><a class="viewcode-back" href="../../vitamin.html#vitamin.make_condor_files.write_subfile">[docs]</a><span class="k">def</span> <span class="nf">write_subfile</span><span class="p">(</span><span class="n">sub_filename</span><span class="p">,</span><span class="n">p</span><span class="p">,</span><span class="n">comment</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">sub_filename</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">sub_filename</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;# filename: </span><span class="si">{}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sub_filename</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;universe = vanilla</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;executable = </span><span class="si">{}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;exec&quot;</span><span class="p">]))</span>
+        <span class="c1">#f.write(&#39;enviroment = &quot;&quot;\n&#39;)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;getenv  = True</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="c1">#f.write(&#39;RequestMemory = {} \n&#39;.format(p[&quot;memory&quot;]))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;log = </span><span class="si">{}</span><span class="s1">/</span><span class="si">{}</span><span class="s1">_$(cluster).log</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;log_dir&quot;</span><span class="p">],</span><span class="n">comment</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;error = </span><span class="si">{}</span><span class="s1">/</span><span class="si">{}</span><span class="s1">_$(cluster).err</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;err_dir&quot;</span><span class="p">],</span><span class="n">comment</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;output = </span><span class="si">{}</span><span class="s1">/</span><span class="si">{}</span><span class="s1">_$(cluster).out</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;out_dir&quot;</span><span class="p">],</span><span class="n">comment</span><span class="p">))</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="s2">&quot;$(start_ind) $(sampler)&quot;</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;arguments = </span><span class="si">{}</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;accounting_group = ligo.dev.o4.cbc.explore.test</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;queue</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="make_train_dag"><a class="viewcode-back" href="../../vitamin.html#vitamin.make_condor_files.make_train_dag">[docs]</a><span class="k">def</span> <span class="nf">make_train_dag</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;training&quot;</span><span class="p">):</span>
+
+    <span class="n">p</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;root_dir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">]</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;root_dir&quot;</span><span class="p">],</span><span class="s2">&quot;condor&quot;</span><span class="p">)</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;log_dir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;err_dir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;err&quot;</span><span class="p">)</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;out_dir&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;out&quot;</span><span class="p">)</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;config_file&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">config_file</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;exec&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;run_</span><span class="si">{}</span><span class="s2">.sh&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">run_type</span><span class="p">))</span>
+
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;run_type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">run_type</span>
+    <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">20</span>
+
+    <span class="k">for</span> <span class="n">direc</span> <span class="ow">in</span> <span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;log_dir&quot;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;err_dir&quot;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;out_dir&quot;</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">direc</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">direc</span><span class="p">)</span>
+
+
+    <span class="k">if</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;training&quot;</span><span class="p">:</span>
+        <span class="n">num_files</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;n_training_data&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;file_split&quot;</span><span class="p">])</span>
+        <span class="n">num_jobs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_files</span><span class="o">/</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">num_jobs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">num_jobs</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">num_files</span>
+        <span class="n">samplers</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;real_noise&quot;</span><span class="p">:</span>
+        <span class="n">num_files</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">num_jobs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">samplers</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;validation&quot;</span><span class="p">:</span>
+        <span class="n">num_files</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;n_validation_data&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;file_split&quot;</span><span class="p">])</span>
+        <span class="n">num_jobs</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">num_files</span>
+        <span class="n">samplers</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;test&quot;</span><span class="p">:</span>
+        <span class="n">num_jobs</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;n_test_data&quot;</span><span class="p">]</span>
+        <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">samplers</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s2">&quot;samplers&quot;</span><span class="p">]</span>
+        <span class="n">samplers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s2">&quot;vitamin&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;real_test&quot;</span><span class="p">:</span>
+        <span class="n">num_jobs</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">comment</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_run&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">run_type</span><span class="p">)</span>
+    <span class="n">run_sub_filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">.sub&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">comment</span><span class="p">))</span>
+    <span class="n">write_subfile</span><span class="p">(</span><span class="n">run_sub_filename</span><span class="p">,</span><span class="n">p</span><span class="p">,</span><span class="n">comment</span><span class="p">)</span>
+    <span class="n">make_executable</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+    <span class="n">dag_filename</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2">.dag&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;condor_dir&quot;</span><span class="p">],</span><span class="n">comment</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">dag_filename</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">seeds</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_jobs</span><span class="p">):</span>
+            <span class="n">seeds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">1e9</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_jobs</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">samplers</span><span class="p">)):</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="s2">&quot;File_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="n">uid</span> <span class="o">=</span> <span class="n">seeds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="n">jobid</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">comment</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">uid</span><span class="p">)</span>
+                <span class="n">job_string</span> <span class="o">=</span> <span class="s2">&quot;JOB </span><span class="si">{}</span><span class="s2"> </span><span class="si">{}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobid</span><span class="p">,</span><span class="n">run_sub_filename</span><span class="p">)</span>
+                <span class="n">retry_string</span> <span class="o">=</span> <span class="s2">&quot;RETRY </span><span class="si">{}</span><span class="s2"> 1</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobid</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;train&quot;</span><span class="p">:</span>
+                    <span class="n">vars_string</span> <span class="o">=</span> <span class="s1">&#39;VARS </span><span class="si">{}</span><span class="s1"> start_ind=&quot;</span><span class="si">{}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobid</span><span class="p">,</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="o">*</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">]))</span>
+                <span class="k">elif</span> <span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;test&quot;</span><span class="p">:</span>
+                    <span class="n">vars_string</span> <span class="o">=</span> <span class="s1">&#39;VARS </span><span class="si">{}</span><span class="s1"> start_ind=&quot;</span><span class="si">{}</span><span class="s1">&quot; sampler=&quot;</span><span class="si">{}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobid</span><span class="p">,</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">samplers</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">vars_string</span> <span class="o">=</span> <span class="s1">&#39;VARS </span><span class="si">{}</span><span class="s1"> start_ind=&quot;</span><span class="si">{}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobid</span><span class="p">,</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">job_string</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">retry_string</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">vars_string</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="make_executable"><a class="viewcode-back" href="../../vitamin.html#vitamin.make_condor_files.make_executable">[docs]</a><span class="k">def</span> <span class="nf">make_executable</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;exec&quot;</span><span class="p">],</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span><span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;#!/usr/bin/bash</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="s2">&quot;python -m vitamin.generate_data --start-ind ${{1}} --num-files </span><span class="si">{}</span><span class="s2"> --run-type </span><span class="si">{}</span><span class="s2"> --ini-file </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;files_per_job&quot;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;run_type&quot;</span><span class="p">],</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;config_file&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;run_type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;test&quot;</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">+=</span> <span class="s2">&quot; --sampler $</span><span class="si">{2}</span><span class="s2">&quot;</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">args</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># make the bash script executable</span>
+    <span class="n">st</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;exec&quot;</span><span class="p">])</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;exec&quot;</span><span class="p">],</span> <span class="n">st</span><span class="o">.</span><span class="n">st_mode</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IEXEC</span><span class="p">)</span></div>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s1">&#39;Input files and options&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--ini-file&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s1">&#39;i&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;path to ini file&#39;</span><span class="p">)</span>
+
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="n">vitamin_config</span> <span class="o">=</span> <span class="n">InputParser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">ini_file</span><span class="p">)</span>
+    
+    <span class="n">make_train_dag</span><span class="p">(</span><span class="n">vitamin_config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;training&quot;</span><span class="p">)</span>
+    <span class="n">make_train_dag</span><span class="p">(</span><span class="n">vitamin_config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;validation&quot;</span><span class="p">)</span>
+    <span class="n">make_train_dag</span><span class="p">(</span><span class="n">vitamin_config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;test&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">vitamin_config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;use_real_detector_noise&quot;</span><span class="p">]:</span>
+        <span class="n">make_train_dag</span><span class="p">(</span><span class="n">vitamin_config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;real_noise&quot;</span><span class="p">)</span>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
