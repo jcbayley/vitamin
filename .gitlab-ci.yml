@@ -2,13 +2,11 @@ stages:
   - test
   - build
 
-.test-python: &test-python
+test:
   stage: test
   image: python
   script:
-    - python setup.py install
-    - ls
-    - cd
+    - pip install vitamin
     - python -c "import vitamin"
 
 
