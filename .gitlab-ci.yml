@@ -7,7 +7,7 @@ test:
   image: python
   script:
     - ls
-    - pip install ./vitamin
+    - pip install .
     - python -c "import vitamin"
 
 
