@@ -3,10 +3,10 @@
 ![GitHub Stars](https://img.shields.io/github/stars/hagabbar/vitamin_b?style=social)
 ![Twitter](https://img.shields.io/twitter/follow/gw_hunter?style=social)
 
-# [VItamin_C: A Machine Learning Library for Fast Gravitational Wave Posterior Generation](https://arxiv.org/abs/1909.06296)
+# [VItamin: A Machine Learning Library for Fast Gravitational Wave Posterior Generation](https://arxiv.org/abs/1909.06296)
 :star: Star us on GitHub  it helps!
 
-Welcome to VItamin_B, a python toolkit for producing fast gravitational wave posterior samples.
+Welcome to VItamin, a python toolkit for producing fast gravitational wave posterior samples.
 
 This [repository](https://github.com/hagabbar/vitamin_b) is the official implementation of [Bayesian Parameter Estimation using Conditional Variational Autoencoders for Gravitational Wave Astronomy](https://arxiv.org/abs/1909.06296).
 
@@ -37,7 +37,7 @@ For installing basemap:
 
 Install VItamin using pip (not currently working):
 ```
-pip install vitamin-c
+pip install vitamin
 ```
 
 ## Training

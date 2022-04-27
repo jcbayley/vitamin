@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-VItamin_B
+VItamin
 =========
 
-Welcome to VItamin_B's documentation! VItamin_B is a user-friendly machine 
+Welcome to VItamin's documentation! VItamin is a user-friendly machine 
 learning package for estimating Bayesian posteriors given Gravitational Wave 
 Events. Get started with Installation and then get an overview with the 
 Quickstart. There is a more detailed tutorial with reduced scope, but good 
