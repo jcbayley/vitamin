@@ -66,11 +66,6 @@ def train(config):
     make_paper_plots = config["testing"]['make_paper_plots']
     hyper_par_tune = False
 
-    # if doing hour angle, use hour angle bounds on RA
-    #bounds['ra_min'] = convert_ra_to_hour_angle(bounds['ra_min'],init.args,None,single=True)
-    #bounds['ra_max'] = convert_ra_to_hour_angle(bounds['ra_max'],init.args,None,single=True)
-    #print('... converted RA bounds to hour angle')
-
     # load the training data
     if not make_paper_plots:
         train_dataset = DataLoader(training_directory,config = config) 
@@ -78,6 +73,9 @@ def train(config):
         train_dataset.load_next_chunk()
         validation_dataset.load_next_chunk()
 
+        #enq = tf.keras.utils.OrderedEnqueuer(train_dataset)
+        #enq.start(workers = 4)
+        
     if config["training"]["test_interval"] != False:
         test_dataset = DataLoader(test_directory,config=config, test_set = True)
         test_dataset.load_next_chunk()

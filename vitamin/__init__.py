@@ -18,7 +18,7 @@ from __future__ import absolute_import
 import sys
 
 from . import model
-from . import gw
+from . import gwtools
 from . import initialise_directory
 from . import callbacks
 from . import plotting
