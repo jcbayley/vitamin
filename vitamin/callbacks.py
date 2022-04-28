@@ -205,6 +205,14 @@ class TestCallback(tf.keras.callbacks.Callback):
             for step in range(self.config["data"]["n_test_data"]):
                 mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
 
+                allinds = []
+                for samp, sampind in self.test_dataset.samples_available.items():
+                    if step not in sampind:
+                        allinds.append(step)
+                if len(allinds) == len(self.test_dataset.samples_available):
+                    print("No available samples: {}".format(step))
+                    continue
+
                 plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
                 start_time_test = time.time()
                 samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'])

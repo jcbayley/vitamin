@@ -1,31 +1,3 @@
-import os
-import shutil
-import h5py
-import json
-import sys
-from sys import exit
-import time
-import argparse
-from ..vitamin_parser import InputParser
-import matplotlib.pyplot as plt
-import numpy as np
-from lal import GreenwichMeanSiderealTime
-from astropy.time import Time
-from astropy import coordinates as coord
-import corner
-from universal_divergence import estimate
-import natsort
-from scipy.spatial.distance import jensenshannon
-import scipy.stats as st
-#from keras_adamw import AdamW
-import tensorflow as tf
-import tensorflow_addons as tfa
-import tensorflow_probability as tfp
-tfd = tfp.distributions
-from tensorflow.keras import regularizers
-from ..model import CVAE
-from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
-from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
 
 def train(config):
 
@@ -39,6 +11,25 @@ def train(config):
         print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
     except:
         print("No CUDA devices")
+
+
+    from lal import GreenwichMeanSiderealTime
+    from astropy.time import Time
+    from astropy import coordinates as coord
+    import corner
+    from universal_divergence import estimate
+    import natsort
+    from scipy.spatial.distance import jensenshannon
+    import scipy.stats as st
+    #from keras_adamw import AdamW
+    import tensorflow as tf
+    import tensorflow_addons as tfa
+    import tensorflow_probability as tfp
+    tfd = tfp.distributions
+    from tensorflow.keras import regularizers
+    from ..model import CVAE
+    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
+    from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
 
         
     # Let GPU consumption grow as needed
@@ -155,11 +146,35 @@ def train(config):
 
 
 if __name__ == "__main__":
+
+    import os
+    import shutil
+    import h5py
+    import json
+    import sys
+    from sys import exit
+    import time
+    import argparse
+    import matplotlib.pyplot as plt
+    import numpy as np
     
     parser = argparse.ArgumentParser(description='Input files and options')
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
-
+    #parser.add_argument('--gpu', metavar='i', type=int, help='path to ini file', default = None)
     args = parser.parse_args()
+
+    """
+    if args.gpu is not None:
+        # define which gpu to use during training
+        try:
+            os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+            print("SET CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
+        except:
+            print("No CUDA devices")
+    """
+
+    from ..vitamin_parser import InputParser
+
     vitamin_config = InputParser(args.ini_file)
 
     train(vitamin_config)

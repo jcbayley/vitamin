@@ -8,8 +8,10 @@ def group_outputs(config):
     
     set_pars = set(inf_pars.values())
     
-    available_dists = inspect.getmembers(out_dist, inspect.isclass)
-    available_dists = {name:cls for name,cls in available_dists}
+    file_dists = inspect.getmembers(out_dist, inspect.isclass)
+    available_dists = OrderedDict()
+    for name,cls in file_dists:
+        available_dists[name] = cls
 
     output_dists = OrderedDict()
     for dist in set_pars:

@@ -18,7 +18,7 @@ from __future__ import absolute_import
 import sys
 
 from . import model
-from . import gwtools
+from . import gw
 from . import initialise_directory
 from . import callbacks
 from . import plotting
@@ -39,6 +39,6 @@ from .model import CVAE
 #from . import run_vitamin
 
 __version__ = "0.3.0"
-__author__ = 'Joseph Bayley, Hunter Gabbard'
+__author__ = 'Joseph Bayley, Hunter Gabbard, Chris Messenger'
 __credits__ = 'University of Glasgow'
 
