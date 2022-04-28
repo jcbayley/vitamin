@@ -183,7 +183,8 @@ setup(
                       'wrapt',
                       'natsort',
                       'regex',
-                      'tensorflow_addons'],
+                      'tensorflow_addons',
+                      'importlib_resources'],
 
     classifiers=[
         'Development Status :: 1 - Planning',
