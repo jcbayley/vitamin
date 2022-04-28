@@ -115,16 +115,16 @@ class TrainCallback(tf.keras.callbacks.Callback):
     def learning_rate_modify(self, epoch, epochs_range = 100, decay_length = 4000, init_rate = 1e-4):
         dec_factor = 1
         cycle_factor = 1
-        if epoch > self.config["training"]["cycle_lr_start"]:
+        if epoch > self.config["training"]["cycle_lr_start"] and self.config["training"]["cycle_lr"]:
             half_fact_arr = np.linspace(1/10, 10, int(self.config["training"]["cycle_lr_length"]/2))
             fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
             position = np.remainder(epoch - self.config["training"]["cycle_lr_start"], self.config["training"]["cycle_lr_length"]).astype(int)
             cycle_factor = fact_arr[position]
 
-        if epoch > self.config["training"]["decay_lr_start"]:
+        if epoch > self.config["training"]["decay_lr_start"] and self.config["training"]["decay_lr"]:
             dec_array = np.logspace(-2, 0, self.config["training"]["decay_lr_length"])[::-1]
             decay_pos = epoch - self.config["training"]["decay_lr_start"]
-            if decay_pos > self.config["training"]["decay_lr_length"]:
+            if decay_pos >= self.config["training"]["decay_lr_length"]:
                 decay_pos = -1
             dec_factor = dec_array[decay_pos]
 

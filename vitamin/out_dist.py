@@ -36,8 +36,8 @@ class JointM1M2:
         return joint
 
     def get_networks(self,):
-        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True)
-        logvar = tf.keras.layers.Dense(2,use_bias=True)
+        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="m1m2_mean")
+        logvar = tf.keras.layers.Dense(2,use_bias=True, name="m1m2_logvar")
         return mean, logvar
 
     def cost_setup(self):
@@ -118,8 +118,8 @@ class JointChirpmassMR:
 
     def get_networks(self,):
         # setup network for joint sitribution
-        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True)
-        logvar = tf.keras.layers.Dense(2,use_bias=True)
+        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="chirpMR_mean")
+        logvar = tf.keras.layers.Dense(2,use_bias=True, name="chirpMR_logvar")
         return mean, logvar
 
     def cost_setup(self):
@@ -164,8 +164,8 @@ class TruncatedNormal:
         return tmvn
 
     def get_networks(self):
-        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True)
-        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True)
+        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="trunc_mean")
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="trunc_logvar")
         return mean, logvar
 
     def get_cost(self, dist, x):
@@ -197,8 +197,8 @@ class VonMises:
         return vm
 
     def get_networks(self):
-        mean =  tf.keras.layers.Dense(2*self.num_pars, use_bias = True)
-        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True)
+        mean =  tf.keras.layers.Dense(2*self.num_pars, use_bias = True, name="vonmises_mean")
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="vonmises_logvar")
         return mean, logvar
 
 
@@ -295,8 +295,8 @@ class JointPowerSpherical:
         return fvm_r2_cost_recon
 
     def get_networks(self):
-        mean = tf.keras.layers.Dense(3,use_bias=True)
-        logvar = tf.keras.layers.Dense(1,use_bias=True)
+        mean = tf.keras.layers.Dense(3,use_bias=True, name="vonmisesfisher_mean")
+        logvar = tf.keras.layers.Dense(1,use_bias=True, name="vonmisesfisher_logvar")
         return mean, logvar
 
     def sample(self, dist, max_samples):

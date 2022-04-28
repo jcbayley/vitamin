@@ -306,60 +306,60 @@ class CVAE(tf.keras.Model):
         means = tf.concat(decoded_pars, axis = 1)
         return means
 
-    def get_network(self, in_tensor, layers):
+    def get_network(self, in_tensor, layers, label = "share"):
         
         conv = in_tensor
-        for layer in layers:
+        for i, layer in enumerate(layers):
             if layer.split("(")[0] == "Conv1D":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
-                conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride))
+                conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
             elif layer.split("(")[0] == "ResBlock":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 # add a bottleneck block
-                conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride))
+                conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride), name = "{}_res_{}".format(label, i))
             elif layer.split("(")[0] == "Linear":
                 num_neurons = layer.split("(")[1].strip(")")
-                conv = self.LinearBlock(conv, int(num_neurons))
+                conv = self.LinearBlock(conv, int(num_neurons), name = "{}_dense_{}".format(label, i))
             else:
                 print("No layers saved")
 
         return conv
 
-    def ConvBlock(self, input_data, filters, kernel_size, strides):
+    def ConvBlock(self, input_data, filters, kernel_size, strides, name = ""):
         #, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer
-        conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
+        conv = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(conv)
         conv = self.activation(conv)
 
         return conv
 
-    def LinearBlock(self,input_data, num_neurons):
+    def LinearBlock(self,input_data, num_neurons, name = ""):
 
-        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
-        out = tf.keras.layers.BatchNormalization()(out)
+        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
+        out = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(out)
         return out
 
-    def ResBlock(self,input_data, filters, kernel_size, strides):
+    def ResBlock(self,input_data, filters, kernel_size, strides, name = ""):
         filters1, filters2, filters3 = filters
         kernel_size1,kernel_size2 = kernel_size
         
         conv_short = input_data
         
-        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(input_data)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_1st".format(name))(input_data)
+        conv = tf.keras.layers.BatchNormalization(name="{}_1st_batchnorm".format(name))(conv)
         conv = self.activation(conv)
         
-        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_2nd".format(name))(conv)
+        conv = tf.keras.layers.BatchNormalization(name="{}_2nd_batchnorm".format(name))(conv)
         conv = self.activation(conv)
         
-        conv = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv)
-        conv = tf.keras.layers.BatchNormalization()(conv)
+        conv = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_3rd".format(name))(conv)
+        conv = tf.keras.layers.BatchNormalization(name="{}_3rd_batchnorm".format(name))(conv)
         #conv = self.act(conv)
         
         if strides > 1:
-            conv_short = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(conv_short)
-            conv_short = tf.keras.layers.BatchNormalization()(conv_short)
+            conv_short = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, strides=strides, kernel_regularizer=regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name = "{}_shortcut".format(name))(conv_short)
+            conv_short = tf.keras.layers.BatchNormalization(name="{}_shortcut_batchnorm".format(name))(conv_short)
             #conv_short = self.act(conv_short)                                                                     
 
         conv = tf.keras.layers.Add()([conv, conv_short])
