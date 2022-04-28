@@ -22,7 +22,7 @@ from . import model
 from . import initialise_directory
 from . import callbacks
 from . import plotting
-from . import templates
+#from . import templates
 
 # Check for optional basemap installation
 try:

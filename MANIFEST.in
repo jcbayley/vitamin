@@ -1,3 +1,3 @@
 include README.md
 include LICENSE.md
-recursive-include *.py *.json
+recursive-include *.py *.json *.ini *.prior

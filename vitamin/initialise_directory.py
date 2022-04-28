@@ -1,5 +1,5 @@
-from . import templates
 import importlib.resources as pkg_resources
+import importlib_resources
 import os
 import shutil
 from pathlib import Path
@@ -13,15 +13,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     outdir = Path(args.out_dir).resolve()
+    my_resources = importlib_resources.files("vitamin")
+    config_file = (my_resources / "default_files"/ "config.ini")
+    prior_file = (my_resources / "default_files"/ "bbh_prior.prior")
     
-    
-    with pkg_resources.path(templates, "config.ini") as cfg:
-        config_file = cfg
-
-    with pkg_resources.path(templates, "bbh_prior.prior")  as pr:
-        prior_file = pr
-
-        
 
     if not os.path.isdir(outdir):
         print("Making directory: {}".format(outdir))

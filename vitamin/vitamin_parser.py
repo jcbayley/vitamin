@@ -3,8 +3,9 @@ import copy
 import numpy as np
 import json
 import importlib.resources as pkg_resources
+import importlib_resources
 from collections import OrderedDict
-from . import templates
+#from . import templates
 import bilby
 import os 
 from pathlib import Path
@@ -20,8 +21,11 @@ class InputParser():
         self.config = {}
         self.default_prior = "BBHPriorDict"
         self.default_ini = configparser.ConfigParser()
-        with pkg_resources.path(templates, "config.ini") as default_config:
-            self.default_ini.read(default_config)
+        my_resources = importlib_resources.files("vitamin")
+        self.default_ini.read((my_resources / "default_files"/ "config.ini"))
+        #with pkg_resources.path(os.path.join(__package__,"default_files"), "config.ini") as default_config:
+        #    print(default_config)
+        #    self.default_ini.read(default_config)
         self.create_config(self.default_ini)
         
 
