@@ -91,7 +91,7 @@ class CVAE(tf.keras.Model):
             outputs.append(logvars(r2))
             self.group_par_sizes.append(group.num_pars)
             self.group_output_sizes.extend(group.num_outputs)
-            
+
         # all outputs
         r2 = tf.keras.layers.concatenate(outputs)
 

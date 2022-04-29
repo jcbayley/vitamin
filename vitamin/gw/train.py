@@ -89,16 +89,9 @@ def train(config):
         with open(os.path.join(config["output"]['output_directory'], "loss.txt"),"r") as f:
             start_epoch = len(np.loadtxt(f))
 
-    # start the training loop
-    train_loss = np.zeros((config["training"]['num_iterations'],3))
-    val_loss = np.zeros((config["training"]['num_iterations'],3))
-    ramp_cycles = 1
-    KL_samples = []
 
     optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
     #optimizer = tf.keras.optimizers.Adam(config["training"]["initial_learning_rate"])
-    #optimizer = AdamW(lr=1e-4, model=model,
-    #                  use_cosine_annealing=True, total_iterations=40)
 
     # Keras hyperparameter optimization
     if hyper_par_tune:
@@ -140,7 +133,7 @@ def train(config):
         logdir = os.path.join(config["output"]["output_directory"], "profile")
         if not os.path.isdir(logdir):
             os.makedirs(logdir)
-        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir = logdir,histogram_freq = 50,profile_batch = 200))
+        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir = logdir,histogram_freq = 50,profile_batch = 200,update_freq = 500))
     
     model.fit(train_dataset, use_multiprocessing = False, workers = 6, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 100, initial_epoch = start_epoch)
 

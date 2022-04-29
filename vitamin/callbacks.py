@@ -201,7 +201,7 @@ class TestCallback(tf.keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs = None):
         
-        if epoch % self.config["training"]["test_interval"] == 0 and epoch != 0:
+        if epoch % self.config["training"]["test_interval"] == 0 and epoch not in [0,1]:
             for step in range(self.config["data"]["n_test_data"]):
                 mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
 
