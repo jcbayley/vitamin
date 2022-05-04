@@ -50,7 +50,7 @@ class DataGenerator():
                 signal.get_detector_response()
                 signal_dataset.append(signal.whitened_signals_td)
                 signal_snrs.append(signal.snrs)
-            for key, value in signal.injection_parameters.items():
+            for key, value in signal.save_injection_parameters.items():
                 signal_inj_pars.setdefault(key, [])
                 signal_inj_pars[key].append(value)
 
@@ -104,7 +104,9 @@ class DataGenerator():
                 inj_keys = hf["injection_parameters_keys"]
                 inj_vals = hf["injection_parameters_values"]
                 signal.injection_parameters = {}
+                signal.save_injection_parameters = {}
                 for k in range(len(inj_keys)):
+                    signal.save_injection_parameters[inj_keys[k].decode()] = inj_vals[k]
                     signal.injection_parameters[inj_keys[k].decode()] = inj_vals[k]
                 #signal.snrs = hf["snrs"]
             signal.generate_polarisations()
@@ -127,7 +129,7 @@ class DataGenerator():
                     hf.create_dataset('frequency_domain_strain', data=signal.frequency_domain_strain)
                     inj_keys = []
                     inj_vals = []
-                    for key, value in signal.injection_parameters.items():
+                    for key, value in signal.save_injection_parameters.items():
                         inj_keys.append(key)
                         inj_vals.append(value)
                     hf.create_dataset('injection_parameters_values', data=inj_vals)
@@ -145,9 +147,15 @@ class DataGenerator():
                 logl = getattr(signal,sampler).log_likelihood_evaluations
                 if logl is not None:
                     hf.create_dataset('log_like_eval', data=logl) 
-                print("samp_params",getattr(signal, sampler).posterior.keys())
+
+                # converting masses so have all representations
                 all_posterior_params = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(getattr(signal, sampler).posterior)[0]
-                print("all_params",all_posterior_params.keys())
+                if "chirp_mass" not in all_posterior_params:
+                    all_posterior_params["chirp_mass"] = bilby.gw.conversion.component_masses_to_chirp_mass(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
+                if "mass_ratio" not in all_posterior_params:
+                    all_posterior_params["mass_ratio"] = bilby.gw.conversion.component_masses_to_mass_ratio(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
+
+
                 for q,qi in all_posterior_params.items():
                     name = q + '_post'
                     print('saving PE samples for parameter {}'.format(q))

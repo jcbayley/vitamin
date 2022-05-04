@@ -8,13 +8,48 @@ optionally use the pregenerated sets of waveforms provided here
 
 Some things to note about the provided black box:
 
-* We currently set all priors to be uniformly distributed and produce posteriors on 7 parameters (m1,m2,luminosity distance,time of coalescence,inclination angle, right ascension and declination). Both phase and psi are internally marginalized out.
-
-* Sampling rate is locked at 256 Hz and duration is locked at 1s (more boxes with other values will become available in future).
+* We currently set all priors to be uniformly distributed and produce posteriors on 15 parameters (chirp_mass, mass_ratio,luminosity distance,time of coalescence,inclination angle, spin_magnitude1, spin_magnitude2, spin_angle1, spin_angle2, phi_jl, phi_12, psi, right ascension and declination). Both phase and psi are internally marginalized out.
 
 * Only works on binary black hole signals (more boxes trained on other signals to be released in the future).
 
 * Does not require a GPU to generate samples, but will be ~1s slower to generate all samples per time series.  
+
+==========
+Quickstart from console
+==========
+
+To create a default config file and directory to run code from run:
+
+.. code-block:: console
+
+   $ python -m vitamin.initialise_directory --out-dir your_run_directory
+   $ cd your_run_directory
+
+This will create a config file with various parameters that you can modify. Here you should write the output and data directores as complete paths not relative paths.
+Also a prior file is created which is the default prior distributions that we use (also can be modified).
+
+To create a set of files to generate training, validation and test data run.
+
+.. code-block:: console
+
+   $ python -m vitamin.gw.make_condor_files --out-dir your_run_directory
+
+This will create a condor directory which contains a set of training/validation/testing submit and dag files and a set of bash scripts which will generate some data.
+Running the dag files will create all of the training/validation/test data and run any standard PE code to compare to (currently only runs dynesty and nessai).
+
+Once the data has began training one can train a model using
+
+.. code-block:: console
+
+   $ python -m vitamin.gw.train --ini-file config.ini
+
+which will output plots and information to your_run_directory
+
+==========
+Quickstart from notebook
+==========
+
+!! in progress !!
 
 * Start an ipython notebook (or Google Colab Notebook)
 
@@ -26,8 +61,7 @@ Some things to note about the provided black box:
 
 .. code-block:: console
 
-   $ import vitamin_b
-   $ from vitamin_b import run_vitamin
+   $ import vitamin
 
 .. note:: Test samples should be of the format 'data_<test sample number>.h5py'. Where the h5py file 
    should have a directory containing the noisy time series labeled 'y_data_noisy'. 
@@ -37,10 +71,10 @@ Some things to note about the provided black box:
 
 .. code-block:: console
 
-   $ samples = run_vitamin.gen_samples(model_loc='public_model/inverse_model.ckpt',
-                                                test_set='test_sets/all_4_samplers/test_waveforms/',num_samples=10000,
-                                                plot_corner=True)
+   $ model = vitamin.load_model("path_to_checkpoint.ckpt")
+   $ samples = model.gen_samples(test_data)
 
+   $ vitamin.generate_posterior("path_to_checkpoint.ckpt", test_data)
 
 * The function will now return a set of samples from the posterior per timeseries(default is 10000). 
 

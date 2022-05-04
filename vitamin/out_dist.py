@@ -5,6 +5,7 @@ import numpy as np
 class JointM1M2:
 
     def __init__(self, pars, config):
+        self.name = "JointM1M2"
         self.pars = pars
         if self.pars[0] == "mass_2":
             self.order_flipped = True
@@ -69,6 +70,7 @@ class JointChirpmassMR:
         """
         Joint distribution for Chirpmass and symetric mas ratio
         """
+        self.name = "JointChirpmassMR"
         self.config = config
         self.pars = pars
         if self.pars[0] == "chirp_mass":
@@ -150,6 +152,7 @@ class JointChirpmassMR:
 class TruncatedNormal:
 
     def __init__(self, pars, config):
+        self.name = "TruncatedNormal"
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [self.num_pars, self.num_pars]
@@ -177,6 +180,7 @@ class TruncatedNormal:
 class VonMises:
 
     def __init__(self, pars, config):
+        self.name = "VonMises"
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [2*self.num_pars, self.num_pars]
@@ -211,6 +215,7 @@ class VonMises:
 class JointVonMisesFisher:
 
     def __init__(self, pars, config):
+        self.name = "JointVonMisesFisher"
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
@@ -262,6 +267,7 @@ class JointVonMisesFisher:
 class JointPowerSpherical:
 
     def __init__(self, pars, config):
+        self.name = "JointPowerSpherical"
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:

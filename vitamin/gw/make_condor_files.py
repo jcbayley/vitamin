@@ -103,7 +103,7 @@ def make_train_dag(config, run_type = "training"):
 def make_executable(p):
     with open(p["exec"], "w")as f:
         f.write("#!/usr/bin/bash\n")
-        args = "python -m vitamin.gwtools.generate_data --start-ind ${{1}} --num-files {} --run-type {} --ini-file {}".format( p["files_per_job"], p["run_type"],p["config_file"])
+        args = "python -m vitamin.gw.generate_data --start-ind ${{1}} --num-files {} --run-type {} --ini-file {}".format( p["files_per_job"], p["run_type"],p["config_file"])
         if p["run_type"] == "test":
             args += " --sampler ${2}"
         f.write(args + "\n")

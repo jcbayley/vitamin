@@ -23,15 +23,15 @@ Clone vitamin repository
 
 .. code-block:: console
 
-   $ git clone https://github.com/hagabbar/vitamin_b
-   $ cd vitamin_b
+   $ git clone https://git.ligo.org/joseph.bayley/vitamin_c
+   $ cd vitamin_c
 
 Make a virtual environment
 
 .. code-block:: console
 
-   $ virtualenv -p python3.6 myenv
-   $ source myenv/bin/activate
+   $ conda create --name myenv --python=3.6
+   $ conda activate myenv
    $ pip install --upgrade pip
 
 (optional skyplotting install) cd into your environment and download geos library
@@ -53,7 +53,7 @@ Make a virtual environment
    $ cd ../../..
    $ pip install git+https://github.com/matplotlib/basemap.git
 
-Install vitamin_b and other required pacakges
+Install vitamin_c and other required pacakges
 
 .. code-block:: console
 
@@ -64,7 +64,7 @@ Install vitamin_b and other required pacakges
 From PyPi
 ---------
 
-Make a virtual environment
+Make a virtual environment (Not available just yet)
 
 .. code-block:: console
 

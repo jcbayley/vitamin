@@ -41,7 +41,12 @@ class GenerateTemplate():
         Also get the parameters for inference to save
         """
         self.injection_parameters = self.config["priors"].sample()
-        self.injection_parameters, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
+        self.save_injection_parameters, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(self.injection_parameters)
+        if "chirp_mass" not in self.save_injection_parameters:
+            self.save_injection_parameters["chirp_mass"] = bilby.gw.conversion.component_masses_to_chirp_mass(self.save_injection_parameters["mass_1"], self.save_injection_parameters["mass_2"])
+        if "mass_ratio" not in self.save_injection_parameters:
+            self.save_injection_parameters["mass_ratio"] = bilby.gw.conversion.component_masses_to_mass_ratio(self.save_injection_parameters["mass_1"], self.save_injection_parameters["mass_2"])
+
 
     def clear_attributes(self):
         """ Remove attributes to regenerate data
@@ -199,7 +204,7 @@ class GenerateTemplate():
             pass
 
         # initialise likelihood
-        phase_marginalization=True
+        phase_marginalization=self.config["testing"]["phase_marginalisation"]
         likelihood = bilby.gw.GravitationalWaveTransient(
             interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,priors=self.config["priors"])
 
@@ -227,7 +232,7 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
+                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True,flow_class='gwflowproposal')
             run_endt = time.time()
 
             # save test sample waveform

@@ -137,7 +137,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     # samples shape [numsamples, numpar]
     # all other shape [numsamplers, numsamples, numpar]
 
-    config["data"]['corner_labels'] = config["data"]['rand_pars']
+    config["data"]['corner_labels'] = config["testing"]["bilby_pars"]
 
     # make save directories
     directories = {}
@@ -191,18 +191,23 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
         for i, other_samples in enumerate(all_other_samples):
             if np.all(other_samples) == 0:
                 continue
-            sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["bilby_ol_len"]])
-            true_params = np.zeros(config["masks"]["inf_ol_len"])
-            vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_ol_len"]])
+            #sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["bilby_ol_len"]])
+            #true_params = np.zeros(config["masks"]["inf_ol_len"])
+            #vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_ol_len"]])
+            sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["inf_bilby_len"]])
+            true_params = np.zeros(config["masks"]["inf_bilby_len"])
+            vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_bilby_len"]])
             ol_pars = []
             cnt = 0
-            for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
+            #for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
+            for inf_idx, bilby_idx in config["masks"]["inf_bilby_idx"]:
                 inf_par = config["model"]['inf_pars_list'][inf_idx]
                 bilby_par = config["testing"]['bilby_pars'][bilby_idx]
                 #print(inf_par, np.min(vit_samples[:, inf_idx]), np.max(vit_samples[:,inf_idx]))
                 if inf_par == "geocent_time":
                     vitamin_samples[:,cnt] = vit_samples[:,inf_idx] - config["data"]["ref_geocent_time"]
                     sampler_samples[:,cnt] = other_samples[:,bilby_idx] - config["data"]["ref_geocent_time"]
+                    true_params[cnt] = x_truth[inf_idx] - config["data"]["ref_geocent_time"]
                 elif inf_par == "phase":
                     continue
                 else:
@@ -213,7 +218,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                 ol_pars.append(inf_par)
                 cnt += 1
             parnames = []
-            for k_idx,k in enumerate(config["data"]['rand_pars']):
+            for k_idx,k in enumerate(config["testing"]['bilby_pars']):
                 if np.isin(k, ol_pars):
                     parnames.append(config["data"]['corner_labels'][k_idx])
 
@@ -256,7 +261,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             np.savetxt(other_samples_file,sampler_samples)
 
             if i == 0:
-                figure = corner.corner(sampler_samples, **defaults_kwargs,labels=parnames,
+                figure = corner.corner(sampler_samples, **defaults_kwargs,labels=ol_pars,
                                        color='tab:blue',
                                        show_titles=True, hist_kwargs=hist_kwargs_other)
             else:
@@ -269,7 +274,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
 
         for j,JS in enumerate(JS_est):    
             for j1,JS_ind in enumerate(JS):
-                plt.annotate('JS_{} = {:.3f}'.format(parnames[j1],JS_ind),(0.2 + 0.05*j1,0.95-j*0.02 - j1*0.02),xycoords='figure fraction',fontsize=18)
+                plt.annotate('JS_{} = {:.3f}'.format(ol_pars[j1],JS_ind),(0.2 + 0.05*j1,0.95-j*0.02 - j1*0.02),xycoords='figure fraction',fontsize=18)
 
         corner.corner(vitamin_samples,**defaults_kwargs,
                       color='tab:red',

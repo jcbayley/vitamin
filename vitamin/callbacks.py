@@ -54,12 +54,12 @@ class TrainCallback(tf.keras.callbacks.Callback):
         self.train_dataloader = train_dataloader
         self.recon_losses = []
         self.kl_losses = []
-        self.gauss_losses = []
-        self.vm_losses = []
+        for name, group in self.model.grouped_params.items():
+            setattr(self, "{}_losses".format(name), [])
+            setattr(self, "old_{}_losses".format(name), [])
+
         self.old_recon_losses = []
         self.old_kl_losses = []
-        self.old_gauss_losses = []
-        self.old_vm_losses = []
 
 
     def inf_data_plot(self):
@@ -83,16 +83,16 @@ class TrainCallback(tf.keras.callbacks.Callback):
 
         total_r_losses = np.append(self.old_recon_losses, self.recon_losses)
         total_kl_losses = np.append(self.old_kl_losses, self.kl_losses)
-        total_gauss_losses = np.append(self.old_gauss_losses, self.gauss_losses)
-        total_vm_losses = np.append(self.old_vm_losses, self.vm_losses)
+        all_losses = []
         
         fig, ax = plt.subplots(nrows = 2, figsize = (16,10))
         ax[0].plot(total_r_losses, label = "recon")
         ax[0].plot(total_kl_losses, label = "kl")
         ax[0].set_yscale("symlog")
         ax[0].legend()
-        ax[1].plot(total_gauss_losses, label = "gauss")
-        ax[1].plot(total_vm_losses, label = "von mises")
+        for name, group in self.model.grouped_params.items():
+            temp_loss = np.append(getattr(self,"{}_losses".format(name)),getattr(self,"old_{}_losses".format(name)))
+            ax[1].plot(temp_loss, label = name)
         ax[1].set_yscale("symlog")
         ax[1].legend()
         
@@ -152,13 +152,14 @@ class TrainCallback(tf.keras.callbacks.Callback):
     def on_batch_end(self, batch, logs=None):
         self.recon_losses.append(self.model.recon_loss_metric.result())
         self.kl_losses.append(self.model.kl_loss_metric.result())
-        self.gauss_losses.append(self.model.gauss_loss_metric.result())
-        self.vm_losses.append(self.model.vm_loss_metric.result())
-
+        metrics = {}
+        for name, group in self.model.grouped_params.items():
+            getattr(self, "{}_losses".format(name)).append(getattr(self.model, "{}_loss_metric".format(name)).result())
+            metrics[name] = getattr(self.model, "{}_loss_metric".format(name)).result()
         if not np.isfinite(self.recon_losses[-1]):
-            print("recon loss inf \n")
-            if not np.isfinite(self.gauss_losses[-1]):
-                print("gauss inf \n")
+            print("\n recon loss inf \n")
+            for name, group in self.model.grouped_params.items():
+                print(name, getattr(self, "{}_losses".format(name))[-3:])
             self.nan_plots()
         if not np.isfinite(self.kl_losses[-1]):
             print("kl loss inf")
@@ -169,13 +170,16 @@ class TrainCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self,epoch, logs = None):
         self.old_recon_losses = self.recon_losses
         self.old_kl_losses = self.kl_losses
-        self.old_gauss_losses = self.gauss_losses
-        self.old_vm_losses = self.vm_losses
+        #self.old_gauss_losses = self.gauss_losses
+        #self.old_vm_losses = self.vm_losses
+        for name, group in self.model.grouped_params.items():
+            setattr(self, "old_{}_losses".format(name), getattr(self, "{}_losses".format(name)))
+            setattr(self, "{}_losses".format(name), [])
 
         self.recon_losses = []
         self.kl_losses = []
-        self.gauss_losses = []
-        self.vm_losses = []
+        #self.gauss_losses = []
+        #self.vm_losses = []
 
         #if epoch % self.config["training"]['plot_interval'] == 0:
             # Save the weights using the `checkpoint_path` format

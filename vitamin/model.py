@@ -37,11 +37,11 @@ class CVAE(tf.keras.Model):
         self.ramp = tf.Variable(0.0, trainable=False)
         self.initial_learning_rate = self.config["training"]["initial_learning_rate"]
 
+        self.grouped_params = group_outputs(self.config)
+
         self.total_loss_metric = tf.keras.metrics.Mean('total_loss', dtype=tf.float32)
         self.recon_loss_metric = tf.keras.metrics.Mean('recon_loss', dtype=tf.float32)
         self.kl_loss_metric = tf.keras.metrics.Mean('KL_loss', dtype=tf.float32)
-        self.gauss_loss_metric = tf.keras.metrics.Mean('gauss_loss', dtype=tf.float32)
-        self.vm_loss_metric = tf.keras.metrics.Mean('vm_loss', dtype=tf.float32)
 
         self.val_total_loss_metric = tf.keras.metrics.Mean('val_total_loss', dtype=tf.float32)
         self.val_recon_loss_metric = tf.keras.metrics.Mean('val_recon_loss', dtype=tf.float32)
@@ -53,14 +53,14 @@ class CVAE(tf.keras.Model):
 
         # the shared convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        conv = self.get_network(all_input_y, self.config["model"]["shared_network"])
+        conv = self.get_network(all_input_y, self.config["model"]["shared_network"], label="shared")
         conv = tf.keras.layers.Flatten()(conv)
 
         # r1 encoder network
-        r1 = self.get_network(conv, self.config["model"]["output_network"])
-        r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2)(r1)
-        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
-        r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(r1)
+        r1 = self.get_network(conv, self.config["model"]["output_network"], label = "r1")
+        r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name = "r1_mean_dense")(r1)
+        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense")(r1)
+        r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_modes_dense")(r1)
         r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
 
@@ -68,9 +68,9 @@ class CVAE(tf.keras.Model):
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        q = self.get_network(q, self.config["model"]["output_network"])
-        qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2)(q)
-        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer)(q)
+        q = self.get_network(q, self.config["model"]["output_network"], label = "q")
+        qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name="q_mean_dense")(q)
+        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense")(q)
         q = tf.keras.layers.concatenate([qmu,qlogvar])
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
 
@@ -78,9 +78,8 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        r2 = self.get_network(r2, self.config["model"]["output_network"])
+        r2 = self.get_network(r2, self.config["model"]["output_network"], label = "r2")
         
-        self.grouped_params = group_outputs(self.config)
         
         outputs = []
         self.group_par_sizes = []
@@ -91,6 +90,7 @@ class CVAE(tf.keras.Model):
             outputs.append(logvars(r2))
             self.group_par_sizes.append(group.num_pars)
             self.group_output_sizes.extend(group.num_outputs)
+            setattr(self, "{}_loss_metric".format(name), tf.keras.metrics.Mean('{}_loss'.format(name), dtype=tf.float32))
 
         # all outputs
         r2 = tf.keras.layers.concatenate(outputs)
@@ -104,28 +104,32 @@ class CVAE(tf.keras.Model):
 
     def encode_r1(self, y=None):
         mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
+        #mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.z_dim*self.n_modes,self.n_modes], axis=1)
         return tf.reshape(mean,[-1,self.n_modes,self.z_dim]), tf.reshape(logvar,[-1,self.n_modes,self.z_dim]), tf.reshape(weight,[-1,self.n_modes])
 
     def encode_q(self, x=None, y=None):
         return tf.split(self.encoder_q([y,x]), num_or_size_splits=[self.z_dim,self.z_dim], axis=1)
+        #mean, logvar =  tf.split(self.encoder_q([y,x]), num_or_size_splits=[self.z_dim,self.z_dim*self.z_dim], axis=1)
+        #return mean, tf.reshape(logvar, [-1, self.z_dim, self.z_dim])
 
     def decode_r2(self, y=None, z=None, apply_sigmoid=False):
         return tf.split(self.decoder_r2([y,z]), num_or_size_splits=self.group_output_sizes, axis=1)
 
     @property
     def metrics(self):
-        return [
-            self.total_loss_metric,
-            self.recon_loss_metric,
-            self.kl_loss_metric,
-            self.gauss_loss_metric,
-            self.vm_loss_metric,
-            self.val_total_loss_metric,
-            self.val_recon_loss_metric,
-            self.val_kl_loss_metric,
-        ]
+        base_metrics = [self.total_loss_metric,
+                        self.val_total_loss_metric,
+                        self.recon_loss_metric,
+                        self.val_recon_loss_metric,
+                        self.kl_loss_metric,
+                        self.val_kl_loss_metric]
 
-    #@tf.function
+        for name, group in self.grouped_params.items():
+            base_metrics.append(getattr(self, "{}_loss_metric".format(name)))
+
+        return base_metrics
+
+    @tf.function
     def train_step(self, data):
         """Executes one training step and returns the loss.
         This function computes the loss and gradients, and uses the latter to
@@ -133,34 +137,33 @@ class CVAE(tf.keras.Model):
         """
         
         with tf.GradientTape() as tape:
-            r_loss, kl_loss = self.compute_loss(data[1], data[0], self.ramp)
+            r_loss, kl_loss, reconlosses = self.compute_loss(data[1], data[0], self.ramp)
             loss = r_loss + self.ramp*kl_loss
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
+        outputs = {}
         self.total_loss_metric.update_state(loss)
+        outputs["total_loss"] = self.total_loss_metric.result()
         self.recon_loss_metric.update_state(r_loss)
+        outputs["recon_loss"] = self.recon_loss_metric.result()
         self.kl_loss_metric.update_state(kl_loss)
-        #self.gauss_loss_metric.update_state(g_loss)
-        #self.vm_loss_metric.update_state(vm_loss)
+        outputs["kl_loss"] = self.kl_loss_metric.result()
+        
+        for name, group in self.grouped_params.items():
+            getattr(self, "{}_loss_metric".format(name)).update_state(reconlosses[name])
+            outputs["{}_loss".format(name)] = getattr(self, "{}_loss_metric".format(name)).result()
 
-        #return r_loss, kl_loss
-        return {"total_loss":self.total_loss_metric.result(),
-                "recon_loss":self.recon_loss_metric.result(),
-                "kl_loss":self.kl_loss_metric.result()}
-                #"gauss_loss":self.gauss_loss_metric.result(),
-                #"vm_loss":self.vm_loss_metric.result()}
+        return outputs
 
-        #return r_loss, kl_loss, g_loss, vm_loss, mean_r2, scale_r2, truths, gcost
-
-    #@tf.function
+    @tf.function
     def test_step(self, data):
         """Executes one test step and returns the loss.                                                        
         This function computes the loss and gradients (used for validation data)
         """
         
         #r_loss, kl_loss,g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(data[1], data[0])
-        r_loss, kl_loss  = self.compute_loss(data[1], data[0])
+        r_loss, kl_loss, reconloss  = self.compute_loss(data[1], data[0])
         loss = r_loss + self.ramp*kl_loss
 
         self.val_total_loss_metric.update_state(loss)
@@ -189,6 +192,9 @@ class CVAE(tf.keras.Model):
                                           components_distribution=tfd.MultivariateNormalDiag(
                                               loc=mean_r1,
                                               scale_diag=scale_r1))
+            #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
+            #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
+
 
             mean_q, logvar_q = self.encode_q(x=x,y=y)
             scale_q = self.EPS + tf.sqrt(tf.exp(logvar_q))
@@ -203,9 +209,11 @@ class CVAE(tf.keras.Model):
             cost_recon = 0 
             ind = 0
             indx = 0
-            for group in self.grouped_params.values():
+            outs = {}
+            for name, group in self.grouped_params.items():
                 dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], EPS = self.EPS, ramp = self.ramp)
                 cr = group.get_cost(dist, x_grouped[indx])
+                outs[name] = cr
                 #print(group.pars, cr)
                 cost_recon += cr
                 ind += 2
@@ -215,7 +223,7 @@ class CVAE(tf.keras.Model):
             selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
             log_r1_q = gm_r1.log_prob(tf.cast(z_samp,dtype=tf.float32))   # evaluate the log prob of r1 at the q samples
             cost_KL = tf.cast(selfent_q,dtype=tf.float32) - tf.reduce_mean(log_r1_q)
-            return cost_recon, cost_KL
+            return cost_recon, cost_KL, outs 
             
         return loss_func
 
@@ -239,6 +247,9 @@ class CVAE(tf.keras.Model):
                                               components_distribution=tfd.MultivariateNormalDiag(
                                                   loc=mean_r1,
                                                   scale_diag=scale_r1))
+                #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
+                #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
+
 
                 z_samp = gm_r1.sample()
                 
@@ -274,6 +285,9 @@ class CVAE(tf.keras.Model):
                                       components_distribution=tfd.MultivariateNormalDiag(
                                           loc=mean_r1,
                                           scale_diag=scale_r1))
+        #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
+        #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
+
         z_samp_r1 = gm_r1.sample()
 
         mean_q, logvar_q = self.encode_q(x=x,y=y)
@@ -293,6 +307,8 @@ class CVAE(tf.keras.Model):
         # encode through r1 network                          
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
         scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+        #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
+        #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
 
         gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
                                       components_distribution=tfd.MultivariateNormalDiag(

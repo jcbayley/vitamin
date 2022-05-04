@@ -69,8 +69,16 @@ class InputParser():
 
         self.config["masks"] = {}
 
-        self.config["masks"]["inf_ol_mask"], self.config["masks"]["inf_ol_idx"], self.config["masks"]["inf_ol_len"] = self.get_param_index(self.config["model"]['inf_pars_list'],self.config["testing"]['bilby_pars'])
-        self.config["masks"]["bilby_ol_mask"], self.config["masks"]["bilby_ol_idx"], self.config["masks"]["bilby_ol_len"] = self.get_param_index(self.config["testing"]['bilby_pars'],self.config["model"]['inf_pars_list'])
+        self.config["masks"]["inf_bilby_idx"] = []
+        for i, p in enumerate(self.config["model"]["inf_pars_list"]):
+            for j, p1 in enumerate(self.config["testing"]["bilby_pars"]):
+                if p == p1:
+                    print(p, p1, i, j)
+                    self.config["masks"]["inf_bilby_idx"].append((i,j))
+
+        self.config["masks"]["inf_bilby_len"] = len(self.config["masks"]["inf_bilby_idx"])
+        #self.config["masks"]["inf_ol_mask"], self.config["masks"]["inf_ol_idx"], self.config["masks"]["inf_ol_len"] = self.get_param_index(self.config["model"]['inf_pars_list'],self.config["testing"]['bilby_pars'])
+        #self.config["masks"]["bilby_ol_mask"], self.config["masks"]["bilby_ol_idx"], self.config["masks"]["bilby_ol_len"] = self.get_param_index(self.config["testing"]['bilby_pars'],self.config["model"]['inf_pars_list'])
         
         #parameter masks
         for par in self.config["model"]["inf_pars_list"]:
@@ -107,6 +115,14 @@ class InputParser():
         for par in self.config["priors"]:
             self.config["bounds"]["{}_max".format(par)] = self.config["priors"][par].maximum
             self.config["bounds"]["{}_min".format(par)] = self.config["priors"][par].minimum
+        if "chirp_mass" not in self.config["priors"].keys():
+            self.config["bounds"]["chirp_mass_max"] = bilby.gw.conversion.component_masses_to_chirp_mass(self.config["bounds"]["mass_1_max"], self.config["bounds"]["mass_2_max"])
+            self.config["bounds"]["chirp_mass_min"] = bilby.gw.conversion.component_masses_to_chirp_mass(self.config["bounds"]["mass_1_min"], self.config["bounds"]["mass_2_min"])
+        if "mass_ratio" not in self.config["priors"].keys():
+            self.config["bounds"]["mass_ratio_max"] = bilby.gw.conversion.component_masses_to_mass_ratio(self.config["bounds"]["mass_1_max"], self.config["bounds"]["mass_2_max"])
+            self.config["bounds"]["mass_ratio_min"] = bilby.gw.conversion.component_masses_to_mass_ratio(self.config["bounds"]["mass_1_max"], self.config["bounds"]["mass_2_min"])
+
+
 
     def get_priors(self):
         d = bilby.core.prior.__dict__.copy()
@@ -124,6 +140,9 @@ class InputParser():
             name='geocent_time', latex_label='$t_c$', unit='$s$')
 
         self.config["priors"] = priors
+        self.config["testing"]["bilby_pars"] = list(self.config["priors"].keys())
+        if self.config["testing"]["phase_marginalisation"]:
+            self.config["testing"]["bilby_pars"].remove("phase")
             
     def get_param_index(self, all_pars,pars,sky_extra=None):
         """ 
