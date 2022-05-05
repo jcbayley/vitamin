@@ -90,7 +90,10 @@ def train(config):
             start_epoch = len(np.loadtxt(f))
 
 
-    optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
+    if config["training"]["optimiser"] == "adam":
+        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 2)
+    elif config["training"]["optimiser"] == "sgd":
+        optimizer = tf.keras.optimizers.SGD(config["training"]["initial_learning_rate"])
     #optimizer = tf.keras.optimizers.Adam(config["training"]["initial_learning_rate"])
 
     # Keras hyperparameter optimization

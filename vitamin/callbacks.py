@@ -116,13 +116,13 @@ class TrainCallback(tf.keras.callbacks.Callback):
         dec_factor = 1
         cycle_factor = 1
         if epoch > self.config["training"]["cycle_lr_start"] and self.config["training"]["cycle_lr"]:
-            half_fact_arr = np.linspace(1/10, 10, int(self.config["training"]["cycle_lr_length"]/2))
+            half_fact_arr = np.linspace(1/config["training"]["cycle_lr_amp"], config["training"]["cycle_lr_amp"], int(self.config["training"]["cycle_lr_length"]/2))
             fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
             position = np.remainder(epoch - self.config["training"]["cycle_lr_start"], self.config["training"]["cycle_lr_length"]).astype(int)
             cycle_factor = fact_arr[position]
 
         if epoch > self.config["training"]["decay_lr_start"] and self.config["training"]["decay_lr"]:
-            dec_array = np.logspace(-2, 0, self.config["training"]["decay_lr_length"])[::-1]
+            dec_array = np.logspace(config["training"]["decay_lr_logend"], 0, self.config["training"]["decay_lr_length"])[::-1]
             decay_pos = epoch - self.config["training"]["decay_lr_start"]
             if decay_pos >= self.config["training"]["decay_lr_length"]:
                 decay_pos = -1
@@ -157,9 +157,12 @@ class TrainCallback(tf.keras.callbacks.Callback):
             getattr(self, "{}_losses".format(name)).append(getattr(self.model, "{}_loss_metric".format(name)).result())
             metrics[name] = getattr(self.model, "{}_loss_metric".format(name)).result()
         if not np.isfinite(self.recon_losses[-1]):
-            print("\n recon loss inf \n")
+            print("\n recon loss not finite \n")
+            print([layer.name for layer in self.model.decoder_r2.layers])
             for name, group in self.model.grouped_params.items():
                 print(name, getattr(self, "{}_losses".format(name))[-3:])
+                print(name, "mean", self.model.decoder_r2.get_layer("{}_mean".format(name)))
+                print(name, "logvar", self.model.decoder_r2.get_layer("{}_logvar".format(name)))
             self.nan_plots()
         if not np.isfinite(self.kl_losses[-1]):
             print("kl loss inf")

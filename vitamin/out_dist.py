@@ -36,9 +36,9 @@ class JointM1M2:
         ])
         return joint
 
-    def get_networks(self,):
-        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="m1m2_mean")
-        logvar = tf.keras.layers.Dense(2,use_bias=True, name="m1m2_logvar")
+    def get_networks(self,logvar_activation = "none"):
+        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(2,use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
         return mean, logvar
 
     def cost_setup(self):
@@ -118,10 +118,10 @@ class JointChirpmassMR:
         ])
         return joint
 
-    def get_networks(self,):
+    def get_networks(self,logvar_activation="none"):
         # setup network for joint sitribution
-        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="chirpMR_mean")
-        logvar = tf.keras.layers.Dense(2,use_bias=True, name="chirpMR_logvar")
+        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(2,use_bias=True, name="{}_logvar".format(self.name),activation = logvar_activation)
         return mean, logvar
 
     def cost_setup(self):
@@ -166,9 +166,9 @@ class TruncatedNormal:
 
         return tmvn
 
-    def get_networks(self):
-        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="trunc_mean")
-        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="trunc_logvar")
+    def get_networks(self,logvar_activation="none"):
+        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
         return mean, logvar
 
     def get_cost(self, dist, x):
@@ -200,9 +200,9 @@ class VonMises:
         
         return vm
 
-    def get_networks(self):
-        mean =  tf.keras.layers.Dense(2*self.num_pars, use_bias = True, name="vonmises_mean")
-        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="vonmises_logvar")
+    def get_networks(self, logvar_activation="none"):
+        mean =  tf.keras.layers.Dense(2*self.num_pars, use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="{}_logvar".format(self.name),activation=logvar_activation)
         return mean, logvar
 
 
@@ -248,9 +248,9 @@ class JointVonMisesFisher:
 
         return fvm_r2_cost_recon
 
-    def get_networks(self):
-        mean = tf.keras.layers.Dense(3,use_bias=True)
-        logvar = tf.keras.layers.Dense(1,use_bias=True)
+    def get_networks(self, logvar_activation="none"):
+        mean = tf.keras.layers.Dense(3,use_bias=True,name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(1,use_bias=True,activation = logvar_activation,name="{}_logvar".format(self.name))
         return mean, logvar
 
     def sample(self, dist, max_samples):
@@ -300,9 +300,9 @@ class JointPowerSpherical:
 
         return fvm_r2_cost_recon
 
-    def get_networks(self):
-        mean = tf.keras.layers.Dense(3,use_bias=True, name="vonmisesfisher_mean")
-        logvar = tf.keras.layers.Dense(1,use_bias=True, name="vonmisesfisher_logvar")
+    def get_networks(self,logvar_activation="none"):
+        mean = tf.keras.layers.Dense(3,use_bias=True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(1,use_bias=True, activation=logvar_activation,name="{}_logvar".format(self.name))
         return mean, logvar
 
     def sample(self, dist, max_samples):

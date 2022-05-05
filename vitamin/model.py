@@ -33,6 +33,9 @@ class CVAE(tf.keras.Model):
         self.fourpisq = 4.0*np.pi*np.pi
         self.lntwopi = tf.math.log(2.0*np.pi)
         self.lnfourpi = tf.math.log(4.0*np.pi)
+        self.maxlogvar = np.log(np.nan_to_num(np.float32(np.inf))) - 1
+        self.inv_maxlogvar = 1./self.maxlogvar
+
         # variables
         self.ramp = tf.Variable(0.0, trainable=False)
         self.initial_learning_rate = self.config["training"]["initial_learning_rate"]
@@ -49,6 +52,9 @@ class CVAE(tf.keras.Model):
 
         self.init_network()
 
+    def float_lim_tanh(self, x):
+        return self.maxlogvar*tf.keras.activations.tanh(x*self.inv_maxlogvar)
+
     def init_network(self):
 
         # the shared convolutional network
@@ -59,10 +65,10 @@ class CVAE(tf.keras.Model):
         # r1 encoder network
         r1 = self.get_network(conv, self.config["model"]["output_network"], label = "r1")
         r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name = "r1_mean_dense")(r1)
-        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense")(r1)
+        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation = self.float_lim_tanh)(r1)
         r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_modes_dense")(r1)
         r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
-        self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1)
+        self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1,name="encoder_r1")
 
         # the q encoder network
         q_input_x = tf.keras.Input(shape=(self.x_dim))
@@ -70,9 +76,9 @@ class CVAE(tf.keras.Model):
         q = tf.keras.layers.concatenate([conv,q_inx])
         q = self.get_network(q, self.config["model"]["output_network"], label = "q")
         qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name="q_mean_dense")(q)
-        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense")(q)
+        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation=self.float_lim_tanh)(q)
         q = tf.keras.layers.concatenate([qmu,qlogvar])
-        self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q)
+        self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q,name = "encoder_q")
 
         # the r2 decoder network
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
@@ -85,7 +91,7 @@ class CVAE(tf.keras.Model):
         self.group_par_sizes = []
         self.group_output_sizes = []
         for name, group in self.grouped_params.items():
-            means, logvars = group.get_networks()
+            means, logvars = group.get_networks(logvar_activation = self.float_lim_tanh)
             outputs.append(means(r2))
             outputs.append(logvars(r2))
             self.group_par_sizes.append(group.num_pars)
@@ -95,7 +101,7 @@ class CVAE(tf.keras.Model):
         # all outputs
         r2 = tf.keras.layers.concatenate(outputs)
 
-        self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2)
+        self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2,name = "decoder_r2")
 
         self.compute_loss = self.create_loss_func()
 
