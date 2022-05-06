@@ -33,6 +33,7 @@ Make a virtual environment
    $ conda create --name myenv --python=3.6
    $ conda activate myenv
    $ pip install --upgrade pip
+   $ conda install tensorflow==2.6.0
 
 (optional skyplotting install) cd into your environment and download geos library
 
@@ -57,14 +58,13 @@ Install vitamin_c and other required pacakges
 
 .. code-block:: console
 
-   $ pip install -r requirements.txt
    $ pip install .
 
 ---------
 From PyPi
 ---------
 
-Make a virtual environment (Not available just yet)
+Make a virtual environment !!!!!!!!(Not available just yet)!!!!!!!!!!!!
 
 .. code-block:: console
 

@@ -103,9 +103,8 @@ soupsieve
 tables
 natsort
 tensorboard>=2.1.1
-tensorflow>=2.0.0
 tensorflow-estimator>=2.0.1
-tensorflow-probability>=0.8.0
+tensorflow-probability==0.12.2
 termcolor
 tqdm
 universal-divergence
