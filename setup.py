@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 import subprocess
 import sys
 import os
 
 # check that python version is 3.5 or above
 python_version = sys.version_info
-if python_version < (3, 6):
-    sys.exit("Python < 3.6 is not supported, aborting setup")
+#if python_version < (3, 6):
+#    sys.exit("Python < 3.6 is not supported, aborting setup")
 print("Confirmed Python version {}.{}.{} >= 3.6.0".format(*python_version[:3]))
 
 
@@ -79,9 +79,10 @@ setup(
     author='Joseph Bayley, Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
     author_email='joseph.bayley@glasgow.ac.uk',
     license='GNU General Public License v3 (GPLv3)',
-    packages=['vitamin'],
+    packages=find_packages(),
     package_dir={'vitamin': 'vitamin'},
-    package_data={'vitamin': ['default_files/bbh.prior',"default_files/config.ini"],
+    include_package_data=True,
+    package_data={'vitamin': ['default_files/bbh.prior',"default_files/config.ini", "default_files/init_config.ini"],
                   'vitamin': [version_file]},
 
     python_requires='>=3.6', 
@@ -173,9 +174,9 @@ setup(
                       'tables',
                       'tensorboard>=2.1.1',
                       'tensorflow-estimator>=2.1.0',
-                      'tensorflow-probability>=0.9.0',
-                      'tensorflow-addons==0.16.1',
-                      'tensorflow-probability==0.12.2',
+                      'tensorflow>=2.6.0',
+                      'tensorflow-addons>=0.11.1',
+                      'tensorflow-probability>=0.11.2',
                       'termcolor',
                       'tqdm',
                       'urllib3',

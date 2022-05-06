@@ -9,7 +9,7 @@ estimation. It is primarily designed and built for inference of compact
 binary coalescence events in interferometric data, but it can also be used for
 more general problems.
 
-The code is hosted at https://github.com/hagabbar/vitamin_b.
+The code is hosted at .
 For installation instructions see
 "need to add link here".
 
