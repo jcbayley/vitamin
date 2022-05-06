@@ -29,7 +29,8 @@ introduction to the use of VItamin at the following Google Colab
    quickstart
    vitamin_start_to_finish
    parameters_files
-
+   output_distributions
+   model_options
 
 Indices and tables
 ==================
