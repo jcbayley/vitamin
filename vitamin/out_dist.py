@@ -20,18 +20,18 @@ class JointM1M2:
         self.sample = self.sample_setup()
         self.Root = tfp.distributions.JointDistributionCoroutine.Root
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
+    def get_distribution(self, mean, logvar, ramp = 1.0):
         mean1, mean2 = tf.split(mean, num_or_size_splits=2, axis=1)
         logvar1, logvar2 = tf.split(logvar, num_or_size_splits=2, axis=1)
 
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean1, tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar1)), tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvar1)), tf.float32),
                 low=0, high=1),
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean2, tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar2)), tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvar2)), tf.float32),
                 low=0, high=b0),
         ])
         return joint
@@ -100,7 +100,7 @@ class JointChirpmassMR:
         den = (m*(1 + 1/q))**(1./5.)
         return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
+    def get_distribution(self, mean, logvar, ramp = 1.0):
         # this is not working yet
         mean_q, mean_cm = tf.split(mean, num_or_size_splits=2, axis=1)
         logvarq, logvarcm = tf.split(logvar, num_or_size_splits=2, axis=1)
@@ -108,11 +108,11 @@ class JointChirpmassMR:
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_q,dtype=tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
                 low=0, high=1),
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_cm,dtype=tf.float32),
-                scale=tf.cast(EPS + tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
                 low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
                 high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
         ])
@@ -157,11 +157,11 @@ class TruncatedNormal:
         self.num_pars = len(self.pars)
         self.num_outputs = [self.num_pars, self.num_pars]
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1.0):
+    def get_distribution(self, mean, logvar, ramp = 1.0):
         # truncated normal for non-periodic params                      
         tmvn = tfp.distributions.TruncatedNormal(
             loc=tf.cast(mean, dtype=tf.float32),
-            scale=tf.cast(EPS + tf.sqrt(tf.exp(logvar)),dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvar)),dtype=tf.float32),
             low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0)
 
         return tmvn
@@ -188,7 +188,7 @@ class VonMises:
         self.lntwopi = tf.math.log(2.0*np.pi)
         self.lnfourpi = tf.math.log(4.0*np.pi)
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1):
+    def get_distribution(self, mean, logvar, ramp = 1):
         mean_x, mean_y = tf.split(mean, num_or_size_splits=2, axis=1)
         # the mean angle (0,2pi) [size (batch,p)]
         mean_angle = tf.math.floormod(tf.math.atan2(tf.cast(mean_y,dtype=tf.float32),tf.cast(mean_x,dtype=tf.float32)),2.0*np.pi)
@@ -196,7 +196,7 @@ class VonMises:
         # define the 2D Gaussian scale [size (batch,2*p)]
         vm = tfp.distributions.VonMises(
             loc=tf.cast(mean_angle,dtype=tf.float32),
-            concentration=tf.cast(tf.math.reciprocal(EPS + self.fourpisq*tf.exp(logvar)),dtype=tf.float32))
+            concentration=tf.cast(tf.math.reciprocal(self.fourpisq*tf.exp(logvar)),dtype=tf.float32))
         
         return vm
 
@@ -225,10 +225,10 @@ class JointVonMisesFisher:
         self.lntwopi = tf.math.log(2.0*np.pi)
         self.lnfourpi = tf.math.log(4.0*np.pi)
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1):
+    def get_distribution(self, mean, logvar, ramp = 1):
         # define the von mises fisher for the sky
         fvm_loc = tf.reshape(tf.math.l2_normalize(mean, axis=1),[-1,3])  # mean in (x,y,z)
-        fvm_con = tf.reshape(tf.math.reciprocal(EPS + tf.exp(logvar)),[-1])
+        fvm_con = tf.reshape(tf.math.reciprocal(tf.exp(logvar)),[-1])
         fvm_r2 = tfp.distributions.VonMisesFisher(
             mean_direction = tf.cast(fvm_loc,dtype=tf.float32),
             concentration = tf.cast(fvm_con,dtype=tf.float32)
@@ -277,10 +277,10 @@ class JointPowerSpherical:
         self.lntwopi = tf.math.log(2.0*np.pi)
         self.lnfourpi = tf.math.log(4.0*np.pi)
 
-    def get_distribution(self, mean, logvar, EPS = 1e-6, ramp = 1):
+    def get_distribution(self, mean, logvar, ramp = 1):
         # define the von mises fisher for the sky
         fvm_loc = tf.reshape(tf.math.l2_normalize(mean, axis=1),[-1,3])  # mean in (x,y,z)
-        fvm_con = tf.reshape(tf.math.reciprocal(EPS + tf.exp(logvar)),[-1])
+        fvm_con = tf.reshape(tf.math.reciprocal(tf.exp(logvar)),[-1])
         fvm_r2 = tfp.distributions.PowerSpherical(
             mean_direction = tf.cast(fvm_loc,dtype=tf.float32),
             concentration = tf.cast(fvm_con,dtype=tf.float32)

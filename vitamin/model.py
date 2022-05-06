@@ -196,7 +196,7 @@ class CVAE(tf.keras.Model):
             x = tf.cast(x, dtype=tf.float32)
             
             mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-            scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+            scale_r1 = tf.sqrt(tf.exp(logvar_r1))
             gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
                                           components_distribution=tfd.MultivariateNormalDiag(
                                               loc=mean_r1,
@@ -206,7 +206,7 @@ class CVAE(tf.keras.Model):
 
 
             mean_q, logvar_q = self.encode_q(x=x,y=y)
-            scale_q = self.EPS + tf.sqrt(tf.exp(logvar_q))
+            scale_q = tf.sqrt(tf.exp(logvar_q))
             mvn_q = tfp.distributions.MultivariateNormalDiag(
                 loc=mean_q,
                 scale_diag=scale_q)
@@ -220,7 +220,7 @@ class CVAE(tf.keras.Model):
             indx = 0
             outs = {}
             for name, group in self.grouped_params.items():
-                dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], EPS = self.EPS, ramp = self.ramp)
+                dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], ramp = self.ramp)
                 cr = group.get_cost(dist, x_grouped[indx])
                 outs[name] = cr
                 #print(group.pars, cr)
@@ -251,7 +251,7 @@ class CVAE(tf.keras.Model):
             for i in range(samp_iterations):
 
                 mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-                scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+                scale_r1 = tf.sqrt(tf.exp(logvar_r1))
                 gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
                                               components_distribution=tfd.MultivariateNormalDiag(
                                                   loc=mean_r1,
@@ -267,7 +267,7 @@ class CVAE(tf.keras.Model):
                 indx = 0
                 dist_samples = []
                 for group in self.grouped_params.values():
-                    dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], EPS = self.EPS, ramp = self.ramp)
+                    dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1],  ramp = self.ramp)
                     dist_samples.append(group.sample(dist, max_samples))
                     ind += 2
                     indx += 1
@@ -289,7 +289,7 @@ class CVAE(tf.keras.Model):
         y = tf.tile(y,(nsamples,1,1))
         x = tf.tile(x,(nsamples,1))
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+        scale_r1 = tf.sqrt(tf.exp(logvar_r1))
         gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
                                       components_distribution=tfd.MultivariateNormalDiag(
                                           loc=mean_r1,
@@ -300,7 +300,7 @@ class CVAE(tf.keras.Model):
         z_samp_r1 = gm_r1.sample()
 
         mean_q, logvar_q = self.encode_q(x=x,y=y)
-        scale_q = self.EPS + tf.sqrt(tf.exp(logvar_q))
+        scale_q = tf.sqrt(tf.exp(logvar_q))
         mvn_q = tfp.distributions.MultivariateNormalDiag(
             loc=mean_q,
             scale_diag=scale_q)
@@ -315,7 +315,7 @@ class CVAE(tf.keras.Model):
         
         # encode through r1 network                          
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
-        scale_r1 = self.EPS + tf.sqrt(tf.exp(logvar_r1))
+        scale_r1 = tf.sqrt(tf.exp(logvar_r1))
         #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
         #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
 
