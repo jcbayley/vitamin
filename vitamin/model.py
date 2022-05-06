@@ -36,6 +36,9 @@ class CVAE(tf.keras.Model):
         self.maxlogvar = np.log(np.nan_to_num(np.float32(np.inf))) - 1
         self.inv_maxlogvar = 1./self.maxlogvar
 
+        self.minlogvar = -6
+        self.maxlogvar = 2
+
         # variables
         self.ramp = tf.Variable(0.0, trainable=False)
         self.initial_learning_rate = self.config["training"]["initial_learning_rate"]
@@ -49,11 +52,11 @@ class CVAE(tf.keras.Model):
         self.val_total_loss_metric = tf.keras.metrics.Mean('val_total_loss', dtype=tf.float32)
         self.val_recon_loss_metric = tf.keras.metrics.Mean('val_recon_loss', dtype=tf.float32)
         self.val_kl_loss_metric = tf.keras.metrics.Mean('val_KL_loss', dtype=tf.float32)
-
+        
         self.init_network()
 
     def float_lim_tanh(self, x):
-        return self.maxlogvar*tf.keras.activations.tanh(x*self.inv_maxlogvar)
+        return (self.maxlogvar - self.minlogvar)*tf.keras.activations.sigmoid(x) + self.minlogvar
 
     def init_network(self):
 

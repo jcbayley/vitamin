@@ -122,7 +122,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
             cycle_factor = fact_arr[position]
 
         if epoch > self.config["training"]["decay_lr_start"] and self.config["training"]["decay_lr"]:
-            dec_array = np.logspace(config["training"]["decay_lr_logend"], 0, self.config["training"]["decay_lr_length"])[::-1]
+            dec_array = np.logspace(self.config["training"]["decay_lr_logend"], 0, self.config["training"]["decay_lr_length"])[::-1]
             decay_pos = epoch - self.config["training"]["decay_lr_start"]
             if decay_pos >= self.config["training"]["decay_lr_length"]:
                 decay_pos = -1
