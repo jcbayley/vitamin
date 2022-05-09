@@ -31,6 +31,7 @@ introduction to the use of VItamin at the following Google Colab
    parameters_files
    output_distributions
    model_options
+   create_data
 
 Indices and tables
 ==================

@@ -30,7 +30,7 @@ Make a virtual environment using the environment.yml file supplied in the reposi
 
 .. code-block:: console
 
-   $ conda env create --f environment.yml
+   $ conda env create -f environment.yml
    $ conda activate myenv
    $ pip install --upgrade pip
 

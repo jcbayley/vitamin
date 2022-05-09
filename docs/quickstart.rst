@@ -32,10 +32,11 @@ To create a set of files to generate training, validation and test data run.
 
 .. code-block:: console
 
-   $ python -m vitamin.gw.make_condor_files --out-dir your_run_directory
+   $ python -m vitamin.gw.make_condor_files --ini-file your_run_directory
 
 This will create a condor directory which contains a set of training/validation/testing submit and dag files and a set of bash scripts which will generate some data.
 Running the dag files will create all of the training/validation/test data and run any standard PE code to compare to (currently only runs dynesty and nessai).
+If condor is not available then go to this page (:doc:`create_data`) to see how to run sqeuentially.
 
 Running the condor files requires running 
 
