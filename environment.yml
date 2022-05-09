@@ -1,0 +1,11 @@
+name: vit_file_test
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - cudatoolkit=11.2
+  - cudnn=8.1
+  - python=3.7
+  - tensorflow=2.6.0
