@@ -9,7 +9,7 @@ and install the optional basemap/geos packages.
 ----------------------
 Notes on Compatibility
 ----------------------
-VItamin requires Python3.6 (e.g. python3.7 will not work) More versions of python will be compatible in the future.
+VItamin requires Python3.7 More versions of python will be compatible in the future.
 
 A GPU is required in order to train a model from scratch, however it is not necessary 
 to have a GPU in order to test a pre-trained model (VItamin will default to the CPU 
@@ -26,14 +26,13 @@ Clone vitamin repository
    $ git clone https://git.ligo.org/joseph.bayley/vitamin_c
    $ cd vitamin_c
 
-Make a virtual environment
+Make a virtual environment using the environment.yml file supplied in the repository - this install the specific cuDNN cuda and tensorflow versions that work with this version of vitamin
 
 .. code-block:: console
 
-   $ conda create --name myenv --python=3.6
+   $ conda env create --f environment.yml
    $ conda activate myenv
    $ pip install --upgrade pip
-   $ conda install tensorflow==2.6.0
 
 (optional skyplotting install) cd into your environment and download geos library
 
@@ -54,7 +53,7 @@ Make a virtual environment
    $ cd ../../..
    $ pip install git+https://github.com/matplotlib/basemap.git
 
-Install vitamin_c and other required pacakges
+Install vitamin and other required pacakges
 
 .. code-block:: console
 

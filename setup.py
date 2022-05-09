@@ -7,8 +7,8 @@ import os
 
 # check that python version is 3.5 or above
 python_version = sys.version_info
-#if python_version < (3, 6):
-#    sys.exit("Python < 3.6 is not supported, aborting setup")
+if python_version < (3, 6):
+    sys.exit("Python < 3.6 is not supported, aborting setup")
 print("Confirmed Python version {}.{}.{} >= 3.6.0".format(*python_version[:3]))
 
 
@@ -116,9 +116,6 @@ setup(
                       'entrypoints',
                       'future',
                       'gast',
-                      'google-auth',
-                      'google-auth-oauthlib',
-                      'google-pasta',
                       'grpcio',
                       'gwdatafind',
                       'gwosc',
@@ -172,11 +169,10 @@ setup(
                       'six',
                       'soupsieve',
                       'tables',
-                      'tensorboard>=2.1.1',
-                      'tensorflow-estimator>=2.1.0',
-                      'tensorflow>=2.6.0',
-                      'tensorflow-addons>=0.11.1',
-                      'tensorflow-probability>=0.11.2',
+                      'tensorflow==2.6.0',
+                      'keras==2.6.0',
+                      'tensorflow-addons==0.13.0',
+                      'tensorflow-probability==0.14.1',
                       'termcolor',
                       'tqdm',
                       'urllib3',
@@ -185,7 +181,6 @@ setup(
                       'wrapt',
                       'natsort',
                       'regex',
-                      'tensorflow_addons',
                       'importlib_resources'],
 
     classifiers=[

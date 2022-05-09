@@ -17,7 +17,7 @@ For installation instructions see
 from __future__ import absolute_import
 import sys
 
-from . import model
+from . import vitamin_model
 #from . import gw
 from . import initialise_directory
 from . import callbacks

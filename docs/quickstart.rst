@@ -49,7 +49,7 @@ which will output plots and information to your_run_directory
 Quickstart from notebook
 ==========
 
-!! in progress !!
+!! in progress - Not working yet!!
 
 * Start an ipython notebook (or Google Colab Notebook)
 

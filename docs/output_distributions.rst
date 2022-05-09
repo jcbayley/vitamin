@@ -10,6 +10,9 @@ TruncatedNormal
 VonMises
 VonMisesFisher
 
-GW specific
+====
+GW specific distributions
+====
+
 JointM1M2
 JointChirpmassMR
