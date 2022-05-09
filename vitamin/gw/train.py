@@ -27,7 +27,7 @@ def train(config):
     import tensorflow_probability as tfp
     tfd = tfp.distributions
     from tensorflow.keras import regularizers
-    from ..model import CVAE
+    from ..vitamin_model import CVAE
     from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
     from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
 

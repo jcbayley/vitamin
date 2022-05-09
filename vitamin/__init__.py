@@ -34,7 +34,7 @@ except (ModuleNotFoundError, ImportError):
 else:
     from .skyplotting import plot_sky
 
-from .model import CVAE
+from .vitamin_model import CVAE
 
 #from . import run_vitamin
 
