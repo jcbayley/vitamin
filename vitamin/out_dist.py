@@ -316,99 +316,93 @@ class JointPowerSpherical:
 
         return samples
 
+
 class JointXYZ:
 
     def __init__(self, pars, config):
-        """
-        !!!! Not working do not use!!!!!!
-        Joint distribution for sjy and distance, i.e. sample in postion in space and convery back to distance and sky
+        """                                                                                                                                  
+        !!!! Not working do not use!!!!!!                                                                                                    
+        Joint distribution for sjy and distance, i.e. sample in postion in space and convery back to distance and sky                        
         """
         self.name = "JointXYZ"
         self.config = config
         self.pars = pars
-        if self.pars[0] == "alpha":
-            self.order_flipped = True
-        elif self.pars[0] == "luminosity_distance":
-            self.order_flipped = False
+
+        order = ["ra", "dec", "luminosity_distance"]
+        self.order_adl = []
+        self.inorder = []
+        for i,p in enumerate(order):
+            for j,p1 in enumerate(pars):
+                if p == p1:
+                    self.order_adl.append(j)
+        for i,p in enumerate(pars):
+            for j,p1 in enumerate(order):
+                if p == p1:
+                    self.inorder.append(j)
 
         self.num_pars = len(self.pars)
         if self.num_pars != 3:
             raise Exception("Please only use three variables for JointXYZ")
         self.num_outputs = [self.num_pars,self.num_pars]
-        self.get_cost = self.cost_setup()
-        self.sample = self.sample_setup()
-
-    def Mconstrainm1(self, q_norm, m):
-        """Contraint for the chirp mass based on maxmium mass of m1
-        """
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
-        num = (q*m*m)**(3./5.)
-        den = (m*(1 + q))**(1./5.)
-        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
-
-    def Mconstrainm2(self, q_norm, m):
-        """Contraint for the chirp mass based on minimum mass of m2"""
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
-        num = ((1/q)*m*m)**(3./5.)
-        den = (m*(1 + 1/q))**(1./5.)
-        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
-
+        self.fourpisq = 4.0*np.pi*np.pi
+        self.lntwopi = tf.math.log(2.0*np.pi)
+        self.lnfourpi = tf.math.log(4.0*np.pi)
+        
     def get_distribution(self, mean, logvar, ramp = 1.0):
-        # this is not working yet
-        mean_q, mean_cm = tf.split(mean, num_or_size_splits=2, axis=1)
-        logvarq, logvarcm = tf.split(logvar, num_or_size_splits=2, axis=1)
+        mean_x, mean_y, mean_z = tf.split(mean, num_or_size_splits=3, axis=1)
+        logvarx, logvary, logvarz = tf.split(logvar, num_or_size_splits=3, axis=1)
 
-        joint = tfp.distributions.JointDistributionSequential([
-            tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean_q,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
-                low=0, high=1),
-            lambda y: tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean_cm,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
-                low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
-                high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
-            lambda z: tfp.distributions.TruncatedNormal(
-                loc=tf.cast(mean_cm,dtype=tf.float32),
-                scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
-                low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
-                high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
+        joint = tfp.distributions.JointDistributionNamed(dict(
+            x = tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean_x,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarx)),dtype=tf.float32),
+                low=-1, high=1),
+            y = lambda x: tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean_y,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvary)),dtype=tf.float32),
+                low=-tf.sqrt(1 - x*x),
+                high=tf.sqrt(1 - x*x)),
+            z = lambda x, y: tfp.distributions.TruncatedNormal(
+                loc=tf.cast(mean_z,dtype=tf.float32),
+                scale=tf.cast(tf.sqrt(tf.exp(logvarz)),dtype=tf.float32),
+                low=-tf.sqrt(1 - y*y - x*x),
+                high=tf.sqrt(1 - y*y - x*x)),
 
-        ])
+        ))
         return joint
-
+    
     def get_networks(self,logvar_activation="none"):
-        # setup network for joint sitribution
-        mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
-        logvar = tf.keras.layers.Dense(2,use_bias=True, name="{}_logvar".format(self.name),activation = logvar_activation)
+        # setup network for joint sitribution                                                                                               
+        mean =  tf.keras.layers.Dense(3,activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(3,use_bias=True, name="{}_logvar".format(self.name),activation = logvar_activation)
         return mean, logvar
+    
+    def get_cost(self, dist, x):
+        # reverse order of true parmaeters to estimate logprob                                                                               
+        xs = tf.split(x, num_or_size_splits=3, axis=1)
+        ra_sky = tf.reshape(2*np.pi*xs[self.order_adl[0]],(-1,1))       # convert the scaled 0->1 true RA value back to radians                
+        dec_sky = tf.reshape(np.pi*(xs[self.order_adl[1]] - 0.5),(-1,1)) # convert the scaled 0>1 true dec value back to radians
+        xyz = {}
+        xyz["x"] = xs[self.order_adl[2]]*tf.cos(ra_sky)*tf.cos(dec_sky)
+        xyz["y"] = xs[self.order_adl[2]]*tf.sin(ra_sky)*tf.cos(dec_sky)
+        xyz["z"] = xs[self.order_adl[2]]*tf.sin(dec_sky)   # construct the true parameter unit vector                                                             
+        #normed_xyz = tf.math.l2_normalize(xyz_unit,axis=1) # normalise x,y,z coords to r                                                    
+        # get log prob        
+        
+        cost_recon = -1.0*tf.reduce_mean(self.lnfourpi + dist.log_prob(xyz),axis=0)
+        return cost_recon
 
-    def cost_setup(self):
-        if self.order_flipped:
-            def get_cost(dist, x):
-                # reverse order of true parmaeters to estimate logprob
-                x_ra, x_dec, x_dist = tf.split(x, num_or_size_splits=3, axis=1)
-                ra_sky = tf.reshape(2*np.pi*x_ra,(-1,1))       # convert the scaled 0->1 true RA value back to radians
-                dec_sky = tf.reshape(np.pi*(x_dec - 0.5),(-1,1)) # convert the scaled 0>1 true dec value back to radians
-                xyz_unit = tf.concat([x_dist*tf.cos(ra_sky)*tf.cos(dec_sky),x_dist*tf.sin(ra_sky)*tf.cos(dec_sky),x_dist*tf.sin(dec_sky)],axis=1)   # construct the true parameter unit vector
-                normed_xyz = tf.math.l2_normalize(xyz_unit,axis=1) # normalise x,y,z coords to r
-                # get log prob
-                fvm_r2_cost_recon = -1.0*tf.reduce_mean(self.lnfourpi + dist.log_prob(normed_xyz),axis=0)
+    def sample(self, dist, max_samples):
+        # transpose amd squeeze to get [samples, parameters]       
+        smp = dist.sample()
+        xyz_samples = tf.concat([smp["x"], smp["y"], smp["z"]], axis = 1)
+        #xyz_samples = tf.gather(smp, indices=self.reorder, axis = 1)
+        x,y,z = tf.split(xyz_samples, num_or_size_splits=3, axis=1)
+        dl = tf.sqrt(x*x + y*y + z*z)
+        dec_sky = tf.acos(z/tf.sqrt(dl))
+        ra_sky = tf.atan(y/x)
+        adl = tf.concat([ra_sky, dec_sky, dl], axis = 1)
+        return tf.gather(adl, indices=self.inorder, axis = 1)
 
-        else:
-            def get_cost(dist, x):
-                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
-                return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x1, x2),axis=1),axis=0)
 
-        return get_cost
 
-    def sample_setup(self):
-        if self.order_flipped:
-            # reverse order of samples based on inputs
-            def sample(dist, max_samples):
-                # transpose amd squeeze to get [samples, parameters]
-                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2])[:,::-1], 2)
-        else:
-            def sample(dist, max_samples):
-                return tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2)
-        return sample
