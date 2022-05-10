@@ -35,8 +35,8 @@ class CVAE(tf.keras.Model):
         self.maxlogvar = np.log(np.nan_to_num(np.float32(np.inf))) - 1
         self.inv_maxlogvar = 1./self.maxlogvar
 
-        self.minlogvar = -6
-        self.maxlogvar = 2
+        self.minlogvar = -10
+        self.maxlogvar = 4
 
         # variables
         self.ramp = tf.Variable(0.0, trainable=False)

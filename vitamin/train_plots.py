@@ -159,7 +159,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
 
     if samples.shape[0]<100:
         print('... Bad run, not doing posterior plotting.')
-        return [-1.0] * len(config["test"]['samplers'][1:])
+        return [-1.0] * len(config["testing"]['samplers'][1:])
     # make numpy arrays
     samples = samples.numpy()
     #print(np.min(samples, axis=0), np.max(samples, axis = 0))

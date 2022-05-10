@@ -401,7 +401,15 @@ class JointXYZ:
         dl = tf.sqrt(x*x + y*y + z*z)
         dec_sky = tf.acos(z/tf.sqrt(dl))
         ra_sky = tf.atan(y/x)
-        adl = tf.concat([ra_sky, dec_sky, dl], axis = 1)
+        # convert ra back depending on x and y
+        add_pi_ind = tf.squeeze(tf.where(tf.logical_and(tf.squeeze(x) < 0,tf.squeeze(y) >= 0)))
+        minus_pi_ind = tf.squeeze(tf.where(tf.logical_and(tf.squeeze(x) < 0,tf.squeeze(y) < 0)))
+        ra_sky = ra_sky.numpy()
+        ra_sky[add_pi_ind.numpy()] += np.pi
+        ra_sky[minus_pi_ind.numpy()] -= np.pi
+        # shift ra to between 0 and 2pi
+        ra_sky = tf.convert_to_tensor(ra_sky) + np.pi
+        adl = tf.concat([ra_sky/(2*np.pi), dec_sky/np.pi, dl], axis = 1)
         return tf.gather(adl, indices=self.inorder, axis = 1)
 
 
