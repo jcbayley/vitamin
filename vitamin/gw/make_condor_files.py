@@ -113,13 +113,12 @@ def make_executable(p):
     os.chmod(p["exec"], st.st_mode | stat.S_IEXEC)
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description='Input files and options')
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
 
     args = parser.parse_args()
     vitamin_config = InputParser(args.ini_file)
-    
+
     make_train_dag(vitamin_config, run_type = "training")
     make_train_dag(vitamin_config, run_type = "validation")
     make_train_dag(vitamin_config, run_type = "test")

@@ -184,7 +184,8 @@ if __name__ == "__main__":
         for i in range(args.num_files):
             data.create_training_val_file(start_ind = args.start_ind + i)
     elif args.run_type == "test":
-        data.create_test_file(start_ind=args.start_ind, sampler = args.sampler)
+        for i in range(args.num_files):
+            data.create_test_file(start_ind=args.start_ind + i, sampler = args.sampler)
         #data.create_test_file(start_ind=args.start_ind, sampler = None)
 
 

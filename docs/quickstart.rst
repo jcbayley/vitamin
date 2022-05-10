@@ -35,6 +35,12 @@ To create a set of files to generate training, validation and test data run.
    $ python -m vitamin.gw.make_condor_files --ini-file your_run_directory
 
 This will create a condor directory which contains a set of training/validation/testing submit and dag files and a set of bash scripts which will generate some data.
+If you run into trouble with CUDA running out of memory, then make sure this is not using the GPU resources by running:
+
+.. code-block:: console
+
+   $ CUDA_VISIBLE_DEVICES="" python -m vitamin.gw.make_condor_files --ini-file your_run_directory
+
 Running the dag files will create all of the training/validation/test data and run any standard PE code to compare to (currently only runs dynesty and nessai).
 If condor is not available then go to this page (:doc:`create_data`) to see how to run sqeuentially.
 
@@ -53,6 +59,14 @@ Once the data has been generated, one can train a model using
    $ python -m vitamin.gw.train --ini-file config.ini
 
 which will output plots and information to your_run_directory
+
+If there are multiple available GPUs you can select which GPU to run on by running:
+
+.. code-block:: console
+
+   $ CUDA_VISIBLE_DEVICES="1" python -m vitamin.gw.train --ini-file config.ini
+
+Where replace the 1 with the gpu device number.
 
 ==========
 Quickstart from notebook

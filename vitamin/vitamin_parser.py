@@ -73,8 +73,8 @@ class InputParser():
         for i, p in enumerate(self.config["model"]["inf_pars_list"]):
             for j, p1 in enumerate(self.config["testing"]["bilby_pars"]):
                 if p == p1:
-                    print(p, p1, i, j)
                     self.config["masks"]["inf_bilby_idx"].append((i,j))
+
 
         self.config["masks"]["inf_bilby_len"] = len(self.config["masks"]["inf_bilby_idx"])
         #self.config["masks"]["inf_ol_mask"], self.config["masks"]["inf_ol_idx"], self.config["masks"]["inf_ol_len"] = self.get_param_index(self.config["model"]['inf_pars_list'],self.config["testing"]['bilby_pars'])
@@ -94,19 +94,6 @@ class InputParser():
         self.config["masks"]["nonperiodic_mask"], self.config["masks"]["nonperiodic_idx_mask"], self.config["masks"]["nonperiodic_len"] = self.get_param_index(self.config["model"]["inf_pars_list"],nonperiodic_params)
 
         self.config["masks"]["idx_periodic_mask"] = np.argsort(self.config["masks"]["nonperiodic_idx_mask"] + self.config["masks"]["periodic_idx_mask"] + self.config["masks"]["ra_idx_mask"] + self.config["masks"]["dec_idx_mask"])
-
-        """
-        # non periodic masks
-        
-        nonperiodic_nonm1m2_params = copy.copy(nonperiodic_params)
-        nonperiodic_nonm1m2_params.remove("mass_1")
-        nonperiodic_nonm1m2_params.remove("mass_2")
-        self.config["masks"]["nonperiodicpars_nonm1m2_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_idx_mask"], self.config["masks"]["nonperiodicpars_nonm1m2_len"] = self.get_param_index(nonperiodic_params,nonperiodic_nonm1m2_params)
-        self.config["masks"]["nonperiodic_nonm1m2_mask"], self.config["masks"]["nonperiodic_nonm1m2_idx_mask"], self.config["masks"]["nonperiodic_nonm1m2_len"] = self.get_param_index(self.config["model"]["inf_pars_list"],nonperiodic_nonm1m2_params)
-
-        self.config["masks"]["nonperiodic_m1_mask"], self.config["masks"]["nonperiodic_m1_idx_mask"], self.config["masks"]["nonperiodic_m1_len"] = self.get_param_index(nonperiodic_params,['mass_1'])
-        self.config["masks"]["nonperiodic_m2_mask"], self.config["masks"]["nonperiodic_m2_idx_mask"], self.config["masks"]["nonperiodic_m2_len"] = self.get_param_index(nonperiodic_params,['mass_2'])
-        """
         self.get_param_order()
 
 
