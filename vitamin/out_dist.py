@@ -99,19 +99,29 @@ class JointChirpmassMR:
         self.sample = self.sample_setup()
 
     def Mconstrainm1(self, q_norm, m):
-        """Contraint for the chirp mass based on maxmium mass of m1
+        """Contraint for the chirp mass based on maxmium mass of m1                                                                         
         """
         q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
         num = (q*m*m)**(3./5.)
         den = (m*(1 + q))**(1./5.)
-        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        chirpmass = num/den
+        inds = tf.where(chirpmass > self.config["bounds"]["chirp_mass_max"])
+        if inds.shape[0] is not None:
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_max"])
+            chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
+        return (chirpmass - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
 
     def Mconstrainm2(self, q_norm, m):
         """Contraint for the chirp mass based on minimum mass of m2"""
         q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
         num = ((1/q)*m*m)**(3./5.)
         den = (m*(1 + 1/q))**(1./5.)
-        return (num/den - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        chirpmass = num/den
+        inds = tf.where(chirpmass < self.config["bounds"]["chirp_mass_min"])
+        if inds.shape[0] is not None:
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_min"])
+            chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
+        return (chirpmass  - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
 
     def get_distribution(self, mean, logvar, ramp = 1.0):
         # this is not working yet
