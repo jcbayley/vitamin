@@ -102,9 +102,10 @@ snowballstemmer
 soupsieve
 tables
 natsort
-tensorboard>=2.1.1
-tensorflow-estimator>=2.0.1
+tensorboard
+tensorflow-estimator
 tensorflow-probability==0.12.2
+tensorflow_addons
 termcolor
 tqdm
 universal-divergence
