@@ -1,3 +1,5 @@
 include README.md
 include LICENSE.md
-recursive-include *.py *.json
+include vitamin/default_files/init_config.ini
+include vitamin/default_files/config.ini
+include vitamin/default_files/bbh_prior.prior

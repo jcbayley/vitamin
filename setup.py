@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 import subprocess
 import sys
 import os
@@ -43,7 +43,7 @@ def write_version_file(version):
 
     version_file = '.version'
     if os.path.isfile(version_file) is False:
-        with open('vitamin_c/' + version_file, 'w+') as f:
+        with open('vitamin/' + version_file, 'w+') as f:
             f.write('{}: {}'.format(version, git_status))
 
     return version_file
@@ -64,26 +64,26 @@ def readfile(filename):
     return filecontents
 
 
-VERSION = '0.2.10'
+VERSION = '0.3.0'
 version_file = write_version_file(VERSION)
 long_description = get_long_description()
 
 
 setup(
-    name='vitamin_c',
-    version='0.2.10',    
+    name='vitamin',
+    version='0.3.0',    
     description='A user-friendly machine learning Bayesian inference library',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/hagabbar/vitamin_b',
-    author='Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
-    author_email='h.gabbard.1@research.gla.ac.uk',
+    url='https://git.ligo.org/joseph.bayley/vitamin_c',
+    author='Joseph Bayley, Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
+    author_email='joseph.bayley@glasgow.ac.uk',
     license='GNU General Public License v3 (GPLv3)',
-    packages=['vitamin_b','vitamin_b.models','vitamin_b.models.neural_networks',
-              'vitamin_b.params_files'],
-    package_dir={'vitamin_b': 'vitamin_b'},
-    package_data={'vitamin_b': ['params_files/*.json'],
-                  'vitamin_b': [version_file]},
+    packages=find_packages(),
+    package_dir={'vitamin': 'vitamin'},
+    include_package_data=True,
+    package_data={'vitamin': ['default_files/bbh.prior',"default_files/config.ini", "default_files/init_config.ini"],
+                  'vitamin': [version_file]},
 
     python_requires='>=3.6', 
     install_requires=['numpy',
@@ -116,9 +116,6 @@ setup(
                       'entrypoints',
                       'future',
                       'gast',
-                      'google-auth',
-                      'google-auth-oauthlib',
-                      'google-pasta',
                       'grpcio',
                       'gwdatafind',
                       'gwosc',
@@ -172,17 +169,19 @@ setup(
                       'six',
                       'soupsieve',
                       'tables',
-                      'tensorboard>=2.1.1',
-                      'tensorflow>=2.1.0',
-                      'tensorflow-estimator>=2.1.0',
-                      'tensorflow-probability>=0.9.0',
+                      'tensorflow==2.6.0',
+                      'keras==2.6.0',
+                      'tensorflow-addons==0.13.0',
+                      'tensorflow-probability==0.14.1',
                       'termcolor',
                       'tqdm',
                       'urllib3',
                       'webencodings',
                       'Werkzeug',
                       'wrapt',
-                      ],
+                      'natsort',
+                      'regex',
+                      'importlib_resources'],
 
     classifiers=[
         'Development Status :: 1 - Planning',

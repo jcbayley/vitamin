@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quickstart &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Run Your Own Analysis from Start to Finish" href="vitamin_start_to_finish.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Quickstart</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline"></a></h1>
+<p>This section will detail how you can produce samples from a gravitational wave (GW) postrior within
+minutes of downloading VItamin given your own GW time series binary black hole data. You may also
+optionally use the pregenerated sets of waveforms provided here</p>
+<p>Some things to note about the provided black box:</p>
+<ul class="simple">
+<li><p>We currently set all priors to be uniformly distributed and produce posteriors on 7 parameters (m1,m2,luminosity distance,time of coalescence,inclination angle, right ascension and declination). Both phase and psi are internally marginalized out.</p></li>
+<li><p>Sampling rate is locked at 256 Hz and duration is locked at 1s (more boxes with other values will become available in future).</p></li>
+<li><p>Only works on binary black hole signals (more boxes trained on other signals to be released in the future).</p></li>
+<li><p>Does not require a GPU to generate samples, but will be ~1s slower to generate all samples per time series.</p></li>
+<li><p>Start an ipython notebook (or Google Colab Notebook)</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>ipython3
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>import vitamin_b and run_vitamin module</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>import vitamin_b
+<span class="gp">$ </span>from vitamin_b import run_vitamin
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Test samples should be of the format ‘data_&lt;test sample number&gt;.h5py’. Where the h5py file
+should have a directory containing the noisy time series labeled ‘y_data_noisy’.
+‘y_data’ should be a numpy array of shape (&lt;number of detectors&gt;,&lt;sample rate X duration&gt;)</p>
+</div>
+<ul class="simple">
+<li><p>To produce test sample posteriors using VItamin, simply point vitamin to the directory containing your test waveforms (examples provided <a class="reference external" href="https://drive.google.com/file/d/1yWZOzvN8yf9rB_boRbXg70nEqhmb5Tfc/view?usp=sharing">here</a>), the pre-trained model (<a class="reference external" href="https://drive.google.com/file/d/1GSdGX2t2SoF3rencUnQ1mZAyoxO5F-zl/view?usp=sharing">model download</a>) and specify the number of samples per posterior requested.</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span><span class="nv">samples</span> <span class="o">=</span> run_vitamin.gen_samples<span class="o">(</span><span class="nv">model_loc</span><span class="o">=</span><span class="s1">&#39;public_model/inverse_model.ckpt&#39;</span>,
+<span class="go">                                             test_set=&#39;test_sets/all_4_samplers/test_waveforms/&#39;,num_samples=10000,</span>
+<span class="go">                                             plot_corner=True)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>The function will now return a set of samples from the posterior per timeseries(default is 10000).</p></li>
+<li><p>Since we set the option plot_corner=True, you will also find a corner plot in the same directory as we ran the code under the title ‘vitamin_example_corner.png’.</p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="vitamin_start_to_finish.html" class="btn btn-neutral float-right" title="Run Your Own Analysis from Start to Finish" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

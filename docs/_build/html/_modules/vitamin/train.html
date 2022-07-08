@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.train &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.train</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.train</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">lal</span> <span class="kn">import</span> <span class="n">GreenwichMeanSiderealTime</span>
+<span class="kn">from</span> <span class="nn">astropy.time</span> <span class="kn">import</span> <span class="n">Time</span>
+<span class="kn">from</span> <span class="nn">astropy</span> <span class="kn">import</span> <span class="n">coordinates</span> <span class="k">as</span> <span class="n">coord</span>
+<span class="kn">import</span> <span class="nn">corner</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">sys</span> <span class="kn">import</span> <span class="n">exit</span>
+<span class="kn">from</span> <span class="nn">universal_divergence</span> <span class="kn">import</span> <span class="n">estimate</span>
+<span class="kn">import</span> <span class="nn">natsort</span>
+<span class="c1">#import plotting</span>
+<span class="kn">from</span> <span class="nn">scipy.spatial.distance</span> <span class="kn">import</span> <span class="n">jensenshannon</span>
+<span class="kn">import</span> <span class="nn">scipy.stats</span> <span class="k">as</span> <span class="nn">st</span>
+<span class="c1">#import wandb</span>
+<span class="c1">#from wandb.keras import WandbCallback</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="c1">#from keras_adamw import AdamW</span>
+<span class="kn">from</span> <span class="nn">.vitamin_parser</span> <span class="kn">import</span> <span class="n">InputParser</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">tensorflow_addons</span> <span class="k">as</span> <span class="nn">tfa</span>
+<span class="kn">import</span> <span class="nn">tensorflow_probability</span> <span class="k">as</span> <span class="nn">tfp</span>
+<span class="n">tfd</span> <span class="o">=</span> <span class="n">tfp</span><span class="o">.</span><span class="n">distributions</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">regularizers</span>
+<span class="kn">from</span> <span class="nn">.model</span> <span class="kn">import</span> <span class="n">CVAE</span>
+<span class="kn">from</span> <span class="nn">.callbacks</span> <span class="kn">import</span>  <span class="n">PlotCallback</span><span class="p">,</span> <span class="n">TrainCallback</span><span class="p">,</span> <span class="n">TestCallback</span><span class="p">,</span> <span class="n">TimeCallback</span>
+<span class="kn">from</span> <span class="nn">.load_data</span> <span class="kn">import</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">convert_ra_to_hour_angle</span><span class="p">,</span> <span class="n">convert_hour_angle_to_ra</span><span class="p">,</span> <span class="n">psiphi_to_psiX</span><span class="p">,</span> <span class="n">psiX_to_psiphi</span><span class="p">,</span> <span class="n">m1m2_to_chirpmassq</span><span class="p">,</span> <span class="n">chirpmassq_to_m1m2</span>
+
+<div class="viewcode-block" id="train"><a class="viewcode-back" href="../../vitamin.html#vitamin.train.train">[docs]</a><span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+
+    <span class="c1">#params, bounds, masks, fixed_vals = get_params(params_dir = params_dir)</span>
+    <span class="n">run</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%y-%m-</span><span class="si">%d</span><span class="s1">-</span><span class="si">%X</span><span class="s1">-%Z&#39;</span><span class="p">)</span>
+
+    <span class="c1"># define which gpu to use during training</span>
+    <span class="c1">#gpu_num = str(vitamin_config[&quot;training&quot;][&#39;gpu_num&#39;])   </span>
+    <span class="c1">#os.environ[&quot;CUDA_VISIBLE_DEVICES&quot;]=gpu_num</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;CUDA DEV: &quot;</span><span class="p">,</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;CUDA_VISIBLE_DEVICES&quot;</span><span class="p">])</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No CUDA devices&quot;</span><span class="p">)</span>
+        
+    <span class="c1"># Let GPU consumption grow as needed</span>
+    <span class="n">config_gpu</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">compat</span><span class="o">.</span><span class="n">v1</span><span class="o">.</span><span class="n">ConfigProto</span><span class="p">()</span>
+    <span class="n">config_gpu</span><span class="o">.</span><span class="n">gpu_options</span><span class="o">.</span><span class="n">allow_growth</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">compat</span><span class="o">.</span><span class="n">v1</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config_gpu</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... letting GPU consumption grow as needed&#39;</span><span class="p">)</span>
+
+    <span class="n">train_log_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s1">&#39;output_directory&#39;</span><span class="p">],</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
+
+    <span class="n">training_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;data_directory&quot;</span><span class="p">],</span> <span class="s2">&quot;training&quot;</span><span class="p">)</span>
+    <span class="n">validation_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;data_directory&quot;</span><span class="p">],</span> <span class="s2">&quot;validation&quot;</span><span class="p">)</span>
+    <span class="n">test_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;data_directory&quot;</span><span class="p">],</span> <span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="s2">&quot;waveforms&quot;</span><span class="p">)</span>
+
+    <span class="n">epochs</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s1">&#39;num_iterations&#39;</span><span class="p">]</span>
+    <span class="n">plot_cadence</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">0.5</span><span class="o">*</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;plot_interval&quot;</span><span class="p">])</span>
+    <span class="c1"># Include the epoch in the file name (uses `str.format`)</span>
+    <span class="n">checkpoint_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">],</span><span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span><span class="s2">&quot;model&quot;</span><span class="p">)</span>
+    <span class="n">checkpoint_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">checkpoint_path</span><span class="p">)</span>
+    <span class="n">dirs</span> <span class="o">=</span> <span class="p">[</span><span class="n">checkpoint_dir</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">direc</span> <span class="ow">in</span> <span class="n">dirs</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">direc</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">direc</span><span class="p">)</span>
+
+    <span class="n">make_paper_plots</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s1">&#39;make_paper_plots&#39;</span><span class="p">]</span>
+    <span class="n">hyper_par_tune</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="c1"># if doing hour angle, use hour angle bounds on RA</span>
+    <span class="c1">#bounds[&#39;ra_min&#39;] = convert_ra_to_hour_angle(bounds[&#39;ra_min&#39;],init.args,None,single=True)</span>
+    <span class="c1">#bounds[&#39;ra_max&#39;] = convert_ra_to_hour_angle(bounds[&#39;ra_max&#39;],init.args,None,single=True)</span>
+    <span class="c1">#print(&#39;... converted RA bounds to hour angle&#39;)</span>
+
+    <span class="c1"># load the training data</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">make_paper_plots</span><span class="p">:</span>
+        <span class="n">train_dataset</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">training_directory</span><span class="p">,</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span><span class="p">)</span> 
+        <span class="n">validation_dataset</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">validation_directory</span><span class="p">,</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span><span class="n">val_set</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">train_dataset</span><span class="o">.</span><span class="n">load_next_chunk</span><span class="p">()</span>
+        <span class="n">validation_dataset</span><span class="o">.</span><span class="n">load_next_chunk</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;test_interval&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="n">test_dataset</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">test_directory</span><span class="p">,</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">test_set</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">test_dataset</span><span class="o">.</span><span class="n">load_next_chunk</span><span class="p">()</span>
+        <span class="n">test_dataset</span><span class="o">.</span><span class="n">load_bilby_samples</span><span class="p">()</span>
+
+        <span class="c1"># load precomputed samples</span>
+        <span class="n">bilby_samples</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">sampler</span> <span class="ow">in</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s2">&quot;samplers&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">bilby_samples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">test_dataset</span><span class="o">.</span><span class="n">sampler_outputs</span><span class="p">[</span><span class="n">sampler</span><span class="p">])</span>
+        <span class="n">bilby_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">bilby_samples</span><span class="p">)</span>
+
+    <span class="n">start_epoch</span> <span class="o">=</span> <span class="mi">0</span>
+    
+    <span class="n">model</span> <span class="o">=</span> <span class="n">CVAE</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s1">&#39;resume_training&#39;</span><span class="p">]:</span>
+        <span class="c1"># Load the previously saved weights</span>
+        <span class="c1">#latest = tf.train.latest_checkpoint(checkpoint_dir)</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">load_weights</span><span class="p">(</span><span class="n">checkpoint_path</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... loading in previous model </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">checkpoint_path</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s1">&#39;output_directory&#39;</span><span class="p">],</span> <span class="s2">&quot;loss.txt&quot;</span><span class="p">),</span><span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">start_epoch</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+
+    <span class="c1"># start the training loop</span>
+    <span class="n">train_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s1">&#39;num_iterations&#39;</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">val_loss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s1">&#39;num_iterations&#39;</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">ramp_cycles</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">KL_samples</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">tfa</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;initial_learning_rate&quot;</span><span class="p">],</span> <span class="n">weight_decay</span> <span class="o">=</span> <span class="mf">1e-8</span><span class="p">)</span>
+    <span class="c1">#optimizer = tf.keras.optimizers.Adam(config[&quot;training&quot;][&quot;initial_learning_rate&quot;])</span>
+    <span class="c1">#optimizer = AdamW(lr=1e-4, model=model,</span>
+    <span class="c1">#                  use_cosine_annealing=True, total_iterations=40)</span>
+
+    <span class="c1"># Keras hyperparameter optimization</span>
+    <span class="k">if</span> <span class="n">hyper_par_tune</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">keras_hyper_optim</span>
+        <span class="k">del</span> <span class="n">model</span>
+        <span class="n">keras_hyper_optim</span><span class="o">.</span><span class="n">main</span><span class="p">(</span><span class="n">train_dataset</span><span class="p">,</span> <span class="n">val_dataset</span><span class="p">)</span>
+        <span class="n">exit</span><span class="p">()</span>
+
+    <span class="c1"># compile and build the model (hardcoded values will change soon)</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">run_eagerly</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">compute_loss</span><span class="p">)</span>
+
+    <span class="c1">#model([test_data, test_pars])</span>
+    <span class="c1">#model.build([(None, 1024,2), (None, 15)])</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">],</span> <span class="s2">&quot;model_summary.txt&quot;</span><span class="p">),</span><span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">encoder_r1</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">print_fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">))</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">encoder_q</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">print_fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">))</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">decoder_r2</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">print_fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">))</span>
+    
+    <span class="n">checkpoint</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">ModelCheckpoint</span><span class="p">(</span>
+        <span class="n">filepath</span><span class="o">=</span><span class="n">checkpoint_path</span><span class="p">,</span>
+        <span class="n">monitor</span><span class="o">=</span><span class="s2">&quot;val_loss&quot;</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">save_best_only</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">save_weights_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+        <span class="n">save_freq</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span>
+        <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">initial_value_threshold</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+    <span class="n">callbacks</span> <span class="o">=</span> <span class="p">[</span><span class="n">PlotCallback</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">],</span> <span class="n">epoch_plot</span><span class="o">=</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;plot_interval&quot;</span><span class="p">],</span><span class="n">start_epoch</span><span class="o">=</span><span class="n">start_epoch</span><span class="p">),</span> <span class="n">TrainCallback</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">train_dataset</span><span class="p">,</span> <span class="n">model</span><span class="p">),</span> <span class="n">TimeCallback</span><span class="p">(</span><span class="n">config</span><span class="p">),</span> <span class="n">checkpoint</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;test_interval&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="n">callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TestCallback</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">test_dataset</span><span class="p">,</span> <span class="n">bilby_samples</span><span class="p">))</span>
+        
+    <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;tensorboard_log&quot;</span><span class="p">]:</span>
+        <span class="n">logdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">],</span> <span class="s2">&quot;profile&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">logdir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">logdir</span><span class="p">)</span>
+        <span class="n">callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">TensorBoard</span><span class="p">(</span><span class="n">log_dir</span> <span class="o">=</span> <span class="n">logdir</span><span class="p">,</span><span class="n">histogram_freq</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span><span class="n">profile_batch</span> <span class="o">=</span> <span class="mi">200</span><span class="p">))</span>
+    
+    <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_dataset</span><span class="p">,</span> <span class="n">use_multiprocessing</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">workers</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span> <span class="n">epochs</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;training&quot;</span><span class="p">][</span><span class="s2">&quot;num_iterations&quot;</span><span class="p">],</span> <span class="n">callbacks</span> <span class="o">=</span> <span class="n">callbacks</span><span class="p">,</span> <span class="n">shuffle</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">validation_data</span> <span class="o">=</span> <span class="n">validation_dataset</span><span class="p">,</span> <span class="n">max_queue_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span> <span class="n">initial_epoch</span> <span class="o">=</span> <span class="n">start_epoch</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s1">&#39;Input files and options&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--ini-file&#39;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s1">&#39;i&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;path to ini file&#39;</span><span class="p">)</span>
+
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="n">vitamin_config</span> <span class="o">=</span> <span class="n">InputParser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">ini_file</span><span class="p">)</span>
+
+    <span class="n">train</span><span class="p">(</span><span class="n">vitamin_config</span><span class="p">)</span>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

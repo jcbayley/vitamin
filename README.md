@@ -1,20 +1,16 @@
 [![PyPI version](https://badge.fury.io/py/vitamin-b.svg)](https://badge.fury.io/py/vitamin-b)
 ![License](https://img.shields.io/github/license/hagabbar/vitamin_b)
-![GitHub Stars](https://img.shields.io/github/stars/hagabbar/vitamin_b?style=social)
-![Twitter](https://img.shields.io/twitter/follow/gw_hunter?style=social)
 
-# [VItamin_C: A Machine Learning Library for Fast Gravitational Wave Posterior Generation](https://arxiv.org/abs/1909.06296)
+# [VItamin: A Machine Learning Library for Fast Gravitational Wave Posterior Generation](https://arxiv.org/abs/1909.06296)
 :star: Star us on GitHub  it helps!
 
-Welcome to VItamin_B, a python toolkit for producing fast gravitational wave posterior samples.
+Welcome to VItamin, a python toolkit for producing fast gravitational wave posterior samples.
 
-This [repository](https://github.com/hagabbar/vitamin_b) is the official implementation of [Bayesian Parameter Estimation using Conditional Variational Autoencoders for Gravitational Wave Astronomy](https://arxiv.org/abs/1909.06296).
+This [repository](https://git.ligo.org/joseph.bayley/vitamin_c/) is the official implementation of [Bayesian Parameter Estimation using Conditional Variational Autoencoders for Gravitational Wave Astronomy](https://arxiv.org/abs/1909.06296).
 
 Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonlini, Roderick Murray-Smith
 
-Official Documentation can be found at [https://hagabbar.github.io/vitamin_c](https://hagabbar.github.io/vitamin_c).
-
-Check out our Blog (to be made), [Paper](https://arxiv.org/abs/1909.06296) and [Interactive Demo](https://colab.research.google.com/github/hagabbar/OzGrav_demo/blob/master/OzGrav_VItamin_demo.ipynb).
+Official Documentation can be found at [https://joseph.bayley.docs.ligo.org/vitamin_c](https://joseph.bayley.docs.ligo.org/vitamin_c).
 
 Note: This repository is a work in progress. No official release of code just yet.
 

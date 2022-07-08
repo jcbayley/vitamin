@@ -1,0 +1,3 @@
+JOB File_0_0_648554845 .//condor/val_run.sub
+RETRY File_0_0_648554845 1
+VARS File_0_0_648554845 start_ind="0"

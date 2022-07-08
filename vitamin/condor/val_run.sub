@@ -1,0 +1,10 @@
+# filename: .//condor/val_run.sub
+universe = vanilla
+executable = ./run_vitamin_condor.py_change
+getenv  = True
+log = .//condor/log/val_run_$(cluster).log
+error = .//condor/err/val_run_$(cluster).err
+output = .//condor/out/val_run_$(cluster).out
+arguments = --gen_val True --start_ind $(start_ind) --num_files 20 --config-file config.ini
+accounting_group = ligo.dev.o4.cbc.explore.test
+queue

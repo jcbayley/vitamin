@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.train_plots &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.train_plots</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.train_plots</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">lal</span> <span class="kn">import</span> <span class="n">GreenwichMeanSiderealTime</span>
+<span class="kn">from</span> <span class="nn">astropy.time</span> <span class="kn">import</span> <span class="n">Time</span>
+<span class="kn">from</span> <span class="nn">astropy</span> <span class="kn">import</span> <span class="n">coordinates</span> <span class="k">as</span> <span class="n">coord</span>
+<span class="kn">import</span> <span class="nn">corner</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">sys</span> <span class="kn">import</span> <span class="n">exit</span>
+<span class="kn">from</span> <span class="nn">universal_divergence</span> <span class="kn">import</span> <span class="n">estimate</span>
+<span class="kn">import</span> <span class="nn">natsort</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">regularizers</span>
+<span class="kn">from</span> <span class="nn">scipy.spatial.distance</span> <span class="kn">import</span> <span class="n">jensenshannon</span>
+<span class="kn">import</span> <span class="nn">scipy.stats</span> <span class="k">as</span> <span class="nn">st</span>
+
+
+<div class="viewcode-block" id="plot_losses"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_losses">[docs]</a><span class="k">def</span> <span class="nf">plot_losses</span><span class="p">(</span><span class="n">train_loss</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the losses</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">train_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="s1">&#39;b&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;RECON&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">train_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="s1">&#39;r&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;KL&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">train_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span><span class="s1">&#39;g&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;TOTAL&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">val_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="s1">&#39;--b&#39;</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">val_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="s1">&#39;--r&#39;</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">val_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span><span class="s1">&#39;--g&#39;</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="mf">1.1</span><span class="o">*</span><span class="n">train_loss</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="mf">0.1</span><span class="o">*</span><span class="n">epoch</span><span class="p">):</span><span class="n">epoch</span><span class="p">,:]),</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="mf">1.1</span><span class="o">*</span><span class="n">train_loss</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="mf">0.1</span><span class="o">*</span><span class="n">epoch</span><span class="p">):</span><span class="n">epoch</span><span class="p">,:])])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/loss.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="c1"># save loss data to text file</span>
+    <span class="n">loss_file</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/loss.txt&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">train_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,:],</span><span class="n">val_loss</span><span class="p">[:</span><span class="n">epoch</span><span class="p">,:]],</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">loss_file</span><span class="p">,</span><span class="n">data</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="plot_batch_losses"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_batch_losses">[docs]</a><span class="k">def</span> <span class="nf">plot_batch_losses</span><span class="p">(</span><span class="n">train_loss</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the losses</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">train_loss</span><span class="p">[:,</span><span class="mi">0</span><span class="p">],</span><span class="s1">&#39;b&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;RECON&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">train_loss</span><span class="p">[:,</span><span class="mi">1</span><span class="p">],</span><span class="s1">&#39;r&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;KL&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">train_loss</span><span class="p">[:,</span><span class="mi">2</span><span class="p">],</span><span class="s1">&#39;g&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;TOTAL&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;epoch&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_yscale</span><span class="p">(</span><span class="s2">&quot;symlog&quot;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="c1">#plt.ylim([np.min(1.1*train_loss[int(0.1*epoch):epoch,:]),np.max(1.1*train_loss[int(0.1*epoch):epoch,:])])</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/batch_loss.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="plot_gauss_von"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_gauss_von">[docs]</a><span class="k">def</span> <span class="nf">plot_gauss_von</span><span class="p">(</span><span class="n">train_loss</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the losses</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">train_loss</span><span class="p">[:,</span><span class="mi">0</span><span class="p">],</span><span class="s1">&#39;b&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;Gauss&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">train_loss</span><span class="p">[:,</span><span class="mi">1</span><span class="p">],</span><span class="s1">&#39;r&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;Vonm&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;epoch&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_yscale</span><span class="p">(</span><span class="s2">&quot;symlog&quot;</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="c1">#plt.ylim([np.min(1.1*train_loss[int(0.1*epoch):epoch,:]),np.max(1.1*train_loss[int(0.1*epoch):epoch,:])])</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/batch_gauss_von_loss.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="plot_losses_zoom"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_losses_zoom">[docs]</a><span class="k">def</span> <span class="nf">plot_losses_zoom</span><span class="p">(</span><span class="n">train_loss</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">ind_start</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;TOTAL&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the losses</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">label</span> <span class="o">==</span> <span class="s2">&quot;TOTAL&quot;</span><span class="p">:</span>
+        <span class="n">ind</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="k">elif</span> <span class="n">label</span> <span class="o">==</span> <span class="s2">&quot;RECON&quot;</span><span class="p">:</span>
+        <span class="n">ind</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="n">label</span> <span class="o">==</span> <span class="s2">&quot;KL&quot;</span><span class="p">:</span>
+        <span class="n">ind</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="c1">#plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,0],&#39;b&#39;,label=&#39;RECON&#39;)</span>
+    <span class="c1">#plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,1],&#39;r&#39;,label=&#39;KL&#39;)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">)[</span><span class="n">ind_start</span><span class="p">:],</span><span class="n">train_loss</span><span class="p">[</span><span class="n">ind_start</span><span class="p">:</span><span class="n">epoch</span><span class="p">,</span><span class="n">ind</span><span class="p">],</span><span class="s1">&#39;g&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="p">))</span>
+    <span class="c1">#plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,0],&#39;--b&#39;,alpha=0.5)</span>
+    <span class="c1">#plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,1],&#39;--r&#39;,alpha=0.5)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="p">)[</span><span class="n">ind_start</span><span class="p">:],</span><span class="n">val_loss</span><span class="p">[</span><span class="n">ind_start</span><span class="p">:</span><span class="n">epoch</span><span class="p">,</span><span class="n">ind</span><span class="p">],</span><span class="s1">&#39;--g&#39;</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;loss&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="c1">#plt.ylim([np.min(1.1*train_loss[int(0.1*epoch):epoch,:]),np.max(1.1*train_loss[int(0.1*epoch):epoch,:])])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">/loss_zoom_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">run</span><span class="p">,</span><span class="n">label</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+ 
+<div class="viewcode-block" id="plot_KL"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_KL">[docs]</a><span class="k">def</span> <span class="nf">plot_KL</span><span class="p">(</span><span class="n">KL_samples</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the KL evolution</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># arrives in shape n_kl,n_test,3</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">KL_samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="c1">#    KL_samples = np.transpose(KL_samples,[2,1,0])   # re-order axes</span>
+<span class="c1">#    print(list(np.linspace(0,len(params[&#39;samplers&#39;][1:])-1,num=len(params[&#39;samplers&#39;][1:]), dtype=int))[::-1])</span>
+<span class="c1">#    print(KL_samples.shape)</span>
+<span class="c1">#    exit()</span>
+<span class="c1">#    KL_samples = np.transpose(KL_samples, list(np.linspace(0,len(params[&#39;samplers&#39;][1:])-1,num=len(params[&#39;samplers&#39;][1:]), dtype=int))[::-1])    </span>
+    <span class="n">ls</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;-&#39;</span><span class="p">,</span><span class="s1">&#39;--&#39;</span><span class="p">,</span><span class="s1">&#39;:&#39;</span><span class="p">]</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;C0&#39;</span><span class="p">,</span><span class="s1">&#39;C1&#39;</span><span class="p">,</span><span class="s1">&#39;C2&#39;</span><span class="p">,</span><span class="s1">&#39;C3&#39;</span><span class="p">]</span>
+    <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.4</span><span class="p">,</span><span class="mf">14.4</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">kl_s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">KL_samples</span><span class="p">):</span>   <span class="c1"># loop over samplers</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span><span class="n">kl</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">kl_s</span><span class="p">):</span>     <span class="c1"># loop over test cases</span>
+            <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">semilogx</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">step</span><span class="p">,</span><span class="n">kl</span><span class="p">,</span><span class="n">ls</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">N</span><span class="o">*</span><span class="n">step</span><span class="p">,</span><span class="n">kl</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="s1">&#39;.&#39;</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">axs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;KL&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="o">-</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">1.0</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/kl.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="plot_posterior"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_posterior">[docs]</a><span class="k">def</span> <span class="nf">plot_posterior</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span><span class="n">x_truth</span><span class="p">,</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">,</span><span class="n">all_other_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scale_other_samples</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">unconvert_parameters</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    plots the posteriors</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># samples shape [numsamples, numpar]</span>
+    <span class="c1"># all other shape [numsamplers, numsamples, numpar]</span>
+
+    <span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;corner_labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;rand_pars&#39;</span><span class="p">]</span>
+
+    <span class="c1"># make save directories</span>
+    <span class="n">directories</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">dname</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;comparison_posteriors&quot;</span><span class="p">,</span> <span class="s2">&quot;full_posteriors&quot;</span><span class="p">,</span><span class="s2">&quot;JS_divergence&quot;</span><span class="p">,</span><span class="s2">&quot;samples&quot;</span><span class="p">]:</span>
+        <span class="n">directories</span><span class="p">[</span><span class="n">dname</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_directory&quot;</span><span class="p">],</span> <span class="n">dname</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="n">dname</span><span class="p">]):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="n">dname</span><span class="p">])</span>
+    
+    <span class="c1"># trim samples from outside the cube</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">s</span><span class="o">&gt;=</span><span class="mf">0.0</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">s</span><span class="o">&lt;=</span><span class="mf">1.0</span><span class="p">)):</span>
+            <span class="n">mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">samples</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">boolean_mask</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span><span class="n">mask</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;identified </span><span class="si">{}</span><span class="s1"> good samples&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+
+    <span class="k">if</span> <span class="n">samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">&lt;</span><span class="mi">100</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Bad run, not doing posterior plotting.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">][</span><span class="s1">&#39;samplers&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="c1"># make numpy arrays</span>
+    <span class="n">samples</span> <span class="o">=</span> <span class="n">samples</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+    <span class="c1">#print(np.min(samples, axis=0), np.max(samples, axis = 0))</span>
+    <span class="c1">#samples_file = os.path.join(directories[&quot;samples&quot;],&#39;posterior_samples_epoch_{}_event_{}_normed.txt&#39;.format(epoch,idx))</span>
+    <span class="c1">#np.savetxt(samples_file,samples)</span>
+
+    <span class="c1"># convert vitamin sample and true parameter back to truths</span>
+    <span class="k">if</span> <span class="n">unconvert_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">vit_samples</span> <span class="o">=</span> <span class="n">unconvert_parameters</span><span class="p">(</span><span class="n">samples</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">vit_samples</span> <span class="o">=</span> <span class="n">samples</span>
+        
+    <span class="c1"># define general plotting arguments</span>
+    <span class="n">defaults_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+                    <span class="n">bins</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">smooth</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">label_kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">16</span><span class="p">),</span>
+                    <span class="n">title_kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">16</span><span class="p">),</span>
+                    <span class="n">truth_color</span><span class="o">=</span><span class="s1">&#39;tab:orange&#39;</span><span class="p">,</span> <span class="n">quantiles</span><span class="o">=</span><span class="p">[</span><span class="mf">0.16</span><span class="p">,</span> <span class="mf">0.84</span><span class="p">],</span>
+                    <span class="n">levels</span><span class="o">=</span><span class="p">(</span><span class="mf">0.68</span><span class="p">,</span><span class="mf">0.90</span><span class="p">,</span><span class="mf">0.95</span><span class="p">),</span> <span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">plot_density</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_datapoints</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">max_n_ticks</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="c1"># 1-d hist kwargs for normalisation</span>
+    <span class="n">hist_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:red&#39;</span><span class="p">)</span>
+    <span class="n">hist_kwargs_other</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:blue&#39;</span><span class="p">)</span>
+    <span class="n">hist_kwargs_other2</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:green&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">all_other_samples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">JS_est</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">other_samples</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">all_other_samples</span><span class="p">):</span>
+            <span class="n">sampler_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="n">other_samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;bilby_ol_len&quot;</span><span class="p">]])</span>
+            <span class="n">true_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_len&quot;</span><span class="p">])</span>
+            <span class="n">vitamin_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="n">vit_samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_len&quot;</span><span class="p">]])</span>
+            <span class="n">ol_pars</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">inf_idx</span><span class="p">,</span><span class="n">bilby_idx</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_idx&quot;</span><span class="p">],</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;bilby_ol_idx&quot;</span><span class="p">]):</span>
+                <span class="n">inf_par</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">][</span><span class="n">inf_idx</span><span class="p">]</span>
+                <span class="n">bilby_par</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s1">&#39;bilby_pars&#39;</span><span class="p">][</span><span class="n">bilby_idx</span><span class="p">]</span>
+                <span class="c1">#print(inf_par, np.min(vit_samples[:, inf_idx]), np.max(vit_samples[:,inf_idx]))</span>
+                <span class="k">if</span> <span class="n">inf_par</span> <span class="o">==</span> <span class="s2">&quot;geocent_time&quot;</span><span class="p">:</span>
+                    <span class="n">vitamin_samples</span><span class="p">[:,</span><span class="n">cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">vit_samples</span><span class="p">[:,</span><span class="n">inf_idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;ref_geocent_time&quot;</span><span class="p">]</span>
+                    <span class="n">sampler_samples</span><span class="p">[:,</span><span class="n">cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">other_samples</span><span class="p">[:,</span><span class="n">bilby_idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;ref_geocent_time&quot;</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">inf_par</span> <span class="o">==</span> <span class="s2">&quot;phase&quot;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">vitamin_samples</span><span class="p">[:,</span><span class="n">cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">vit_samples</span><span class="p">[:,</span><span class="n">inf_idx</span><span class="p">]</span>
+                    <span class="n">sampler_samples</span><span class="p">[:,</span><span class="n">cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">other_samples</span><span class="p">[:,</span><span class="n">bilby_idx</span><span class="p">]</span>
+
+                <span class="n">true_params</span><span class="p">[</span><span class="n">cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">x_truth</span><span class="p">[</span><span class="n">inf_idx</span><span class="p">]</span>
+                <span class="n">ol_pars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inf_par</span><span class="p">)</span>
+                <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">parnames</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">k_idx</span><span class="p">,</span><span class="n">k</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;rand_pars&#39;</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">ol_pars</span><span class="p">):</span>
+                    <span class="n">parnames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;corner_labels&#39;</span><span class="p">][</span><span class="n">k_idx</span><span class="p">])</span>
+
+            <span class="c1"># convert to RA</span>
+            <span class="c1">#vit_samples = convert_hour_angle_to_ra(vit_samples,params,ol_pars)</span>
+            <span class="c1">#true_x = convert_hour_angle_to_ra(np.reshape(true_x,[1,true_XS.shape[1]]),params,ol_pars).flatten()</span>
+            <span class="c1">#old_true_post = true_post                 </span>
+
+            <span class="n">samples_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;samples&quot;</span><span class="p">],</span><span class="s1">&#39;vitamin_posterior_samples_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.txt&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">))</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">samples_file</span><span class="p">,</span><span class="n">vitamin_samples</span><span class="p">)</span>
+
+            <span class="c1"># compute KL estimate</span>
+            <span class="n">idx1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">vitamin_samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3000</span><span class="p">)</span>
+            <span class="n">idx2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">sampler_samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3000</span><span class="p">)</span>
+            <span class="n">temp_JS</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">SMALL_CONST</span> <span class="o">=</span> <span class="mf">1e-162</span>
+            <span class="k">def</span> <span class="nf">my_kde_bandwidth</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">fac</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+                <span class="sd">&quot;&quot;&quot;We use Scott&#39;s Rule, multiplied by a constant factor.&quot;&quot;&quot;</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.</span><span class="o">/</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">d</span><span class="o">+</span><span class="mi">4</span><span class="p">))</span> <span class="o">*</span> <span class="n">fac</span>
+
+
+
+            <span class="k">for</span> <span class="n">pr</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">vitamin_samples</span><span class="p">)[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="c1">#try:</span>
+                <span class="c1">#print(&quot;vit&quot;, pr, min(vitamin_samples[idx1, pr:pr+1]), max(vitamin_samples[idx1, pr:pr+1]))</span>
+                <span class="c1">#print(&quot;samp&quot;, pr, min(sampler_samples[idx1, pr:pr+1]), max(sampler_samples[idx1, pr:pr+1]))</span>
+                <span class="n">kdsampp</span> <span class="o">=</span> <span class="n">vitamin_samples</span><span class="p">[</span><span class="n">idx1</span><span class="p">,</span> <span class="n">pr</span><span class="p">:</span><span class="n">pr</span><span class="o">+</span><span class="mi">1</span><span class="p">][</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">vitamin_samples</span><span class="p">[</span><span class="n">idx1</span><span class="p">,</span> <span class="n">pr</span><span class="p">:</span><span class="n">pr</span><span class="o">+</span><span class="mi">1</span><span class="p">])]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+                <span class="n">kdsampq</span> <span class="o">=</span> <span class="n">sampler_samples</span><span class="p">[</span><span class="n">idx2</span><span class="p">,</span> <span class="n">pr</span><span class="p">:</span><span class="n">pr</span><span class="o">+</span><span class="mi">1</span><span class="p">][</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">sampler_samples</span><span class="p">[</span><span class="n">idx2</span><span class="p">,</span> <span class="n">pr</span><span class="p">:</span><span class="n">pr</span><span class="o">+</span><span class="mi">1</span><span class="p">])]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+                <span class="n">eval_pointsp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">kdsampp</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">kdsampp</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">kdsampp</span><span class="p">))</span>
+                <span class="n">eval_pointsq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">kdsampq</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">kdsampq</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">kdsampq</span><span class="p">))</span>
+                <span class="n">kde_p</span> <span class="o">=</span> <span class="n">st</span><span class="o">.</span><span class="n">gaussian_kde</span><span class="p">(</span><span class="n">kdsampp</span><span class="p">)(</span><span class="n">eval_pointsp</span><span class="p">)</span>
+                <span class="n">kde_q</span> <span class="o">=</span> <span class="n">st</span><span class="o">.</span><span class="n">gaussian_kde</span><span class="p">(</span><span class="n">kdsampq</span><span class="p">)(</span><span class="n">eval_pointsq</span><span class="p">)</span>
+                <span class="n">current_JS</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="n">jensenshannon</span><span class="p">(</span><span class="n">kde_p</span><span class="p">,</span> <span class="n">kde_q</span><span class="p">),</span><span class="mi">2</span><span class="p">)</span>
+                <span class="c1">#current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))</span>
+                <span class="n">temp_JS</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current_JS</span><span class="p">)</span>
+
+            <span class="n">JS_est</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">temp_JS</span><span class="p">)</span>
+
+            <span class="n">other_samples_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;samples&quot;</span><span class="p">],</span><span class="s1">&#39;posterior_samples_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">_</span><span class="si">{}</span><span class="s1">.txt&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">,</span><span class="n">i</span><span class="p">))</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">other_samples_file</span><span class="p">,</span><span class="n">sampler_samples</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">figure</span> <span class="o">=</span> <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">sampler_samples</span><span class="p">,</span> <span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span><span class="n">labels</span><span class="o">=</span><span class="n">parnames</span><span class="p">,</span>
+                                       <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:blue&#39;</span><span class="p">,</span>
+                                       <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs_other</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">sampler_samples</span><span class="p">,</span><span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span>
+                              <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:green&#39;</span><span class="p">,</span>
+                              <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">figure</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs_other2</span><span class="p">)</span>
+        
+        <span class="n">JS_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;JS_divergence&quot;</span><span class="p">],</span><span class="s1">&#39;JS_divergence_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">_</span><span class="si">{}</span><span class="s1">.txt&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">,</span><span class="n">i</span><span class="p">))</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">JS_file</span><span class="p">,</span><span class="n">JS_est</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span><span class="n">JS</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">JS_est</span><span class="p">):</span>    
+            <span class="k">for</span> <span class="n">j1</span><span class="p">,</span><span class="n">JS_ind</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">JS</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="s1">&#39;JS_</span><span class="si">{}</span><span class="s1"> = </span><span class="si">{:.3f}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">parnames</span><span class="p">[</span><span class="n">j1</span><span class="p">],</span><span class="n">JS_ind</span><span class="p">),(</span><span class="mf">0.2</span> <span class="o">+</span> <span class="mf">0.05</span><span class="o">*</span><span class="n">j1</span><span class="p">,</span><span class="mf">0.95</span><span class="o">-</span><span class="n">j</span><span class="o">*</span><span class="mf">0.02</span> <span class="o">-</span> <span class="n">j1</span><span class="o">*</span><span class="mf">0.02</span><span class="p">),</span><span class="n">xycoords</span><span class="o">=</span><span class="s1">&#39;figure fraction&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">18</span><span class="p">)</span>
+
+        <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">vitamin_samples</span><span class="p">,</span><span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span>
+                      <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:red&#39;</span><span class="p">,</span>
+                      <span class="n">fill_contours</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">truths</span><span class="o">=</span><span class="n">true_params</span><span class="p">,</span>
+                      <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">figure</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">==</span> <span class="s1">&#39;pub_plot&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Saved output to&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;comparison_posteriors&quot;</span><span class="p">],</span><span class="s1">&#39;comp_posterior_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;comparison_posteriors&quot;</span><span class="p">],</span><span class="s1">&#39;comp_posterior_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Saved output to &#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;comparison_posteriors&quot;</span><span class="p">],</span><span class="s1">&#39;comp_posterior_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;comparison_posteriors&quot;</span><span class="p">],</span><span class="s1">&#39;comp_posterior_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">JS_est</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Get corner parnames to use in plotting labels</span>
+        <span class="n">parnames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k_idx</span><span class="p">,</span><span class="n">k</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;rand_pars&#39;</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">]):</span>
+                <span class="n">parnames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;corner_labels&#39;</span><span class="p">][</span><span class="n">k_idx</span><span class="p">])</span>
+
+        <span class="n">figure</span> <span class="o">=</span> <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span><span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span><span class="n">labels</span><span class="o">=</span><span class="n">parnames</span><span class="p">,</span>
+                           <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:red&#39;</span><span class="p">,</span>
+                           <span class="n">fill_contours</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">truths</span><span class="o">=</span><span class="n">x_truth</span><span class="p">,</span>
+                           <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">==</span> <span class="s1">&#39;pub_plot&#39;</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;full_posterior&quot;</span><span class="p">],</span><span class="s1">&#39;full_posterior_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">save_dir</span><span class="p">,</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directories</span><span class="p">[</span><span class="s2">&quot;full_posterior&quot;</span><span class="p">],</span><span class="s1">&#39;full_posterior_epoch_</span><span class="si">{}</span><span class="s1">_event_</span><span class="si">{}</span><span class="s1">.png&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">)))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mf">1.0</span></div>
+
+<div class="viewcode-block" id="plot_latent"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.plot_latent">[docs]</a><span class="k">def</span> <span class="nf">plot_latent</span><span class="p">(</span><span class="n">mu_r1</span><span class="p">,</span> <span class="n">z_r1</span><span class="p">,</span> <span class="n">mu_q</span><span class="p">,</span> <span class="n">z_q</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">run</span><span class="o">=</span><span class="s1">&#39;testing&#39;</span><span class="p">):</span>
+
+    <span class="c1"># define general plotting arguments</span>
+    <span class="n">defaults_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+                    <span class="n">bins</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">smooth</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">label_kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">16</span><span class="p">),</span>
+                    <span class="n">title_kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">16</span><span class="p">),</span>
+                    <span class="n">truth_color</span><span class="o">=</span><span class="s1">&#39;tab:orange&#39;</span><span class="p">,</span> <span class="n">quantiles</span><span class="o">=</span><span class="p">[</span><span class="mf">0.16</span><span class="p">,</span> <span class="mf">0.84</span><span class="p">],</span>
+                    <span class="n">levels</span><span class="o">=</span><span class="p">(</span><span class="mf">0.68</span><span class="p">,</span><span class="mf">0.90</span><span class="p">,</span><span class="mf">0.95</span><span class="p">),</span> <span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">plot_density</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_datapoints</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">max_n_ticks</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="c1"># 1-d hist kwargs for normalisation</span>
+    <span class="n">hist_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:red&#39;</span><span class="p">)</span>
+    <span class="n">hist_kwargs_other</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:blue&#39;</span><span class="p">)</span>
+
+    <span class="n">z_q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">z_q</span><span class="p">)</span>
+    <span class="n">z_r1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">z_r1</span><span class="p">)</span>
+
+    <span class="c1">#z_q[np.isinf(z_q)] = np.nan</span>
+    <span class="c1">#z_r1[np.isinf(z_r1)] = np.nan</span>
+
+    <span class="n">figure</span> <span class="o">=</span> <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">z_q</span><span class="p">),</span> <span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span>
+                           <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:blue&#39;</span><span class="p">,</span>
+                           <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs_other</span><span class="p">)</span>
+    <span class="n">corner</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">z_r1</span><span class="p">),</span><span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span>
+                           <span class="n">color</span><span class="o">=</span><span class="s1">&#39;tab:red&#39;</span><span class="p">,</span>
+                           <span class="n">fill_contours</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                           <span class="n">show_titles</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">figure</span><span class="p">,</span> <span class="n">hist_kwargs</span><span class="o">=</span><span class="n">hist_kwargs</span><span class="p">)</span>
+    <span class="c1"># Extract the axes</span>
+    <span class="n">z_dim</span> <span class="o">=</span> <span class="n">z_r1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">axes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">axes</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">z_dim</span><span class="p">,</span> <span class="n">z_dim</span><span class="p">))</span>
+
+    <span class="c1"># Loop over the histograms</span>
+    <span class="k">for</span> <span class="n">yi</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">z_dim</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">yi</span><span class="p">):</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">axes</span><span class="p">[</span><span class="n">yi</span><span class="p">,</span> <span class="n">xi</span><span class="p">]</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">mu_r1</span><span class="p">[</span><span class="mi">0</span><span class="p">,:,</span><span class="n">xi</span><span class="p">],</span> <span class="n">mu_r1</span><span class="p">[</span><span class="mi">0</span><span class="p">,:,</span><span class="n">yi</span><span class="p">],</span> <span class="s2">&quot;sr&quot;</span><span class="p">)</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">mu_q</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">xi</span><span class="p">],</span> <span class="n">mu_q</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">yi</span><span class="p">],</span> <span class="s2">&quot;sb&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">epoch</span> <span class="o">==</span> <span class="s1">&#39;pub_plot&#39;</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/latent_</span><span class="si">%s</span><span class="s1">_event_</span><span class="si">%d</span><span class="s1">.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">,</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/latent_epoch_</span><span class="si">%d</span><span class="s1">_event_</span><span class="si">%d</span><span class="s1">.png&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run</span><span class="p">,</span><span class="n">epoch</span><span class="p">,</span><span class="n">idx</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="paper_plots"><a class="viewcode-back" href="../../vitamin.html#vitamin.train_plots.paper_plots">[docs]</a><span class="k">def</span> <span class="nf">paper_plots</span><span class="p">(</span><span class="n">test_dataset</span><span class="p">,</span> <span class="n">y_data_test</span><span class="p">,</span> <span class="n">x_data_test</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">plot_dir</span><span class="p">,</span> <span class="n">run</span><span class="p">,</span> <span class="n">bilby_samples</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Make publication plots</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">epoch</span> <span class="o">=</span> <span class="s1">&#39;pub_plot&#39;</span><span class="p">;</span> <span class="n">ramp</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">plotter</span> <span class="o">=</span> <span class="n">plotting</span><span class="o">.</span><span class="n">make_plots</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">x_data_test</span><span class="p">)</span> 
+
+    <span class="k">for</span> <span class="n">step</span><span class="p">,</span> <span class="p">(</span><span class="n">x_batch_test</span><span class="p">,</span> <span class="n">y_batch_test</span><span class="p">)</span> <span class="ow">in</span> <span class="n">test_dataset</span><span class="o">.</span><span class="n">enumerate</span><span class="p">():</span>
+        <span class="n">mu_r1</span><span class="p">,</span> <span class="n">z_r1</span><span class="p">,</span> <span class="n">mu_q</span><span class="p">,</span> <span class="n">z_q</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">gen_z_samples</span><span class="p">(</span><span class="n">x_batch_test</span><span class="p">,</span> <span class="n">y_batch_test</span><span class="p">,</span> <span class="n">nsamples</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+        <span class="n">plot_latent</span><span class="p">(</span><span class="n">mu_r1</span><span class="p">,</span><span class="n">z_r1</span><span class="p">,</span><span class="n">mu_q</span><span class="p">,</span><span class="n">z_q</span><span class="p">,</span><span class="n">epoch</span><span class="p">,</span><span class="n">step</span><span class="p">,</span><span class="n">run</span><span class="o">=</span><span class="n">plot_dir</span><span class="p">)</span>
+        <span class="n">start_time_test</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">samples</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">gen_samples</span><span class="p">(</span><span class="n">y_batch_test</span><span class="p">,</span> <span class="n">ramp</span><span class="o">=</span><span class="n">ramp</span><span class="p">,</span> <span class="n">nsamples</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;n_samples&#39;</span><span class="p">])</span>
+        <span class="n">end_time_test</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">samples</span><span class="p">)):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Found nans in samples. Not making plots&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">samples</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">s</span><span class="p">)):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="n">s</span><span class="p">)</span>
+            <span class="n">KL_est</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Run </span><span class="si">{}</span><span class="s1"> Testing time elapsed for </span><span class="si">{}</span><span class="s1"> samples: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">run</span><span class="p">,</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;n_samples&#39;</span><span class="p">],</span><span class="n">end_time_test</span> <span class="o">-</span> <span class="n">start_time_test</span><span class="p">))</span>
+            <span class="n">KL_est</span> <span class="o">=</span> <span class="n">plot_posterior</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span><span class="n">x_batch_test</span><span class="p">[</span><span class="mi">0</span><span class="p">,:],</span><span class="n">epoch</span><span class="p">,</span><span class="n">step</span><span class="p">,</span><span class="n">all_other_samples</span><span class="o">=</span><span class="n">bilby_samples</span><span class="p">[:,</span><span class="n">step</span><span class="p">,:],</span><span class="n">run</span><span class="o">=</span><span class="n">plot_dir</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+            <span class="n">_</span> <span class="o">=</span> <span class="n">plot_posterior</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span><span class="n">x_batch_test</span><span class="p">[</span><span class="mi">0</span><span class="p">,:],</span><span class="n">epoch</span><span class="p">,</span><span class="n">step</span><span class="p">,</span><span class="n">run</span><span class="o">=</span><span class="n">plot_dir</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Finished making publication plots! Congrats fam.&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Make p-p plots</span>
+    <span class="n">plotter</span><span class="o">.</span><span class="n">plot_pp</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">y_data_test</span><span class="p">,</span> <span class="n">x_data_test</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">bounds</span><span class="p">,</span> <span class="n">inf_ol_idx</span><span class="p">,</span> <span class="n">bilby_ol_idx</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Finished making p-p plots!&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Make KL plots</span>
+    <span class="n">plotter</span><span class="o">.</span><span class="n">gen_kl_plots</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="n">y_data_test</span><span class="p">,</span> <span class="n">x_data_test</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">bounds</span><span class="p">,</span> <span class="n">inf_ol_idx</span><span class="p">,</span> <span class="n">bilby_ol_idx</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Finished making KL plots!&#39;</span><span class="p">)</span>    
+
+    <span class="k">return</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

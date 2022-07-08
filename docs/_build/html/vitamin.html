@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin package &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>vitamin package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/vitamin.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="vitamin-package">
+<h1>vitamin package<a class="headerlink" href="#vitamin-package" title="Permalink to this headline"></a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="vitamin.templates.html">vitamin.templates package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="vitamin.templates.html#module-vitamin.templates">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.callbacks">
+<span id="vitamin-callbacks-module"></span><h2>vitamin.callbacks module<a class="headerlink" href="#module-vitamin.callbacks" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.callbacks.PlotCallback">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.callbacks.</span></span><span class="sig-name descname"><span class="pre">PlotCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_epoch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#PlotCallback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.PlotCallback" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.PlotCallback.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#PlotCallback.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.PlotCallback.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
+<blockquote>
+<div><blockquote>
+<div><p>validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id1"><span class="problematic" id="id2">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.callbacks.TestCallback">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.callbacks.</span></span><span class="sig-name descname"><span class="pre">TestCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bilby_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TestCallback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TestCallback" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TestCallback.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TestCallback.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TestCallback.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
+<blockquote>
+<div><blockquote>
+<div><p>validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id3"><span class="problematic" id="id4">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.callbacks.TimeCallback">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.callbacks.</span></span><span class="sig-name descname"><span class="pre">TimeCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_epoch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TimeCallback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TimeCallback" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TimeCallback.on_epoch_begin">
+<span class="sig-name descname"><span class="pre">on_epoch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TimeCallback.on_epoch_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TimeCallback.on_epoch_begin" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the start of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict. Currently no data is passed to this argument for this method</p>
+<blockquote>
+<div><p>but that may change in the future.</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TimeCallback.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TimeCallback.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TimeCallback.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
+<blockquote>
+<div><blockquote>
+<div><p>validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id5"><span class="problematic" id="id6">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.callbacks.</span></span><span class="sig-name descname"><span class="pre">TrainCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_dataloader</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.inf_data_plot">
+<span class="sig-name descname"><span class="pre">inf_data_plot</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.inf_data_plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.inf_data_plot" title="Permalink to this definition"></a></dt>
+<dd><p>Plot the bad piece of data - not yet used</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.learning_rate_it">
+<span class="sig-name descname"><span class="pre">learning_rate_it</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.learning_rate_it"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.learning_rate_it" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.learning_rate_modify">
+<span class="sig-name descname"><span class="pre">learning_rate_modify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0001</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.learning_rate_modify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.learning_rate_modify" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.nan_plots">
+<span class="sig-name descname"><span class="pre">nan_plots</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.nan_plots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.nan_plots" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.on_batch_end">
+<span class="sig-name descname"><span class="pre">on_batch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.on_batch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.on_batch_end" title="Permalink to this definition"></a></dt>
+<dd><p>A backwards compatibility alias for <cite>on_train_batch_end</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.on_epoch_begin">
+<span class="sig-name descname"><span class="pre">on_epoch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.on_epoch_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.on_epoch_begin" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the start of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict. Currently no data is passed to this argument for this method</p>
+<blockquote>
+<div><p>but that may change in the future.</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
+<blockquote>
+<div><blockquote>
+<div><p>validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id7"><span class="problematic" id="id8">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.callbacks.TrainCallback.ramp_func">
+<span class="sig-name descname"><span class="pre">ramp_func</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/callbacks.html#TrainCallback.ramp_func"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.callbacks.TrainCallback.ramp_func" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin.create_template">
+<span id="vitamin-create-template-module"></span><h2>vitamin.create_template module<a class="headerlink" href="#module-vitamin.create_template" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.create_template.</span></span><span class="sig-name descname"><span class="pre">GenerateTemplate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'train'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.clear_attributes">
+<span class="sig-name descname"><span class="pre">clear_attributes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.clear_attributes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.clear_attributes" title="Permalink to this definition"></a></dt>
+<dd><p>Remove attributes to regenerate data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.generate_polarisations">
+<span class="sig-name descname"><span class="pre">generate_polarisations</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.generate_polarisations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.generate_polarisations" title="Permalink to this definition"></a></dt>
+<dd><p>Generates the polarisations of signal to be combined later.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.get_detector_response">
+<span class="sig-name descname"><span class="pre">get_detector_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency_domain_strain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.get_detector_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.get_detector_response" title="Permalink to this definition"></a></dt>
+<dd><p>Gets the whitened signal from polarisations</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.get_injection_parameters">
+<span class="sig-name descname"><span class="pre">get_injection_parameters</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.get_injection_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.get_injection_parameters" title="Permalink to this definition"></a></dt>
+<dd><p>Get the injection parameters from the prior distribution
+Also get the parameters for inference to save</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.get_real_noise">
+<span class="sig-name descname"><span class="pre">get_real_noise</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.get_real_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.get_real_noise" title="Permalink to this definition"></a></dt>
+<dd><p>Get a segment of real noise</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.create_template.GenerateTemplate.run_pe">
+<span class="sig-name descname"><span class="pre">run_pe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sampler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'dynesty'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_ind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/create_template.html#GenerateTemplate.run_pe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.create_template.GenerateTemplate.run_pe" title="Permalink to this definition"></a></dt>
+<dd><p>Run traditional PE on the saved waveform
+Current options are dynesty and nessai</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="vitamin-gen-benchmark-pe-module">
+<h2>vitamin.gen_benchmark_pe module<a class="headerlink" href="#vitamin-gen-benchmark-pe-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.generate_data">
+<span id="vitamin-generate-data-module"></span><h2>vitamin.generate_data module<a class="headerlink" href="#module-vitamin.generate_data" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.generate_data.DataGenerator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.generate_data.</span></span><span class="sig-name descname"><span class="pre">DataGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_to_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/generate_data.html#DataGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.generate_data.DataGenerator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.generate_data.DataGenerator.create_test_file">
+<span class="sig-name descname"><span class="pre">create_test_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_ind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/generate_data.html#DataGenerator.create_test_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.generate_data.DataGenerator.create_test_file" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.generate_data.DataGenerator.create_training_val_file">
+<span class="sig-name descname"><span class="pre">create_training_val_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_ind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/generate_data.html#DataGenerator.create_training_val_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.generate_data.DataGenerator.create_training_val_file" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin.group_inference_parameters">
+<span id="vitamin-group-inference-parameters-module"></span><h2>vitamin.group_inference_parameters module<a class="headerlink" href="#module-vitamin.group_inference_parameters" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.group_inference_parameters.group_outputs">
+<span class="sig-prename descclassname"><span class="pre">vitamin.group_inference_parameters.</span></span><span class="sig-name descname"><span class="pre">group_outputs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/group_inference_parameters.html#group_outputs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.group_inference_parameters.group_outputs" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-vitamin.initialise_directory">
+<span id="vitamin-initialise-directory-module"></span><h2>vitamin.initialise_directory module<a class="headerlink" href="#module-vitamin.initialise_directory" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.keras_callbacks">
+<span id="vitamin-keras-callbacks-module"></span><h2>vitamin.keras_callbacks module<a class="headerlink" href="#module-vitamin.keras_callbacks" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.keras_callbacks.WRScheduler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.keras_callbacks.</span></span><span class="sig-name descname"><span class="pre">WRScheduler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps_per_epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta_min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta_decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cycle_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cycle_mult_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_callbacks.html#WRScheduler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_callbacks.WRScheduler" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
+<p>Warm restart scheduler for optimizers with decoupled weight decay.</p>
+<p>Warm restarts include cosine annealing with periodic restarts
+for both learning rate and weight decay. Normalized weight decay is also included.</p>
+<dl>
+<dt># Arguments</dt><dd><p>steps_per_epoch: int &gt; 0. The number of training batches per epoch.
+eta_min: float &gt;=0. The minimum of the multiplier.
+eta_max: float &gt;=0. The maximum of the multiplier.
+eta_decay: float &gt;=0. The decay rate of eta_min/eta_max after each restart.
+cycle_length: int &gt; 0. The number of epochs in the first restart cycle.
+cycle_mult_factor: float &gt; 0. The rate to increase the number of epochs</p>
+<blockquote>
+<div><p>in a cycle after each restart.</p>
+</div></blockquote>
+</dd>
+<dt># Reference</dt><dd><ul class="simple">
+<li><p>[SGDR: Stochastic Gradient Descent with Warm Restarts](<a class="reference external" href="http://arxiv.org/abs/1608.03983">http://arxiv.org/abs/1608.03983</a>)</p></li>
+<li><p>[Decoupled Weight Decay Regularization](<a class="reference external" href="https://arxiv.org/abs/1711.05101">https://arxiv.org/abs/1711.05101</a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_callbacks.WRScheduler.cal_eta">
+<span class="sig-name descname"><span class="pre">cal_eta</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_callbacks.html#WRScheduler.cal_eta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_callbacks.WRScheduler.cal_eta" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate eta</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_callbacks.WRScheduler.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_callbacks.html#WRScheduler.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_callbacks.WRScheduler.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Check for end of current cycle, apply restarts when necessary</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_callbacks.WRScheduler.on_train_batch_begin">
+<span class="sig-name descname"><span class="pre">on_train_batch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_callbacks.html#WRScheduler.on_train_batch_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_callbacks.WRScheduler.on_train_batch_begin" title="Permalink to this definition"></a></dt>
+<dd><p>update eta</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_callbacks.WRScheduler.on_train_begin">
+<span class="sig-name descname"><span class="pre">on_train_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_callbacks.html#WRScheduler.on_train_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_callbacks.WRScheduler.on_train_begin" title="Permalink to this definition"></a></dt>
+<dd><p>Set the number of training batches of the first restart cycle to steps_per_cycle</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="vitamin-keras-hyper-optim-module">
+<h2>vitamin.keras_hyper_optim module<a class="headerlink" href="#vitamin-keras-hyper-optim-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.keras_optimizers">
+<span id="vitamin-keras-optimizers-module"></span><h2>vitamin.keras_optimizers module<a class="headerlink" href="#module-vitamin.keras_optimizers" title="Permalink to this headline"></a></h2>
+<p>From built-in optimizer classes.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.AdamW">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.keras_optimizers.</span></span><span class="sig-name descname"><span class="pre">AdamW</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta_1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta_2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epsilon</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.025</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps_per_cycle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#AdamW"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.AdamW" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.optimizer_v2.optimizer_v2.OptimizerV2</span></code></p>
+<p>AdamW optimizer with decoupled weight decay.
+Default parameters follow those provided in the original Adam paper.</p>
+<dl class="simple">
+<dt># Arguments</dt><dd><p>lr: float &gt;= 0. Learning rate.
+beta_1: float, 0 &lt; beta &lt; 1. Generally close to 1.
+beta_2: float, 0 &lt; beta &lt; 1. Generally close to 1.
+epsilon: float &gt;= 0. Fuzz factor. If <cite>None</cite>, defaults to <cite>K.epsilon()</cite>.
+decay: float &gt;= 0. Learning rate decay over each update.
+weight_decay: float &gt;= 0. Normalized weight decay.
+eta: float &gt;= 0. The multiplier to schedule learning rate and weight decay.
+steps_per_cycle: int &gt; 0. The number of training batches of a restart cycle.</p>
+</dd>
+<dt># References</dt><dd><ul class="simple">
+<li><p>[Adam - A Method for Stochastic Optimization](<a class="reference external" href="http://arxiv.org/abs/1412.6980v8">http://arxiv.org/abs/1412.6980v8</a>)</p></li>
+<li><p>[Decoupled Weight Decay Regularization](<a class="reference external" href="https://arxiv.org/abs/1711.05101">https://arxiv.org/abs/1711.05101</a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.AdamW.get_config">
+<span class="sig-name descname"><span class="pre">get_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#AdamW.get_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.AdamW.get_config" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the config of the optimizer.</p>
+<p>An optimizer config is a Python dictionary (serializable)
+containing the configuration of an optimizer.
+The same optimizer can be reinstantiated later
+(without any saved state) from this configuration.</p>
+<dl class="simple">
+<dt>Returns:</dt><dd><p>Python dictionary.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.AdamW.get_updates">
+<span class="sig-name descname"><span class="pre">get_updates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#AdamW.get_updates"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.AdamW.get_updates" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.SGDW">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.keras_optimizers.</span></span><span class="sig-name descname"><span class="pre">SGDW</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nesterov</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.025</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps_per_cycle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#SGDW"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.SGDW" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.optimizer_v2.optimizer_v2.OptimizerV2</span></code></p>
+<p>Stochastic gradient descent optimizer with decoupled weight decay.</p>
+<p>Includes support for momentum, learning rate decay, Nesterov momentum,
+and warm restarts.</p>
+<dl>
+<dt># Arguments</dt><dd><p>lr: float &gt;= 0. Learning rate.
+momentum: float &gt;= 0. Parameter that accelerates SGD</p>
+<blockquote>
+<div><p>in the relevant direction and dampens oscillations.</p>
+</div></blockquote>
+<p>decay: float &gt;= 0. Learning rate decay over each update.
+nesterov: boolean. Whether to apply Nesterov momentum.
+weight_decay: float &gt;= 0. Normalized weight decay.
+eta: float &gt;= 0. The multiplier to schedule learning rate and weight decay.
+steps_per_cycle: int &gt; 0. The number of training batches of a restart cycle.</p>
+</dd>
+<dt># References</dt><dd><ul class="simple">
+<li><p>[Decoupled Weight Decay Regularization](<a class="reference external" href="https://arxiv.org/abs/1711.05101">https://arxiv.org/abs/1711.05101</a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.SGDW.get_config">
+<span class="sig-name descname"><span class="pre">get_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#SGDW.get_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.SGDW.get_config" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the config of the optimizer.</p>
+<p>An optimizer config is a Python dictionary (serializable)
+containing the configuration of an optimizer.
+The same optimizer can be reinstantiated later
+(without any saved state) from this configuration.</p>
+<dl class="simple">
+<dt>Returns:</dt><dd><p>Python dictionary.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.keras_optimizers.SGDW.get_updates">
+<span class="sig-name descname"><span class="pre">get_updates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/keras_optimizers.html#SGDW.get_updates"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.keras_optimizers.SGDW.get_updates" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin.load_data">
+<span id="vitamin-load-data-module"></span><h2>vitamin.load_data module<a class="headerlink" href="#module-vitamin.load_data" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">DataLoader</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">silent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_epoch_load</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'DCS-CALIB_STRAIN_C01'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.utils.data_utils.Sequence</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.convert_parameters">
+<span class="sig-name descname"><span class="pre">convert_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.convert_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.convert_parameters" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.get_all_filenames">
+<span class="sig-name descname"><span class="pre">get_all_filenames</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.get_all_filenames"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.get_all_filenames" title="Permalink to this definition"></a></dt>
+<dd><p>Get a list of all of the filenames containing the waveforms</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.get_infer_pars">
+<span class="sig-name descname"><span class="pre">get_infer_pars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inference_parameters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">injection_parameters</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.get_infer_pars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.get_infer_pars" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.get_real_noise">
+<span class="sig-name descname"><span class="pre">get_real_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">segment_duration</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment_range</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_segments</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.get_real_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.get_real_noise" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.get_whitened_signal_response">
+<span class="sig-name descname"><span class="pre">get_whitened_signal_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.get_whitened_signal_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.get_whitened_signal_response" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.load_bilby_samples">
+<span class="sig-name descname"><span class="pre">load_bilby_samples</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.load_bilby_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.load_bilby_samples" title="Permalink to this definition"></a></dt>
+<dd><p>read in pre-computed posterior samples</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.load_next_chunk">
+<span class="sig-name descname"><span class="pre">load_next_chunk</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.load_next_chunk"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.load_next_chunk" title="Permalink to this definition"></a></dt>
+<dd><p>Loads in one chunk of data where the size if set by chunk_size</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.load_real_noise">
+<span class="sig-name descname"><span class="pre">load_real_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_segments</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.load_real_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.load_real_noise" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.load_waveforms">
+<span class="sig-name descname"><span class="pre">load_waveforms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filenames</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.load_waveforms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.load_waveforms" title="Permalink to this definition"></a></dt>
+<dd><p>load all the data from the filenames paths
+args
+———
+filenames : list</p>
+<blockquote>
+<div><p>list of filenames as string</p>
+</div></blockquote>
+<dl class="simple">
+<dt>indices: list</dt><dd><p>list of indices to get data from filenames. if multiple filenames, must be same length as filenames with the indices from each</p>
+</dd>
+</dl>
+<p>x_data           : parameters
+y_data_noisefree : waveform without noise
+y_data_noisy     : waveform with noise</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.on_epoch_end" title="Permalink to this definition"></a></dt>
+<dd><p>Updates indices after each epoch</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.randomise_distance">
+<span class="sig-name descname"><span class="pre">randomise_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.randomise_distance"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.randomise_distance" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.randomise_extrinsic_parameters">
+<span class="sig-name descname"><span class="pre">randomise_extrinsic_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.randomise_extrinsic_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.randomise_extrinsic_parameters" title="Permalink to this definition"></a></dt>
+<dd><p>randomise the extrinsic parameters</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.randomise_phase">
+<span class="sig-name descname"><span class="pre">randomise_phase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.randomise_phase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.randomise_phase" title="Permalink to this definition"></a></dt>
+<dd><p>randomises phase of input parameter x</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.randomise_time">
+<span class="sig-name descname"><span class="pre">randomise_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.randomise_time"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.randomise_time" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.load_data.DataLoader.unconvert_parameters">
+<span class="sig-name descname"><span class="pre">unconvert_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#DataLoader.unconvert_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.DataLoader.unconvert_parameters" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.chirpmassq_to_m1m2">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">chirpmassq_to_m1m2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chirp_mass</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#chirpmassq_to_m1m2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.chirpmassq_to_m1m2" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.convert_hour_angle_to_ra">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">convert_hour_angle_to_ra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#convert_hour_angle_to_ra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.convert_hour_angle_to_ra" title="Permalink to this definition"></a></dt>
+<dd><p>Converts right ascension to hour angle and back again</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.convert_ra_to_hour_angle">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">convert_ra_to_hour_angle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#convert_ra_to_hour_angle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.convert_ra_to_hour_angle" title="Permalink to this definition"></a></dt>
+<dd><p>Converts right ascension to hour angle and back again</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.m1m2_to_chirpmassq">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">m1m2_to_chirpmassq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#m1m2_to_chirpmassq"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.m1m2_to_chirpmassq" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.psiX_to_psiphi">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">psiX_to_psiphi</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">psi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#psiX_to_psiphi"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.psiX_to_psiphi" title="Permalink to this definition"></a></dt>
+<dd><p>Rescales the psi,X parameters back to psi, phi
+Input and Output innormalised units [0,1]</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.load_data.psiphi_to_psiX">
+<span class="sig-prename descclassname"><span class="pre">vitamin.load_data.</span></span><span class="sig-name descname"><span class="pre">psiphi_to_psiX</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">psi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/load_data.html#psiphi_to_psiX"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.load_data.psiphi_to_psiX" title="Permalink to this definition"></a></dt>
+<dd><p>Rescales the psi,phi parameters to a different space
+Input and Output in radians</p>
+</dd></dl>
+
+</section>
+<section id="module-vitamin.make_condor_files">
+<span id="vitamin-make-condor-files-module"></span><h2>vitamin.make_condor_files module<a class="headerlink" href="#module-vitamin.make_condor_files" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.make_condor_files.create_dirs">
+<span class="sig-prename descclassname"><span class="pre">vitamin.make_condor_files.</span></span><span class="sig-name descname"><span class="pre">create_dirs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dirs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/make_condor_files.html#create_dirs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.make_condor_files.create_dirs" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.make_condor_files.make_executable">
+<span class="sig-prename descclassname"><span class="pre">vitamin.make_condor_files.</span></span><span class="sig-name descname"><span class="pre">make_executable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/make_condor_files.html#make_executable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.make_condor_files.make_executable" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.make_condor_files.make_train_dag">
+<span class="sig-prename descclassname"><span class="pre">vitamin.make_condor_files.</span></span><span class="sig-name descname"><span class="pre">make_train_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'training'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/make_condor_files.html#make_train_dag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.make_condor_files.make_train_dag" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.make_condor_files.write_subfile">
+<span class="sig-prename descclassname"><span class="pre">vitamin.make_condor_files.</span></span><span class="sig-name descname"><span class="pre">write_subfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sub_filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/make_condor_files.html#write_subfile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.make_condor_files.write_subfile" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-vitamin.make_params_files">
+<span id="vitamin-make-params-files-module"></span><h2>vitamin.make_params_files module<a class="headerlink" href="#module-vitamin.make_params_files" title="Permalink to this headline"></a></h2>
+<p>Script used to generate run parameters json files</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.make_params_files.get_params">
+<span class="sig-prename descclassname"><span class="pre">vitamin.make_params_files.</span></span><span class="sig-name descname"><span class="pre">get_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/make_params_files.html#get_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.make_params_files.get_params" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-vitamin.model">
+<span id="vitamin-model-module"></span><h2>vitamin.model module<a class="headerlink" href="#module-vitamin.model" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.model.CVAE">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.model.</span></span><span class="sig-name descname"><span class="pre">CVAE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.engine.training.Model</span></code></p>
+<p>Convolutional variational autoencoder.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.ConvBlock">
+<span class="sig-name descname"><span class="pre">ConvBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strides</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.ConvBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.ConvBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.LinearBlock">
+<span class="sig-name descname"><span class="pre">LinearBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_neurons</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.LinearBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.LinearBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.ResBlock">
+<span class="sig-name descname"><span class="pre">ResBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strides</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.ResBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.ResBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.ResBlock2d">
+<span class="sig-name descname"><span class="pre">ResBlock2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.ResBlock2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.ResBlock2d" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.call">
+<span class="sig-name descname"><span class="pre">call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.call" title="Permalink to this definition"></a></dt>
+<dd><p>call the function generates one sample of output (only here for the build section)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.create_loss_func">
+<span class="sig-name descname"><span class="pre">create_loss_func</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.create_loss_func"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.create_loss_func" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.create_sample_func">
+<span class="sig-name descname"><span class="pre">create_sample_func</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.create_sample_func"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.create_sample_func" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.decode_r2">
+<span class="sig-name descname"><span class="pre">decode_r2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_sigmoid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.decode_r2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.decode_r2" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.encode_q">
+<span class="sig-name descname"><span class="pre">encode_q</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.encode_q"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.encode_q" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.encode_r1">
+<span class="sig-name descname"><span class="pre">encode_r1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.encode_r1"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.encode_r1" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.gen_z_samples">
+<span class="sig-name descname"><span class="pre">gen_z_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsamples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.gen_z_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.gen_z_samples" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.get_network">
+<span class="sig-name descname"><span class="pre">get_network</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layers</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.get_network"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.get_network" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.init_network">
+<span class="sig-name descname"><span class="pre">init_network</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.init_network"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.init_network" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.metrics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metrics</span></span><a class="headerlink" href="#vitamin.model.CVAE.metrics" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the model’s metrics added using <cite>compile</cite>, <cite>add_metric</cite> APIs.</p>
+<p>Note: Metrics passed to <cite>compile()</cite> are available only after a <cite>keras.Model</cite>
+has been trained/evaluated on actual data.</p>
+<p>Examples:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">outputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">)(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;Adam&quot;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s2">&quot;mse&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mae&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[&#39;loss&#39;, &#39;mae&#39;]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;out&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output_1</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output_2</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span>
+<span class="gp">... </span>   <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">output_1</span><span class="p">,</span> <span class="n">output_2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span>
+<span class="gp">... </span>   <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">output_2</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">aggregation</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;Adam&quot;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s2">&quot;mse&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mae&quot;</span><span class="p">,</span> <span class="s2">&quot;acc&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[&#39;loss&#39;, &#39;out_loss&#39;, &#39;out_1_loss&#39;, &#39;out_mae&#39;, &#39;out_acc&#39;, &#39;out_1_mae&#39;,</span>
+<span class="go">&#39;out_1_acc&#39;, &#39;mean&#39;]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.test_step">
+<span class="sig-name descname"><span class="pre">test_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.test_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.test_step" title="Permalink to this definition"></a></dt>
+<dd><p>Executes one test step and returns the loss.                                                        
+This function computes the loss and gradients (used for validation data)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.model.CVAE.train_step">
+<span class="sig-name descname"><span class="pre">train_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/model.html#CVAE.train_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.model.CVAE.train_step" title="Permalink to this definition"></a></dt>
+<dd><p>Executes one training step and returns the loss.
+This function computes the loss and gradients, and uses the latter to
+update the model’s parameters.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="vitamin-model-hardcode-module">
+<h2>vitamin.model_hardcode module<a class="headerlink" href="#vitamin-model-hardcode-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.old_model">
+<span id="vitamin-old-model-module"></span><h2>vitamin.old_model module<a class="headerlink" href="#module-vitamin.old_model" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.old_model.</span></span><span class="sig-name descname"><span class="pre">CVAE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.engine.training.Model</span></code></p>
+<p>Convolutional variational autoencoder.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.ConvBlock">
+<span class="sig-name descname"><span class="pre">ConvBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strides</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.ConvBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.ConvBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.LinearBlock">
+<span class="sig-name descname"><span class="pre">LinearBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_neurons</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.LinearBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.LinearBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.ResBlock">
+<span class="sig-name descname"><span class="pre">ResBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strides</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.ResBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.ResBlock" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.ResBlock2d">
+<span class="sig-name descname"><span class="pre">ResBlock2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.ResBlock2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.ResBlock2d" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.call">
+<span class="sig-name descname"><span class="pre">call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.call" title="Permalink to this definition"></a></dt>
+<dd><p>call the function generates one sample of output (only here for the build section)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.compute_loss">
+<span class="sig-name descname"><span class="pre">compute_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noiseamp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.compute_loss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.compute_loss" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.decode_r2">
+<span class="sig-name descname"><span class="pre">decode_r2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_sigmoid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.decode_r2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.decode_r2" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.encode_q">
+<span class="sig-name descname"><span class="pre">encode_q</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.encode_q"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.encode_q" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.encode_r1">
+<span class="sig-name descname"><span class="pre">encode_r1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.encode_r1"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.encode_r1" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.gen_samples">
+<span class="sig-name descname"><span class="pre">gen_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsamples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.gen_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.gen_samples" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.gen_z_samples">
+<span class="sig-name descname"><span class="pre">gen_z_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsamples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.gen_z_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.gen_z_samples" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.get_network">
+<span class="sig-name descname"><span class="pre">get_network</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layers</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.get_network"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.get_network" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.metrics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metrics</span></span><a class="headerlink" href="#vitamin.old_model.CVAE.metrics" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the model’s metrics added using <cite>compile</cite>, <cite>add_metric</cite> APIs.</p>
+<p>Note: Metrics passed to <cite>compile()</cite> are available only after a <cite>keras.Model</cite>
+has been trained/evaluated on actual data.</p>
+<p>Examples:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">outputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">)(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;Adam&quot;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s2">&quot;mse&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mae&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[&#39;loss&#39;, &#39;mae&#39;]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Input</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;out&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output_1</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output_2</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span>
+<span class="gp">... </span>   <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">output_1</span><span class="p">,</span> <span class="n">output_2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">add_metric</span><span class="p">(</span>
+<span class="gp">... </span>   <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">output_2</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">aggregation</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;Adam&quot;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s2">&quot;mse&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mae&quot;</span><span class="p">,</span> <span class="s2">&quot;acc&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">metrics</span><span class="p">]</span>
+<span class="go">[&#39;loss&#39;, &#39;out_loss&#39;, &#39;out_1_loss&#39;, &#39;out_mae&#39;, &#39;out_acc&#39;, &#39;out_1_mae&#39;,</span>
+<span class="go">&#39;out_1_acc&#39;, &#39;mean&#39;]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.test_step">
+<span class="sig-name descname"><span class="pre">test_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.test_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.test_step" title="Permalink to this definition"></a></dt>
+<dd><p>Executes one test step and returns the loss.                                                        
+This function computes the loss and gradients (used for validation data)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.old_model.CVAE.train_step">
+<span class="sig-name descname"><span class="pre">train_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/old_model.html#CVAE.train_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.old_model.CVAE.train_step" title="Permalink to this definition"></a></dt>
+<dd><p>Executes one training step and returns the loss.
+This function computes the loss and gradients, and uses the latter to
+update the model’s parameters.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin.out_dist">
+<span id="vitamin-out-dist-module"></span><h2>vitamin.out_dist module<a class="headerlink" href="#module-vitamin.out_dist" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">JointChirpmassMR</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.Mconstrainm1">
+<span class="sig-name descname"><span class="pre">Mconstrainm1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_norm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.Mconstrainm1"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.Mconstrainm1" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.Mconstrainm2">
+<span class="sig-name descname"><span class="pre">Mconstrainm2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_norm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.Mconstrainm2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.Mconstrainm2" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.cost_setup">
+<span class="sig-name descname"><span class="pre">cost_setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.cost_setup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.cost_setup" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointChirpmassMR.sample_setup">
+<span class="sig-name descname"><span class="pre">sample_setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointChirpmassMR.sample_setup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointChirpmassMR.sample_setup" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointM1M2">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">JointM1M2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointM1M2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointM1M2" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointM1M2.cost_setup">
+<span class="sig-name descname"><span class="pre">cost_setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointM1M2.cost_setup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointM1M2.cost_setup" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointM1M2.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointM1M2.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointM1M2.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointM1M2.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointM1M2.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointM1M2.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointM1M2.sample_setup">
+<span class="sig-name descname"><span class="pre">sample_setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointM1M2.sample_setup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointM1M2.sample_setup" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointPowerSpherical">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">JointPowerSpherical</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointPowerSpherical"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointPowerSpherical" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointPowerSpherical.get_cost">
+<span class="sig-name descname"><span class="pre">get_cost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointPowerSpherical.get_cost"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointPowerSpherical.get_cost" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointPowerSpherical.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointPowerSpherical.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointPowerSpherical.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointPowerSpherical.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointPowerSpherical.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointPowerSpherical.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointPowerSpherical.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointPowerSpherical.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointPowerSpherical.sample" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointVonMisesFisher">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">JointVonMisesFisher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointVonMisesFisher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointVonMisesFisher" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointVonMisesFisher.get_cost">
+<span class="sig-name descname"><span class="pre">get_cost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointVonMisesFisher.get_cost"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointVonMisesFisher.get_cost" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointVonMisesFisher.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointVonMisesFisher.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointVonMisesFisher.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointVonMisesFisher.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointVonMisesFisher.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointVonMisesFisher.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.JointVonMisesFisher.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#JointVonMisesFisher.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.JointVonMisesFisher.sample" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.TruncatedNormal">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">TruncatedNormal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#TruncatedNormal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.TruncatedNormal" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.TruncatedNormal.get_cost">
+<span class="sig-name descname"><span class="pre">get_cost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#TruncatedNormal.get_cost"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.TruncatedNormal.get_cost" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.TruncatedNormal.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#TruncatedNormal.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.TruncatedNormal.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.TruncatedNormal.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#TruncatedNormal.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.TruncatedNormal.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.TruncatedNormal.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#TruncatedNormal.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.TruncatedNormal.sample" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.out_dist.VonMises">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.out_dist.</span></span><span class="sig-name descname"><span class="pre">VonMises</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#VonMises"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.VonMises" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.VonMises.get_cost">
+<span class="sig-name descname"><span class="pre">get_cost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#VonMises.get_cost"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.VonMises.get_cost" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.VonMises.get_distribution">
+<span class="sig-name descname"><span class="pre">get_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logvar</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">EPS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ramp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#VonMises.get_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.VonMises.get_distribution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.VonMises.get_networks">
+<span class="sig-name descname"><span class="pre">get_networks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#VonMises.get_networks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.VonMises.get_networks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.out_dist.VonMises.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dist</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/out_dist.html#VonMises.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.out_dist.VonMises.sample" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin.plotting">
+<span id="vitamin-plotting-module"></span><h2>vitamin.plotting module<a class="headerlink" href="#module-vitamin.plotting" title="Permalink to this headline"></a></h2>
+<p>Script containing a suite of plotting-related functions used by vitamin_b</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.plotting.factorial">
+<span class="sig-prename descclassname"><span class="pre">vitamin.plotting.</span></span><span class="sig-name descname"><span class="pre">factorial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#factorial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.factorial" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.plotting.make_dirs">
+<span class="sig-prename descclassname"><span class="pre">vitamin.plotting.</span></span><span class="sig-name descname"><span class="pre">make_dirs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dir</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_dirs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_dirs" title="Permalink to this definition"></a></dt>
+<dd><p>Make directories to store plots. Directories that already exist will be overwritten.</p>
+<dl class="simple">
+<dt>params: dict</dt><dd><p>general run parameters</p>
+</dd>
+<dt>out_dir: str</dt><dd><p>output directory for test plots</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.plotting.make_plots">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.plotting.</span></span><span class="sig-name descname"><span class="pre">make_plots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rev_x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_test</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_plots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_plots" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class to generate a suite of testing plots</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.plotting.make_plots.gen_kl_plots">
+<span class="sig-name descname"><span class="pre">gen_kl_plots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sig_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bounds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inf_ol_idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bilby_ol_idx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_plots.gen_kl_plots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_plots.gen_kl_plots" title="Permalink to this definition"></a></dt>
+<dd><p>Make kl corner histogram plots.</p>
+<dl class="simple">
+<dt>model: tensorflow object</dt><dd><p>pre-trained tensorflow model</p>
+</dd>
+<dt>sig_test: array_like</dt><dd><p>test sample time series</p>
+</dd>
+<dt>par_test: array_like</dt><dd><p>test sample source parameter values</p>
+</dd>
+<dt>normscales: float</dt><dd><p>arbitrary normalization factor for time series</p>
+</dd>
+<dt>bounds: dict</dt><dd><p>allowed bounds for GW waveform source parameters</p>
+</dd>
+<dt>snrs_test: array_like</dt><dd><p>Optimal SNR values for every test sample</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.plotting.make_plots.plot_loss">
+<span class="sig-name descname"><span class="pre">plot_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_plots.plot_loss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_plots.plot_loss" title="Permalink to this definition"></a></dt>
+<dd><p>Regenerate previously made loss plot</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.plotting.make_plots.plot_pp">
+<span class="sig-name descname"><span class="pre">plot_pp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sig_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bounds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inf_ol_idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bilby_ol_idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bilby_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_plots.plot_pp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_plots.plot_pp" title="Permalink to this definition"></a></dt>
+<dd><p>make p-p plots using in-house methods</p>
+<dl class="simple">
+<dt>model: tensorflow object</dt><dd><p>pre-trained tensorflow neural network model</p>
+</dd>
+<dt>sig_test: array_like</dt><dd><p>array of test time series</p>
+</dd>
+<dt>par_test: array_like</dt><dd><p>array of test time series source parameters</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.plotting.make_plots.pp_plot">
+<span class="sig-name descname"><span class="pre">pp_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">truth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_plots.pp_plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_plots.pp_plot" title="Permalink to this definition"></a></dt>
+<dd><p>generates the pp plot data given samples and truth values</p>
+<dl class="simple">
+<dt>truth: float</dt><dd><p>true scalar value of source parameter</p>
+</dd>
+<dt>samples: array_like</dt><dd><p>posterior samples of source parameter</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>r: float</dt><dd><p>pp value</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.plotting.make_ppplot">
+<span class="sig-prename descclassname"><span class="pre">vitamin.plotting.</span></span><span class="sig-name descname"><span class="pre">make_ppplot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">truths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">savepath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#make_ppplot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.make_ppplot" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.plotting.prune_samples">
+<span class="sig-prename descclassname"><span class="pre">vitamin.plotting.</span></span><span class="sig-name descname"><span class="pre">prune_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chain_file_loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/plotting.html#prune_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.plotting.prune_samples" title="Permalink to this definition"></a></dt>
+<dd><p>Function to remove bad likelihood emcee chains</p>
+<dl class="simple">
+<dt>chain_file_loc: str</dt><dd><p>location of emcee chain file</p>
+</dd>
+<dt>params: dict</dt><dd><p>general run parameters</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>XS: array_like</dt><dd><p>pruned emcee samples</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="vitamin-run-vitamin-module">
+<h2>vitamin.run_vitamin module<a class="headerlink" href="#vitamin-run-vitamin-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="vitamin-run-vitamin-condor-module">
+<h2>vitamin.run_vitamin_condor module<a class="headerlink" href="#vitamin-run-vitamin-condor-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="vitamin-skyplotting-module">
+<h2>vitamin.skyplotting module<a class="headerlink" href="#vitamin-skyplotting-module" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.test">
+<span id="vitamin-test-module"></span><h2>vitamin.test module<a class="headerlink" href="#module-vitamin.test" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.tests">
+<span id="vitamin-tests-module"></span><h2>vitamin.tests module<a class="headerlink" href="#module-vitamin.tests" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-vitamin.train">
+<span id="vitamin-train-module"></span><h2>vitamin.train module<a class="headerlink" href="#module-vitamin.train" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train.train">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train.</span></span><span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train.html#train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train.train" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-vitamin.train_plots">
+<span id="vitamin-train-plots-module"></span><h2>vitamin.train_plots module<a class="headerlink" href="#module-vitamin.train_plots" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.paper_plots">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">paper_plots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_data_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_data_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bilby_samples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#paper_plots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.paper_plots" title="Permalink to this definition"></a></dt>
+<dd><p>Make publication plots</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_KL">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_KL</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">KL_samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_KL"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_KL" title="Permalink to this definition"></a></dt>
+<dd><p>plots the KL evolution</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_batch_losses">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_batch_losses</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_batch_losses"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_batch_losses" title="Permalink to this definition"></a></dt>
+<dd><p>plots the losses</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_gauss_von">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_gauss_von</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_gauss_von"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_gauss_von" title="Permalink to this definition"></a></dt>
+<dd><p>plots the losses</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_latent">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_latent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu_r1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_r1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_latent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_latent" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_losses">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_losses</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_losses"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_losses" title="Permalink to this definition"></a></dt>
+<dd><p>plots the losses</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_losses_zoom">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_losses_zoom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ind_start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'testing'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'TOTAL'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_losses_zoom"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_losses_zoom" title="Permalink to this definition"></a></dt>
+<dd><p>plots the losses</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vitamin.train_plots.plot_posterior">
+<span class="sig-prename descclassname"><span class="pre">vitamin.train_plots.</span></span><span class="sig-name descname"><span class="pre">plot_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_truth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">all_other_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_other_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unconvert_parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/train_plots.html#plot_posterior"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.train_plots.plot_posterior" title="Permalink to this definition"></a></dt>
+<dd><p>plots the posteriors</p>
+</dd></dl>
+
+</section>
+<section id="module-vitamin.vitamin_parser">
+<span id="vitamin-vitamin-parser-module"></span><h2>vitamin.vitamin_parser module<a class="headerlink" href="#module-vitamin.vitamin_parser" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vitamin.vitamin_parser.</span></span><span class="sig-name descname"><span class="pre">InputParser</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.create_config">
+<span class="sig-name descname"><span class="pre">create_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ini_file</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.create_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.create_config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.get_bounds">
+<span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.get_bounds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.get_bounds" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.get_masks">
+<span class="sig-name descname"><span class="pre">get_masks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.get_masks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.get_masks" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.get_param_index">
+<span class="sig-name descname"><span class="pre">get_param_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">all_pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sky_extra</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.get_param_index"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.get_param_index" title="Permalink to this definition"></a></dt>
+<dd><p>Get the list index of requested source parameter types</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.get_param_order">
+<span class="sig-name descname"><span class="pre">get_param_order</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.get_param_order"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.get_param_order" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vitamin.vitamin_parser.InputParser.get_priors">
+<span class="sig-name descname"><span class="pre">get_priors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/vitamin/vitamin_parser.html#InputParser.get_priors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vitamin.vitamin_parser.InputParser.get_priors" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-vitamin">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-vitamin" title="Permalink to this headline"></a></h2>
+<section id="vitamin">
+<h3>VItamin<a class="headerlink" href="#vitamin" title="Permalink to this headline"></a></h3>
+<p>VItamin: a user-friendly machine learning posterior generation library.</p>
+<p>The aim of VItamin is to provide a user-friendly interface to perform fast parameter
+estimation. It is primarily designed and built for inference of compact
+binary coalescence events in interferometric data, but it can also be used for
+more general problems.</p>
+<p>The code is hosted at <a class="reference external" href="https://github.com/hagabbar/vitamin_b">https://github.com/hagabbar/vitamin_b</a>.
+For installation instructions see
+“need to add link here”.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

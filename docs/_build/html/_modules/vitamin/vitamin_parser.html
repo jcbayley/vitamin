@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.vitamin_parser &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.vitamin_parser</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.vitamin_parser</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">configparser</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">importlib.resources</span> <span class="k">as</span> <span class="nn">pkg_resources</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">templates</span>
+<span class="kn">import</span> <span class="nn">bilby</span>
+<span class="kn">import</span> <span class="nn">os</span> 
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">.group_inference_parameters</span> <span class="kn">import</span> <span class="n">group_outputs</span>
+<span class="kn">import</span> <span class="nn">regex</span>
+
+<div class="viewcode-block" id="InputParser"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser">[docs]</a><span class="k">class</span> <span class="nc">InputParser</span><span class="p">():</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config_file</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a configuration, either default configuration or input config file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_prior</span> <span class="o">=</span> <span class="s2">&quot;BBHPriorDict&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_ini</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">pkg_resources</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">templates</span><span class="p">,</span> <span class="s2">&quot;config.ini&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">default_config</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">default_ini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">default_config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_ini</span><span class="p">)</span>
+        
+
+        <span class="k">if</span> <span class="n">config_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">config_file</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ini</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config_file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">create_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ini</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_file</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Using default config file&quot;</span><span class="p">)</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_priors</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_masks</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_bounds</span><span class="p">()</span>
+        
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+<div class="viewcode-block" id="InputParser.create_config"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.create_config">[docs]</a>    <span class="k">def</span> <span class="nf">create_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ini_file</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">ini_file</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;inf_pars&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,{})</span>
+            <span class="k">for</span> <span class="n">key2</span> <span class="ow">in</span> <span class="n">ini_file</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key2</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;shared_network&quot;</span><span class="p">,</span> <span class="s2">&quot;output_network&quot;</span><span class="p">]:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">mod</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">mod</span> <span class="ow">in</span> <span class="n">regex</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\s*,\s*(?![^(]*\))&quot;</span><span class="p">,</span> <span class="n">ini_file</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;[&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;]&quot;</span><span class="p">))]</span>
+                <span class="k">elif</span> <span class="n">key2</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;waveform_approximant&quot;</span><span class="p">,</span> <span class="s2">&quot;run_tag&quot;</span><span class="p">]:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ini_file</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">key2</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;output_directory&quot;</span><span class="p">,</span><span class="s2">&quot;data_directory&quot;</span><span class="p">,</span> <span class="s2">&quot;prior_file&quot;</span><span class="p">]:</span>
+                    <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">ini_file</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">]</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">ini_file</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">key2</span><span class="p">])</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s2">&quot;inf_pars_list&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;inf_pars&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="InputParser.get_masks"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.get_masks">[docs]</a>    <span class="k">def</span> <span class="nf">get_masks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_idx&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;inf_ol_len&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">],</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s1">&#39;bilby_pars&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;bilby_ol_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;bilby_ol_idx&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;bilby_ol_len&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;testing&quot;</span><span class="p">][</span><span class="s1">&#39;bilby_pars&#39;</span><span class="p">],</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">])</span>
+        
+        <span class="c1">#parameter masks</span>
+        <span class="k">for</span> <span class="n">par</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s2">&quot;inf_pars_list&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_mask&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">par</span><span class="p">)],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_idx_mask&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">par</span><span class="p">)],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_len&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">par</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">],[</span><span class="n">par</span><span class="p">])</span>
+
+        <span class="n">all_period_params</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;phase&#39;</span><span class="p">,</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span><span class="s1">&#39;phi_12&#39;</span><span class="p">,</span><span class="s1">&#39;phi_jl&#39;</span><span class="p">]</span>
+        <span class="n">periodic_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">all_period_params</span><span class="p">]</span>
+        <span class="n">all_nonperiod_params</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;mass_1&#39;</span><span class="p">,</span><span class="s1">&#39;mass_2&#39;</span><span class="p">,</span><span class="s1">&#39;luminosity_distance&#39;</span><span class="p">,</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span><span class="s1">&#39;theta_jn&#39;</span><span class="p">,</span><span class="s1">&#39;a_1&#39;</span><span class="p">,</span><span class="s1">&#39;a_2&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_1&#39;</span><span class="p">,</span><span class="s1">&#39;tilt_2&#39;</span><span class="p">]</span>
+        <span class="n">nonperiodic_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">all_nonperiod_params</span><span class="p">]</span>
+
+        <span class="c1"># periodic masks</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;periodic_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;periodic_idx_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;periodic_len&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s1">&#39;inf_pars_list&#39;</span><span class="p">],</span> <span class="n">periodic_params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;nonperiodic_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;nonperiodic_idx_mask&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;nonperiodic_len&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">][</span><span class="s2">&quot;inf_pars_list&quot;</span><span class="p">],</span><span class="n">nonperiodic_params</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;idx_periodic_mask&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;nonperiodic_idx_mask&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;periodic_idx_mask&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;ra_idx_mask&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;dec_idx_mask&quot;</span><span class="p">])</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        # non periodic masks</span>
+<span class="sd">        </span>
+<span class="sd">        nonperiodic_nonm1m2_params = copy.copy(nonperiodic_params)</span>
+<span class="sd">        nonperiodic_nonm1m2_params.remove(&quot;mass_1&quot;)</span>
+<span class="sd">        nonperiodic_nonm1m2_params.remove(&quot;mass_2&quot;)</span>
+<span class="sd">        self.config[&quot;masks&quot;][&quot;nonperiodicpars_nonm1m2_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodicpars_nonm1m2_idx_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodicpars_nonm1m2_len&quot;] = self.get_param_index(nonperiodic_params,nonperiodic_nonm1m2_params)</span>
+<span class="sd">        self.config[&quot;masks&quot;][&quot;nonperiodic_nonm1m2_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_nonm1m2_idx_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_nonm1m2_len&quot;] = self.get_param_index(self.config[&quot;model&quot;][&quot;inf_pars_list&quot;],nonperiodic_nonm1m2_params)</span>
+
+<span class="sd">        self.config[&quot;masks&quot;][&quot;nonperiodic_m1_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_m1_idx_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_m1_len&quot;] = self.get_param_index(nonperiodic_params,[&#39;mass_1&#39;])</span>
+<span class="sd">        self.config[&quot;masks&quot;][&quot;nonperiodic_m2_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_m2_idx_mask&quot;], self.config[&quot;masks&quot;][&quot;nonperiodic_m2_len&quot;] = self.get_param_index(nonperiodic_params,[&#39;mass_2&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_param_order</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="InputParser.get_bounds"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.get_bounds">[docs]</a>    <span class="k">def</span> <span class="nf">get_bounds</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;bounds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">par</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;bounds&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_max&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">par</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">][</span><span class="n">par</span><span class="p">]</span><span class="o">.</span><span class="n">maximum</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;bounds&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_min&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">par</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">][</span><span class="n">par</span><span class="p">]</span><span class="o">.</span><span class="n">minimum</span></div>
+
+<div class="viewcode-block" id="InputParser.get_priors"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.get_priors">[docs]</a>    <span class="k">def</span> <span class="nf">get_priors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">prior</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">d</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">prior</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;prior_file&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">priors</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">default_prior</span><span class="p">](</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;prior_file&quot;</span><span class="p">])</span>
+            <span class="c1"># set geocent time from other input pars</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">priors</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">default_prior</span><span class="p">]()</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No prior file, using default prior&quot;</span><span class="p">)</span>
+
+        <span class="n">priors</span><span class="p">[</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">prior</span><span class="o">.</span><span class="n">Uniform</span><span class="p">(</span>
+            <span class="n">minimum</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;ref_geocent_time&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">]</span><span class="o">/</span><span class="mi">2</span> <span class="o">-</span> <span class="mf">0.35</span><span class="p">,</span>
+            <span class="n">maximum</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;ref_geocent_time&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">]</span><span class="o">/</span><span class="mi">2</span> <span class="o">-</span> <span class="mf">0.15</span><span class="p">,</span>
+            <span class="n">name</span><span class="o">=</span><span class="s1">&#39;geocent_time&#39;</span><span class="p">,</span> <span class="n">latex_label</span><span class="o">=</span><span class="s1">&#39;$t_c$&#39;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;$s$&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">priors</span></div>
+            
+<div class="viewcode-block" id="InputParser.get_param_index"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.get_param_index">[docs]</a>    <span class="k">def</span> <span class="nf">get_param_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">all_pars</span><span class="p">,</span><span class="n">pars</span><span class="p">,</span><span class="n">sky_extra</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">        Get the list index of requested source parameter types</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># identify the indices of wrapped and non-wrapped parameters - clunky code</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># loop over inference params</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">all_pars</span><span class="p">):</span>
+            
+            <span class="c1"># loop over wrapped params</span>
+            <span class="n">flag</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">pars</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">p</span><span class="o">==</span><span class="n">q</span><span class="p">:</span>
+                    <span class="n">flag</span> <span class="o">=</span> <span class="kc">True</span>    <span class="c1"># if inf params is a wrapped param set flag</span>
+
+            <span class="c1"># record the true/false value for this inference param</span>
+            <span class="k">if</span> <span class="n">flag</span><span class="o">==</span><span class="kc">True</span><span class="p">:</span>
+                <span class="n">mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">idx</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">flag</span><span class="o">==</span><span class="kc">False</span><span class="p">:</span>
+                <span class="n">mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">mask</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="InputParser.get_param_order"><a class="viewcode-back" href="../../vitamin.html#vitamin.vitamin_parser.InputParser.get_param_order">[docs]</a>    <span class="k">def</span> <span class="nf">get_param_order</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">grouped_params</span> <span class="o">=</span> <span class="n">group_outputs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+        <span class="n">oldorder</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;inf_pars&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">neworder</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">grouped_params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">neworder</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">group</span><span class="o">.</span><span class="n">pars</span><span class="p">)</span>
+
+        <span class="n">new_order_idx</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">par</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">neworder</span><span class="p">):</span>
+            <span class="n">new_order_idx</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">oldorder</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">par</span><span class="p">))</span>
+
+        <span class="n">reverse_order_idx</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">par</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">oldorder</span><span class="p">):</span>
+            <span class="n">reverse_order_idx</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">neworder</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">par</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;group_order_idx&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_order_idx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;masks&quot;</span><span class="p">][</span><span class="s2">&quot;ungroup_order_idx&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reverse_order_idx</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

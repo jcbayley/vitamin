@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vitamin.create_template &mdash; vitamin 0.3.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> vitamin
+          </a>
+              <div class="version">
+                0.3.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../vitamin_start_to_finish.html">Run Your Own Analysis from Start to Finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters_files.html">Customizing Your Parameters Files</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vitamin</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+      <li>vitamin.create_template</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vitamin.create_template</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">bilby</span>
+<span class="kn">from</span> <span class="nn">sys</span> <span class="kn">import</span> <span class="n">exit</span>
+<span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">glob</span><span class="o">,</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s1">&#39;agg&#39;</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">integrate</span><span class="p">,</span> <span class="n">interpolate</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">import</span> <span class="nn">lalsimulation</span>
+<span class="kn">import</span> <span class="nn">lal</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">scipy.ndimage.interpolation</span> <span class="kn">import</span> <span class="n">shift</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">gwpy.timeseries</span> <span class="kn">import</span> <span class="n">TimeSeries</span>
+<span class="kn">from</span> <span class="nn">gwdatafind</span> <span class="kn">import</span> <span class="n">find_urls</span>
+
+
+<div class="viewcode-block" id="GenerateTemplate"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate">[docs]</a><span class="k">class</span> <span class="nc">GenerateTemplate</span><span class="p">():</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">run_type</span> <span class="o">=</span> <span class="s2">&quot;train&quot;</span><span class="p">,</span> <span class="n">save_dir</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a BBH signal template in real noise or Gaussian noise. Run parameter estimation on signal</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_dir</span> <span class="o">=</span> <span class="n">save_dir</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;use_real_detector_noise&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_noise_seg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_real_noise_seg&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">run_type</span><span class="p">)]</span> 
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">channel_name</span> <span class="o">=</span> <span class="s2">&quot;DCS-CALIB_STRAIN_C01&quot;</span>
+        <span class="c1">#self.get_prior()</span>
+        
+    <span class="c1">#def get_prior(self):</span>
+    <span class="c1">#    self.prior = bilby.gw.prior.BBHPriorDict(self.config[&quot;data&quot;][&quot;prior_file&quot;])</span>
+ 
+<div class="viewcode-block" id="GenerateTemplate.get_injection_parameters"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.get_injection_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">get_injection_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the injection parameters from the prior distribution</span>
+<span class="sd">        Also get the parameters for inference to save</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">,</span> <span class="n">added_keys</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">conversion</span><span class="o">.</span><span class="n">convert_to_lal_binary_black_hole_parameters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GenerateTemplate.clear_attributes"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.clear_attributes">[docs]</a>    <span class="k">def</span> <span class="nf">clear_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Remove attributes to regenerate data</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;injection_parameters&quot;</span><span class="p">,</span><span class="s2">&quot;injection_parameters_list&quot;</span><span class="p">,</span> <span class="s2">&quot;waveform_polarisations&quot;</span><span class="p">,</span> <span class="s2">&quot;whitened_signals_td&quot;</span><span class="p">,</span> <span class="s2">&quot;ifos&quot;</span><span class="p">,</span> <span class="s2">&quot;waveform_generator&quot;</span><span class="p">,</span> <span class="s2">&quot;snrs&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GenerateTemplate.generate_polarisations"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.generate_polarisations">[docs]</a>    <span class="k">def</span> <span class="nf">generate_polarisations</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Generates the polarisations of signal to be combined later.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">]</span><span class="o">&gt;</span><span class="mi">4096</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;EXITING: bilby doesn</span><span class="se">\&#39;</span><span class="s1">t seem to generate noise above 2048Hz so lower the sampling frequency&#39;</span><span class="p">)</span>
+            <span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># compute the number of time domain samples</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Nt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">])</span>
+        
+        <span class="c1"># define the start time of the timeseries</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;ref_geocent_time&quot;</span><span class="p">]</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">]</span><span class="o">/</span><span class="mf">2.0</span>
+        
+        <span class="c1"># Fixed arguments passed into the source model </span>
+        <span class="n">waveform_arguments</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">waveform_approximant</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;waveform_approximant&quot;</span><span class="p">],</span>
+                                  <span class="n">reference_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;reference_frequency&quot;</span><span class="p">],</span> 
+                                  <span class="n">minimum_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;minimum_frequency&quot;</span><span class="p">],</span>
+                                  <span class="n">maximum_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">]</span><span class="o">/</span><span class="mf">2.0</span><span class="p">)</span>
+
+        <span class="c1"># Create the waveform_generator using a LAL BinaryBlackHole source function</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waveform_generator</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">WaveformGenerator</span><span class="p">(</span>
+            <span class="n">duration</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span> <span class="n">sampling_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">],</span>
+            <span class="n">frequency_domain_source_model</span><span class="o">=</span><span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">lal_binary_black_hole</span><span class="p">,</span>
+            <span class="n">parameter_conversion</span><span class="o">=</span><span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">conversion</span><span class="o">.</span><span class="n">convert_to_lal_binary_black_hole_parameters</span><span class="p">,</span>
+            <span class="n">waveform_arguments</span><span class="o">=</span><span class="n">waveform_arguments</span><span class="p">,</span>
+            <span class="n">start_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">)</span>
+        
+        <span class="c1"># extract waveform from bilby</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waveform_generator</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waveform_polarisations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">waveform_generator</span><span class="o">.</span><span class="n">frequency_domain_strain</span><span class="p">()</span></div>
+        <span class="c1">#time_signal = self.waveform_generator.time_domain_strain()</span>
+        
+<div class="viewcode-block" id="GenerateTemplate.get_detector_response"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.get_detector_response">[docs]</a>    <span class="k">def</span> <span class="nf">get_detector_response</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frequency_domain_strain</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Gets the whitened signal from polarisations</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># initialise the interferometers</span>
+        <span class="n">ifos</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">InterferometerList</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;detectors&#39;</span><span class="p">])</span>
+        
+        <span class="c1"># If user is specifying PSD file (bit of a messy section, will update)</span>
+        <span class="n">num_psd_files</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;psd_files&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">num_psd_files</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">elif</span> <span class="n">num_psd_files</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">type_psd</span> <span class="o">=</span> <span class="n">psd_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">int_idx</span><span class="p">,</span><span class="n">ifo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ifos</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">type_psd</span> <span class="o">==</span> <span class="s1">&#39;psd&#39;</span><span class="p">:</span>
+                    <span class="n">ifo</span><span class="o">.</span><span class="n">power_spectral_density</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">PowerSpectralDensity</span><span class="p">(</span><span class="n">psd_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;psd_files&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">type_psd</span> <span class="o">==</span> <span class="s1">&#39;asd&#39;</span><span class="p">:</span>
+                    <span class="n">ifo</span><span class="o">.</span><span class="n">power_spectral_density</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">PowerSpectralDensity</span><span class="p">(</span><span class="n">asd_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;psd_files&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Could not determine whether psd or asd ...&#39;</span><span class="p">)</span>
+                    <span class="n">exit</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">num_psd_files</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">type_psd</span> <span class="o">=</span> <span class="n">psd_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">int_idx</span><span class="p">,</span><span class="n">ifo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ifos</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">type_psd</span> <span class="o">==</span> <span class="s1">&#39;psd&#39;</span><span class="p">:</span>
+                    <span class="n">ifo</span><span class="o">.</span><span class="n">power_spectral_density</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">PowerSpectralDensity</span><span class="p">(</span><span class="n">psd_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;psd_files&quot;</span><span class="p">][</span><span class="n">int_idx</span><span class="p">])</span>
+                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">type_psd</span> <span class="o">==</span> <span class="s1">&#39;asd&#39;</span><span class="p">:</span>
+                    <span class="n">ifo</span><span class="o">.</span><span class="n">power_spectral_density</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">PowerSpectralDensity</span><span class="p">(</span><span class="n">asd_file</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;psd_files&quot;</span><span class="p">][</span><span class="n">int_idx</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Could not determine whether psd or asd ...&#39;</span><span class="p">)</span>
+                    <span class="n">exit</span><span class="p">()</span>
+
+        <span class="c1"># if strain privided set the strain from this</span>
+        <span class="k">if</span> <span class="n">frequency_domain_strain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">int_idx</span><span class="p">,</span><span class="n">ifo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ifos</span><span class="p">):</span>
+                <span class="n">ifo</span><span class="o">.</span><span class="n">set_strain_data_from_frequency_domain_strain</span><span class="p">(</span><span class="n">frequency_domain_strain</span><span class="p">[</span><span class="n">int_idx</span><span class="p">],</span>
+                                                                 <span class="n">sampling_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">],</span>
+                                                                 <span class="n">duration</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span>
+                                                                 <span class="n">start_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">)</span>
+            
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;use_real_detector_noise&quot;</span><span class="p">]:</span>
+                <span class="c1">#load_files, start_times, durations, sample_rates = get_real_noise(params = params, channel_name = &quot;DCS-CALIB_STRAIN_C01&quot;, real_noise_seg = real_noise_seg)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;noise_examples&quot;</span><span class="p">):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Please load some real data using get_real_noise&quot;</span><span class="p">)</span>
+                    <span class="c1"># need to test this peice of code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!</span>
+                    <span class="k">for</span> <span class="n">int_idx</span><span class="p">,</span><span class="n">ifo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ifos</span><span class="p">):</span>
+                        <span class="n">rand_time</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">start_times</span><span class="p">[</span><span class="n">int_idx</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span> <span class="n">start_times</span><span class="p">[</span><span class="n">int_idx</span><span class="p">]</span> <span class="o">+</span> <span class="n">durations</span><span class="p">[</span><span class="n">int_idx</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">]</span> <span class="p">)</span>
+                        <span class="n">temp_ts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">noise_examples</span><span class="p">[</span><span class="n">int_idx</span><span class="p">]</span><span class="o">.</span><span class="n">crop</span><span class="p">(</span><span class="n">rand_time</span><span class="p">,</span> <span class="n">rand_time</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">])</span>
+                        <span class="n">ifo</span><span class="o">.</span><span class="n">strain_data</span><span class="o">.</span><span class="n">set_from_gwpy_imeseries</span><span class="p">(</span><span class="n">temp_ts</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ifos</span><span class="o">.</span><span class="n">set_strain_data_from_power_spectral_densities</span><span class="p">(</span>
+                    <span class="n">sampling_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">],</span> <span class="n">duration</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">],</span><span class="n">start_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">frequency_domain_strain</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;detectors&quot;</span><span class="p">])):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">frequency_domain_strain</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ifos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">strain_data</span><span class="o">.</span><span class="n">frequency_domain_strain</span><span class="p">)</span>
+
+        <span class="c1"># inject signal</span>
+        <span class="n">ifos</span><span class="o">.</span><span class="n">inject_signal</span><span class="p">(</span><span class="n">waveform_generator</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waveform_generator</span><span class="p">,</span>
+                           <span class="n">parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">)</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Injected signal&#39;</span><span class="p">)</span>
+        <span class="n">whitened_signal_td_all</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">whitened_h_td_all</span> <span class="o">=</span> <span class="p">[]</span> 
+        <span class="c1"># iterate over ifos</span>
+        <span class="n">whiten_data</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;detectors&#39;</span><span class="p">])):</span>
+            <span class="c1"># get frequency domain noise-free signal at detector</span>
+            <span class="n">signal_fd</span> <span class="o">=</span> <span class="n">ifos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">get_detector_response</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">waveform_polarisations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">)</span> 
+            
+            <span class="c1"># get frequency domain signal + noise at detector</span>
+            <span class="n">h_fd</span> <span class="o">=</span> <span class="n">ifos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">strain_data</span><span class="o">.</span><span class="n">frequency_domain_strain</span>
+            
+            <span class="c1"># whitening</span>
+            <span class="k">if</span> <span class="n">whiten_data</span><span class="p">:</span>
+                <span class="c1"># whiten frequency domain noise-free signal (and reshape/flatten)</span>
+                <span class="n">whitened_signal_fd</span> <span class="o">=</span> <span class="n">signal_fd</span><span class="o">/</span><span class="n">ifos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">amplitude_spectral_density_array</span>
+                <span class="c1">#whitened_signal_fd = whitened_signal_fd.reshape(whitened_signal_fd.shape[0])    </span>
+                
+                <span class="c1"># inverse FFT noise-free signal back to time domain and normalise</span>
+                <span class="n">whitened_signal_td</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Nt</span><span class="p">)</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">irfft</span><span class="p">(</span><span class="n">whitened_signal_fd</span><span class="p">)</span>
+                
+                <span class="c1"># whiten noisy frequency domain signal</span>
+                <span class="n">whitened_h_fd</span> <span class="o">=</span> <span class="n">h_fd</span><span class="o">/</span><span class="n">ifos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">amplitude_spectral_density_array</span>
+                
+                <span class="c1"># inverse FFT noisy signal back to time domain and normalise</span>
+                <span class="n">whitened_h_td</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Nt</span><span class="p">)</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">irfft</span><span class="p">(</span><span class="n">whitened_h_fd</span><span class="p">)</span>
+                
+                <span class="n">whitened_h_td_all</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">whitened_h_td</span><span class="p">])</span>
+                <span class="n">whitened_signal_td_all</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">whitened_signal_td</span><span class="p">])</span>            
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">whitened_h_td_all</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">h_fd</span><span class="p">])</span>
+                <span class="n">whitened_signal_td_all</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">signal_fd</span><span class="p">])</span>
+                    
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;... Whitened signals&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">whitened_signals_td</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">whitened_signal_td_all</span><span class="p">),</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">whitened_data_td</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">whitened_h_td_all</span><span class="p">),</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ifos</span> <span class="o">=</span> <span class="n">ifos</span>
+        <span class="c1">#self.waveform_generator = waveform_generator</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">snrs</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ifos</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">meta_data</span><span class="p">[</span><span class="s1">&#39;optimal_SNR&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s1">&#39;detectors&#39;</span><span class="p">]))]</span></div>
+
+
+<div class="viewcode-block" id="GenerateTemplate.run_pe"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.run_pe">[docs]</a>    <span class="k">def</span> <span class="nf">run_pe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampler</span> <span class="o">=</span> <span class="s2">&quot;dynesty&quot;</span><span class="p">,</span> <span class="n">start_ind</span> <span class="o">=</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Run traditional PE on the saved waveform</span>
+<span class="sd">        Current options are dynesty and nessai</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="s2">&quot;bilby_out_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">start_ind</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bilby</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">setup_logger</span><span class="p">(</span><span class="n">outdir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">save_dir</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">pass</span>
+
+        <span class="c1"># initialise likelihood</span>
+        <span class="n">phase_marginalization</span><span class="o">=</span><span class="kc">True</span>
+        <span class="n">likelihood</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">GravitationalWaveTransient</span><span class="p">(</span>
+            <span class="n">interferometers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ifos</span><span class="p">,</span> <span class="n">waveform_generator</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waveform_generator</span><span class="p">,</span> <span class="n">phase_marginalization</span><span class="o">=</span><span class="n">phase_marginalization</span><span class="p">,</span><span class="n">priors</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">])</span>
+
+        <span class="c1"># look for dynesty sampler option</span>
+        <span class="k">if</span> <span class="n">sampler</span> <span class="o">==</span> <span class="s2">&quot;dynesty&quot;</span><span class="p">:</span>
+
+            <span class="n">run_startt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="c1"># Run sampler dynesty 1 sampler</span>
+
+            <span class="n">result</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">run_sampler</span><span class="p">(</span>
+                <span class="n">likelihood</span><span class="o">=</span><span class="n">likelihood</span><span class="p">,</span> <span class="n">priors</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">],</span> <span class="n">sampler</span><span class="o">=</span><span class="s1">&#39;dynesty&#39;</span><span class="p">,</span> <span class="n">npoints</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">nact</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">npool</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">dlogz</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">injection_parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">,</span> <span class="n">outdir</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">save_dir</span><span class="p">,</span><span class="n">sampler</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="s1">&#39;hdf5&#39;</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">run_endt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+            <span class="c1"># save test sample waveform</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dynesty</span> <span class="o">=</span> <span class="n">result</span>
+
+            <span class="c1"># loop over randomised params and save samples</span>
+            <span class="c1">#for p in inf_pars:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dynesty_runtime</span> <span class="o">=</span> <span class="n">run_endt</span> <span class="o">-</span> <span class="n">run_startt</span>
+
+
+        <span class="k">elif</span> <span class="n">sampler</span> <span class="o">==</span> <span class="s2">&quot;nessai&quot;</span><span class="p">:</span>
+
+            <span class="n">run_startt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="c1"># Run sampler dynesty 1 sampler</span>
+
+            <span class="n">result</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">run_sampler</span><span class="p">(</span>
+                <span class="n">likelihood</span><span class="o">=</span><span class="n">likelihood</span><span class="p">,</span> <span class="n">priors</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;priors&quot;</span><span class="p">],</span> <span class="n">sampler</span><span class="o">=</span><span class="s1">&#39;nessai&#39;</span><span class="p">,</span> <span class="n">npoints</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">dlogz</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">injection_parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">injection_parameters</span><span class="p">,</span> <span class="n">outdir</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">save_dir</span><span class="p">,</span><span class="n">sampler</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="s1">&#39;hdf5&#39;</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">run_endt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+            <span class="c1"># save test sample waveform</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nessai</span> <span class="o">=</span> <span class="n">result</span>
+
+            <span class="c1"># loop over randomised params and save samples</span>
+            <span class="c1">#for p in inf_pars:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nessai_runtime</span> <span class="o">=</span> <span class="n">run_endt</span> <span class="o">-</span> <span class="n">run_startt</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Currently only comparing to dynesty or nessai please choose one of these&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GenerateTemplate.get_real_noise"><a class="viewcode-back" href="../../vitamin.html#vitamin.create_template.GenerateTemplate.get_real_noise">[docs]</a>    <span class="k">def</span> <span class="nf">get_real_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a segment of real noise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># compute the number of time domain samples</span>
+        <span class="n">Nt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sample_rate&quot;</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">])</span>
+
+        <span class="c1"># Get ifos bilby variable</span>
+        <span class="n">ifos</span> <span class="o">=</span> <span class="n">bilby</span><span class="o">.</span><span class="n">gw</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">InterferometerList</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;detectors&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_noise_seg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">start_range</span><span class="p">,</span> <span class="n">end_range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;real_noise_time_range&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">start_range</span><span class="p">,</span> <span class="n">end_range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_noise_seg</span>
+        <span class="c1"># select times within range that do not overlap by the duration</span>
+        <span class="n">file_length_sec</span> <span class="o">=</span> <span class="mi">4096</span>
+        <span class="n">num_load_files</span> <span class="o">=</span> <span class="mi">1</span><span class="c1">#int(0.1*num_segments/file_length_sec)</span>
+
+        <span class="n">num_f_seg</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">end_range</span> <span class="o">-</span> <span class="n">start_range</span><span class="p">)</span><span class="o">/</span><span class="n">file_length_sec</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">num_load_files</span> <span class="o">&gt;</span> <span class="n">num_f_seg</span><span class="p">:</span>
+            <span class="n">num_load_files</span> <span class="o">=</span> <span class="n">num_f_seg</span>
+
+        <span class="n">file_time</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">num_f_seg</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">num_load_files</span><span class="p">))</span><span class="o">*</span><span class="n">file_length_sec</span> <span class="o">+</span> <span class="n">start_range</span>
+
+        <span class="n">load_files</span>   <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">start_times</span>  <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">durations</span>    <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">sample_rates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1">#for fle in range(num_load_files):</span>
+        <span class="n">fle</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">st1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ifo_idx</span><span class="p">,</span><span class="n">ifo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ifos</span><span class="p">):</span> <span class="c1"># iterate over interferometers</span>
+            <span class="n">det_str</span> <span class="o">=</span> <span class="n">ifo</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">gwf_url</span> <span class="o">=</span> <span class="n">find_urls</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">det_str</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_HOFT_C01&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">det_str</span><span class="p">),</span> <span class="n">file_time</span><span class="p">[</span><span class="n">fle</span><span class="p">],</span><span class="n">file_time</span><span class="p">[</span><span class="n">fle</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;duration&quot;</span><span class="p">])</span>
+            <span class="n">time_series</span> <span class="o">=</span> <span class="n">TimeSeries</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">gwf_url</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">det_str</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">channel_name</span><span class="p">))</span>
+            <span class="n">time_series</span> <span class="o">=</span> <span class="n">time_series</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;sample_rate&quot;</span><span class="p">])</span>
+            <span class="n">load_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time_series</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">start_times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time_series</span><span class="o">.</span><span class="n">t0</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">durations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time_series</span><span class="o">.</span><span class="n">duration</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">sample_rates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time_series</span><span class="o">.</span><span class="n">sample_rate</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="c1">#ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.params[&quot;psd_files&quot;][0])</span>
+            <span class="k">del</span> <span class="n">time_series</span>
+
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_examples</span> <span class="o">=</span> <span class="n">load_files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_start_times</span> <span class="o">=</span> <span class="n">start_times</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_durations</span> <span class="o">=</span> <span class="n">durations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_sample_rates</span> <span class="o">=</span> <span class="n">sample_rates</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, Joseph Bayley.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
