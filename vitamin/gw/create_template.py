@@ -26,8 +26,13 @@ class GenerateTemplate():
         """
         self.config = config
         self.save_dir = save_dir
-        if self.config["data"]["use_real_detector_noise"]:
-            self.real_noise_seg = self.config["data"]["{}_real_noise_seg".format(run_type)] 
+        self.run_type = run_type
+        #if self.config["data"]["use_real_detector_noise"]:
+        #    self.real_noise_seg = self.config["data"]["{}_real_noise_seg".format(run_type.strip("_noise"))] 
+        self.duration = self.config["data"]["duration"]
+        if self.run_type == "test":
+            # if test set add 2s to w5Caveform for use with lalinference
+            self.duration += 2
 
         self.channel_name = "DCS-CALIB_STRAIN_C01"
         #self.get_prior()
@@ -51,7 +56,7 @@ class GenerateTemplate():
     def clear_attributes(self):
         """ Remove attributes to regenerate data
         """
-        for key in ["injection_parameters","injection_parameters_list", "waveform_polarisations", "whitened_signals_td", "ifos", "waveform_generator", "snrs"]:
+        for key in ["injection_parameters","injection_parameters_list", "waveform_polarisations", "whitened_signals_td", "ifos", "waveform_generator", "snrs", "noise_samples", "noise_start_times", "noise_durations", "noise_sample_rates"]:
             if hasattr(self, key):
                 delattr(self, key)
 
@@ -64,7 +69,7 @@ class GenerateTemplate():
             exit(0)
 
         # compute the number of time domain samples
-        self.Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
+        self.Nt = int(self.config["data"]["sampling_frequency"]*self.duration)
         
         # define the start time of the timeseries
         self.start_time = self.config["data"]["ref_geocent_time"]-self.config["data"]["duration"]/2.0
@@ -77,7 +82,7 @@ class GenerateTemplate():
 
         # Create the waveform_generator using a LAL BinaryBlackHole source function
         self.waveform_generator = bilby.gw.WaveformGenerator(
-            duration=self.config["data"]["duration"], sampling_frequency=self.config["data"]["sampling_frequency"],
+            duration=self.duration, sampling_frequency=self.config["data"]["sampling_frequency"],
             frequency_domain_source_model=bilby.gw.source.lal_binary_black_hole,
             parameter_conversion=bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters,
             waveform_arguments=waveform_arguments,
@@ -92,6 +97,8 @@ class GenerateTemplate():
         """
         Gets the whitened signal from polarisations
         """
+
+        
         # initialise the interferometers
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
         
@@ -100,7 +107,7 @@ class GenerateTemplate():
         if num_psd_files == 0:
             pass
         elif num_psd_files == 1:
-            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
                 if self.type_psd == 'psd':
                     ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
@@ -109,8 +116,9 @@ class GenerateTemplate():
                 else:
                     print('Could not determine whether psd or asd ...')
                     exit()
-        elif num_psd_files > 1:
-            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+
+        elif num_psd_files == len(ifos):
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
                 if self.type_psd == 'psd':
                     ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
@@ -120,27 +128,31 @@ class GenerateTemplate():
                     print('Could not determine whether psd or asd ...')
                     exit()
 
+        else:
+            print("Num psd files not valid: should be 0, 1 or number of detectors")
+
         # if strain privided set the strain from this
         if frequency_domain_strain is not None:
             for int_idx,ifo in enumerate(ifos):
                 ifo.set_strain_data_from_frequency_domain_strain(frequency_domain_strain[int_idx],
                                                                  sampling_frequency=self.config["data"]["sampling_frequency"],
-                                                                 duration=self.config["data"]["duration"],
+                                                                 duration=self.duration,
                                                                  start_time=self.start_time)
             
         else:
             if self.config["data"]["use_real_detector_noise"]:
                 #load_files, start_times, durations, sample_rates = get_real_noise(params = params, channel_name = "DCS-CALIB_STRAIN_C01", real_noise_seg = real_noise_seg)
                 if not hasattr(self, "noise_examples"):
-                    print("Please load some real data using get_real_noise")
+                    raise Exception("Please load some real data using get_real_noise")
+                else:
                     # need to test this peice of code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     for int_idx,ifo in enumerate(ifos):
-                        rand_time = np.random.uniform(start_times[int_idx] + self.config["data"]["duration"], start_times[int_idx] + durations[int_idx] + self.config["data"]["duration"] )
-                        temp_ts = self.noise_examples[int_idx].crop(rand_time, rand_time + self.config["data"]["duration"])
-                        ifo.strain_data.set_from_gwpy_imeseries(temp_ts)
+                        rand_idx = int(np.random.uniform(0, len(self.noise_examples[int_idx]) - self.config["data"]["sampling_frequency"]*self.duration) )
+                        temp_ts = TimeSeries(self.noise_examples[int_idx][rand_idx : rand_idx + int(self.config["data"]["sampling_frequency"]*self.duration)], sample_rate = self.config["data"]["sampling_frequency"], t0 = self.start_time)
+                        ifo.strain_data.set_from_gwpy_timeseries(temp_ts)
             else:
                 ifos.set_strain_data_from_power_spectral_densities(
-                    sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],start_time=self.start_time)
+                    sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.duration,start_time=self.start_time)
 
         self.frequency_domain_strain = []
         for i in range(len(self.config["data"]["detectors"])):
@@ -148,11 +160,12 @@ class GenerateTemplate():
 
         # inject signal
         ifos.inject_signal(waveform_generator=self.waveform_generator,
-                           parameters=self.injection_parameters)
+                           parameters=self.injection_parameters,raise_error=False)
         
         print('... Injected signal')
         whitened_signal_td_all = []
         whitened_h_td_all = [] 
+        unwhitened_h_td_all = []
         # iterate over ifos
         whiten_data = True
         for i in range(len(self.config["data"]['detectors'])):
@@ -161,7 +174,7 @@ class GenerateTemplate():
             
             # get frequency domain signal + noise at detector
             h_fd = ifos[i].strain_data.frequency_domain_strain
-            
+
             # whitening
             if whiten_data:
                 # whiten frequency domain noise-free signal (and reshape/flatten)
@@ -176,9 +189,11 @@ class GenerateTemplate():
                 
                 # inverse FFT noisy signal back to time domain and normalise
                 whitened_h_td = np.sqrt(2.0*self.Nt)*np.fft.irfft(whitened_h_fd)
+                unwhitened_h_td = np.sqrt(2.0*self.Nt)*np.fft.irfft(h_fd)
                 
                 whitened_h_td_all.append([whitened_h_td])
                 whitened_signal_td_all.append([whitened_signal_td])            
+                unwhitened_h_td_all.append([unwhitened_h_td])
             else:
                 whitened_h_td_all.append([h_fd])
                 whitened_signal_td_all.append([signal_fd])
@@ -186,6 +201,7 @@ class GenerateTemplate():
         print('... Whitened signals')
         self.whitened_signals_td = np.squeeze(np.array(whitened_signal_td_all),axis=1)
         self.whitened_data_td = np.squeeze(np.array(whitened_h_td_all),axis=1)
+        self.unwhitened_data_td = np.squeeze(np.array(unwhitened_h_td_all),axis=1)
         self.ifos = ifos
         #self.waveform_generator = waveform_generator
         self.snrs = [self.ifos[j].meta_data['optimal_SNR'] for j in range(len(self.config["data"]['detectors']))]
@@ -245,25 +261,25 @@ class GenerateTemplate():
         else:
             print("Currently only comparing to dynesty or nessai please choose one of these")
 
-    def get_real_noise(self,):
+    def generate_real_noise(self,):
         """
         Get a segment of real noise
         """
         # compute the number of time domain samples
-        Nt = int(self.config["data"]["sample_rate"]*self.config["data"]["duration"])
+        Nt = int(self.config["data"]["sampling_frequency"]*self.duration)
 
         # Get ifos bilby variable
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]["detectors"])
 
-        if self.real_noise_seg is None:
-            start_range, end_range = self.config["data"]["real_noise_time_range"]
-        else:
-            start_range, end_range = self.real_noise_seg
+        start_range, end_range = self.config["data"]["{}_time_range".format(self.run_type)]
+
         # select times within range that do not overlap by the duration
         file_length_sec = 4096
         num_load_files = 1#int(0.1*num_segments/file_length_sec)
 
         num_f_seg = int((end_range - start_range)/file_length_sec)
+        if num_f_seg == 0:
+            num_f_seg = 1
 
         if num_load_files > num_f_seg:
             num_load_files = num_f_seg
@@ -279,9 +295,9 @@ class GenerateTemplate():
         st1 = time.time()
         for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
             det_str = ifo.name
-            gwf_url = find_urls("{}".format(det_str[0]), "{}_HOFT_C01".format(det_str), file_time[fle],file_time[fle] + self.config["data"]["duration"])
+            gwf_url = find_urls("{}".format(det_str[0]), "{}_HOFT_C01".format(det_str), file_time[fle],file_time[fle] + self.duration)
             time_series = TimeSeries.read(gwf_url, "{}:{}".format(det_str,self.channel_name))
-            time_series = time_series.resample(self.config["data"]["sample_rate"])
+            time_series = time_series.resample(self.config["data"]["sampling_frequency"])
             load_files.append(time_series.value)
             start_times.append(time_series.t0.value)
             durations.append(time_series.duration.value)

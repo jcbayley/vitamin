@@ -25,6 +25,13 @@ class DataLoader(tf.keras.utils.Sequence):
         self.shuffle = shuffle
         self.batch_size = self.config["training"]["batch_size"]
 
+        if self.test_set:
+            self.run_type = "test"
+        elif self.val_set:
+            self.run_type = "validation"
+        else:
+            self.run_type = "training"
+
         #load all filenames
         self.get_all_filenames()
         # get number of data examples as give them indicies
@@ -43,8 +50,6 @@ class DataLoader(tf.keras.utils.Sequence):
         # will addthis to init files eventually
         self.channel_name = channel_name
 
-        if self.config["data"]["use_real_detector_noise"]:
-            self.noise_files = os.listdir(self.config["data"]["noise_set_dir"])
 
 
     def __len__(self):
@@ -150,7 +155,7 @@ class DataLoader(tf.keras.utils.Sequence):
         if num_psd_files == 0:
             pass
         elif num_psd_files == 1:
-            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
                 if self.type_psd == 'psd':
                     ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
@@ -160,7 +165,7 @@ class DataLoader(tf.keras.utils.Sequence):
                     print('Could not determine whether psd or asd ...')
                     exit()
         elif num_psd_files > 1:
-            type_psd = psd_files[0].split('/')[-1].split('_')[-1].split('.')[0]
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
                 if self.type_psd == 'psd':
                     ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
@@ -239,7 +244,11 @@ class DataLoader(tf.keras.utils.Sequence):
             time_series = time_series.resample(1024)
             start_times[det_str] = np.array(time_series.t0)
             load_files[det_str] = time_series
-            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][ifo_idx])
+            num_psd_files = len(self.config["data"]["psd_files"])
+            if num_psd_files == 0:
+                pass
+            else:
+                ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][ifo_idx])
             del time_series
 
         st2 = time.time()
@@ -273,31 +282,61 @@ class DataLoader(tf.keras.utils.Sequence):
         # Get ifos bilby variable
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]["detectors"])
 
-        for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
-            ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][ifo_idx])
+        num_psd_files = len(self.config["data"]["psd_files"])
+        if num_psd_files == 0:
+            pass
+        elif num_psd_files == 1:
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
+        elif num_psd_files > 1:
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
 
+        if self.test_set:
+            nkey = "test_noise"
+        elif self.val_set:
+            nkey = "validation_noise"
+        else:
+            nkey = "training_noise"
+        
+        print("loading noise from : {}".format(os.path.join(self.config["data"]["data_directory"], nkey)))
+        noise_files = os.listdir(os.path.join(self.config["data"]["data_directory"], nkey))
 
-        file_choice = np.random.choice(self.noise_files, len(self.config["data"]["detectors"]))
+        file_choice = np.random.choice(noise_files)
         data = {ifo.name:[] for ifo in ifos}
-        for find in file_choice:
-            h5py_file = h5py.File(os.path.join(self.config["data"]["noise_set_dir"],find), 'r')
-            for ifo_idx,ifo in enumerate(ifos):
-                data[ifo.name].append(TimeSeries(h5py_file["real_noise_samples"][ifo_idx], sample_rate=h5py_file["sampling_frequency"][ifo_idx], t0=h5py_file["t0"][ifo_idx]))
+        #for find in file_choice:
+        h5py_file = h5py.File(os.path.join(self.config["data"]["data_directory"],"{}_noise".format(self.run_type),file_choice), 'r')
+        for ifo_idx,ifo in enumerate(ifos):
+            data[ifo.name] = TimeSeries(h5py_file["y_noise"][ifo_idx], sample_rate=h5py_file["sample_rates"][ifo_idx], t0=h5py_file["start_times"][ifo_idx])
 
         rand_times = np.random.uniform(0, 4096, size = (num_segments, len(self.config["data"]["detectors"])))
         fle = 0
         return_segments = []
         st1 = time.time()
         for seg in range(num_segments):
-            file_ind = np.arange(len(self.config["data"]["detectors"]))
-            np.random.shuffle(file_ind)
+            #file_ind = np.arange(len(self.config["data"]["detectors"]))
+            #np.random.shuffle(file_ind)
             temp_segment = []
             for ifo_idx,ifo in enumerate(ifos): # iterate over interferometers
                 det_str = ifo.name
                 
-                rand_time = np.random.uniform(data[det_str][file_ind[ifo_idx]].t0.value + self.config["data"]["duration"], data[det_str][file_ind[ifo_idx]].t0.value + data[det_str][file_ind[ifo_idx]].duration.value - self.config["data"]["duration"])
+                rand_time = np.random.uniform(data[det_str].t0.value + self.config["data"]["duration"], data[det_str].t0.value + data[det_str].duration.value - self.config["data"]["duration"])
 
-                temp_ts = data[det_str][file_ind[ifo_idx]].crop(rand_time, rand_time + self.config["data"]["duration"])
+                temp_ts = data[det_str].crop(rand_time, rand_time + self.config["data"]["duration"])
                 ifo.strain_data.set_from_gwpy_timeseries(temp_ts)
 
                 h_fd = ifo.strain_data.frequency_domain_strain
@@ -335,8 +374,10 @@ class DataLoader(tf.keras.utils.Sequence):
                 h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
                 # dont like the below code, will rewrite at some point
                 if self.test_set:
-                    data['y_data_noisefree'].append([h5py_file['y_data_noisefree']])
-                    data['y_data_noisy'].append([h5py_file['y_data_noisy']])
+                    t_noisefree = h5py_file['y_data_noisefree']
+                    t_noisy = h5py_file['y_data_noisy'][:,:int(self.config["data"]["duration"]*self.config["data"]["sampling_frequency"])]
+                    data['y_data_noisefree'].append([t_noisefree])
+                    data['y_data_noisy'].append([t_noisy])
                     data['snrs'].append(h5py_file['snrs'])
                     injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
                     injection_parameters_values = np.array(h5py_file['injection_parameters_values'])
@@ -413,7 +454,7 @@ class DataLoader(tf.keras.utils.Sequence):
         data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
         
         if self.config["data"]["use_real_detector_noise"] and not self.test_set:
-            real_det_noise= self.load_real_noise(len(data["y_data_noisefree"]))
+            real_det_noise = self.load_real_noise(len(data["y_data_noisefree"]))
 
             # cast data to float
             data["y_data_noise"] = tf.cast(np.array(real_det_noise), tf.float32)
@@ -436,32 +477,20 @@ class DataLoader(tf.keras.utils.Sequence):
         # convert the parameters from right ascencsion to hour angle
         x_data = convert_ra_to_hour_angle(x_data, self.config, self.config["model"]['inf_pars_list'])
         
-        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
-        
         for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             #if k.decode('utf-8')=='psi':
             if k =='psi':
                 psi_idx = i
             if k =='phase':
                 phi_idx = i
-            if k =='mass_1':
-                m1_idx = i
-            if k =='mass_2':
-                m2_idx = i
 
+        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
         x_data[:,psi_idx], x_data[:,phi_idx] = psiphi_to_psiX(x_data[:,psi_idx],x_data[:,phi_idx])
-        #replace m1 with chirp mass
-        #x_data[:, m1_idx], x_data[:,m2_idx] = m1m2_to_chirpmassq(x_data[:,m1_idx], x_data[:,m2_idx])
-
-        #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
-        #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])
         
-        # normalise to bounds
-        #decoded_rand_pars, par_idx = self.get_infer_pars(data)
-
         for i,k in enumerate(self.config["model"]["inf_pars_list"]):
             par_min = k + '_min'
             par_max = k + '_max'
+            # these two are forced du the the psi/X reparameterisation
             # Ensure that psi is between 0 and pi
             if par_min == 'psi_min':
                 x_data[:,i] = x_data[:,i]/(np.pi/2.0)
@@ -470,17 +499,13 @@ class DataLoader(tf.keras.utils.Sequence):
                 x_data[:,i] = x_data[:,i]/np.pi
       
             elif par_min == "ra_min":
+                # set the ramin and ramax as the min max of the hour angle to renormalise
                 ramin = convert_ra_to_hour_angle(float(self.config["bounds"][par_min]), self.config, self.config["model"]['inf_pars_list'])
                 ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
                 x_data[:,i] = (x_data[:,i] - ramin) / (ramax - ramin)
 
-            #elif k in "mass_1":
-                #chirm mass
-            #    x_data[:, i] = (x_data[:, i] - min_chirp)/(max_chirp - min_chirp)
-            #elif k in "mass_2":
-                # mass ratio
-            #    x_data[:, i] = (x_data[:, i] - 0.125)/(1 - 0.125)
             else:
+                # normalise remaininf parameters between bounds
                 x_data[:,i] = (x_data[:,i] - self.config["bounds"][par_min]) / (self.config["bounds"][par_max] - self.config["bounds"][par_min])
 
         return x_data
@@ -506,11 +531,6 @@ class DataLoader(tf.keras.utils.Sequence):
                 ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
                 x_data[:,i] = x_data[:,i]*(ramax - ramin) + ramax
 
-            #elif k in "mass_1":
-            #    x_data[:,i] = x_data[:, i]*(max_chirp - min_chirp) + min_chirp
-            #elif k in "mass_2":
-            #    x_data[:,i] = x_data[:, i]*(1 - 0.125) + 0.125
-            
             else:
                 x_data[:,i] = x_data[:,i]*(float(self.config["bounds"][par_max]) - float(self.config["bounds"][par_min])) + float(self.config["bounds"][par_min])
 
@@ -526,14 +546,9 @@ class DataLoader(tf.keras.utils.Sequence):
                 psi_idx = i
             if k =='phase':
                 phi_idx = i
-            if k =='mass_1':
-                m1_idx = i
-            if k =='mass_2':
-                m2_idx = i
 
         x_data[:,psi_idx], x_data[:,phi_idx] = psiX_to_psiphi(x_data[:,psi_idx],x_data[:,phi_idx])
-        #replace m1 with chirp mass
-        #x_data[:, m1_idx], x_data[:,m2_idx] = chirpmassq_to_m1m2(x_data[:,m1_idx], x_data[:,m2_idx])
+
         
         return x_data
 

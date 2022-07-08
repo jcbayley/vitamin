@@ -2,11 +2,13 @@ import tensorflow as tf
 from tensorflow.keras import regularizers
 import tensorflow_probability as tfp
 tfd = tfp.distributions
+from tensorflow.keras import backend as K
 import numpy as np
 import time 
 import matplotlib.pyplot as plt
 import os
 import sys
+import pickle
 from . import plotting 
 from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_posterior
 
@@ -17,29 +19,45 @@ class PlotCallback(tf.keras.callbacks.Callback):
 
         self.plot_dir = plot_dir
         self.epoch_plot = epoch_plot
-        self.train_losses = [[],[],[]]
-        self.val_losses = [[],[],[]]
+        self.all_losses = None#np.array([])#np.array([[],[],[],[],[],[],[]]).T
+
         if start_epoch != 0:
             with open(os.path.join(plot_dir, "loss.txt")) as f:
                 losses = np.loadtxt(f)
-            self.train_losses = [list(losses[:,0]),list(losses[:,1]),list(losses[:,2])]
-            self.val_losses = [list(losses[:,3]),list(losses[:,4]),list(losses[:,5])]
+            self.all_losses = np.array(losses)#[list(losses[:,0]),list(losses[:,1]),list(losses[:,2]),list(losses[:,3]),list(losses[:,4]),list(losses[:,5]),list(losses[:,6])])
+            #if len(np.shape(self.all_losses)) == 1:
+            #    self.all_losses = np.reshape(self.all_losses, (7,-1)).T
+            #self.train_losses = [list(losses[:,0]),list(losses[:,1]),list(losses[:,2]),list(losses[:,3])]
+            #self.val_losses = [list(losses[:,4]),list(losses[:,5]),list(losses[:,6])]
 
     def on_epoch_end(self, epoch, logs = None):
-        self.train_losses[2].append(logs["total_loss"])
-        self.train_losses[0].append(logs["recon_loss"])
-        self.train_losses[1].append(logs["kl_loss"])
+        """
+        self.all_losses[3].append(logs["total_loss"])
+        self.all_losses[1].append(logs["recon_loss"])
+        self.all_losses[2].append(logs["kl_loss"])
 
-        self.val_losses[2].append(logs["val_total_loss"])
-        self.val_losses[0].append(logs["val_recon_loss"])
-        self.val_losses[1].append(logs["val_kl_loss"])
+        self.all_losses[6].append(logs["val_total_loss"])
+        self.all_losses[4].append(logs["val_recon_loss"])
+        self.all_losses[5].append(logs["val_kl_loss"])
 
-        if epoch % self.epoch_plot == 0 and epoch > 3:
+        self.all_losses[0].append(time.time())
+        """
+        if self.all_losses is None:
+            self.all_losses = np.array([[time.time(), logs["recon_loss"], logs["kl_loss"], logs["total_loss"], logs["val_recon_loss"], logs["val_kl_loss"], logs["val_total_loss"]]])
+        else:
+            self.all_losses = np.append(self.all_losses, [[time.time(), logs["recon_loss"], logs["kl_loss"], logs["total_loss"], logs["val_recon_loss"], logs["val_kl_loss"], logs["val_total_loss"]]], axis = 0)
+        #print("train_loss_shape", np.shape(self.all_losses))
+        
+        if epoch % self.epoch_plot == 0 and epoch != 0 or epoch == 2:
             ind_start = epoch - 1000 if epoch > 1000 else 0
-            plot_losses(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir)
-            plot_losses_zoom(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir, ind_start=ind_start, label="TOTAL")
-            plot_losses_zoom(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir, ind_start=ind_start, label="RECON")
-            plot_losses_zoom(np.array(self.train_losses).T, np.array(self.val_losses).T, epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
+            with open(os.path.join(self.plot_dir, "loss.txt"), "w") as f:
+                np.savetxt(f,np.array(self.all_losses))
+
+            plot_losses(np.array(self.all_losses), epoch, run = self.plot_dir)
+
+            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="TOTAL")
+            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="RECON")
+            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
 
 
 class TrainCallback(tf.keras.callbacks.Callback):
@@ -112,6 +130,18 @@ class TrainCallback(tf.keras.callbacks.Callback):
             ramp = 1.0
         tf.keras.backend.set_value(self.model.ramp, ramp)
 
+    def logmin_ramp_func(self,epoch):
+        if self.config["training"]["logvarmin_ramp"] == True:
+            ramp = (epoch-self.config["training"]["logvarmin_ramp_start"])/(self.config["training"]["logvarmin_ramp_length"])
+            if ramp<0:
+                ramp = 0.0
+            if epoch > self.config["training"]["logvarmin_ramp_start"] + self.config["training"]["logvarmin_ramp_length"]:
+                ramp = 1.0
+
+            newlogvar = self.config["training"]["logvarmin_start"] + ramp*self.config["training"]["logvarmin_end"]
+            tf.keras.backend.set_value(self.model.minlogvar, newlogvar)
+
+
     def learning_rate_modify(self, epoch, epochs_range = 100, decay_length = 4000, init_rate = 1e-4):
         dec_factor = 1
         cycle_factor = 1
@@ -144,6 +174,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs = None):
         self.learning_rate_modify(epoch)
+        self.logmin_ramp_func(epoch)
         #self.learning_rate_it(epoch)
         if epoch > self.config["training"]["ramp_start"]:
             self.ramp_func(epoch)
@@ -210,7 +241,12 @@ class TestCallback(tf.keras.callbacks.Callback):
         
         if epoch % self.config["training"]["test_interval"] == 0 and epoch not in [0,1]:
             for step in range(self.config["data"]["n_test_data"]):
-                mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
+                if step > len(self.test_dataset):
+                    break
+                if self.config["training"]["plot_latent"]:
+                    mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
+
+                    plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
 
                 allinds = []
                 for samp, sampind in self.test_dataset.samples_available.items():
@@ -220,7 +256,6 @@ class TestCallback(tf.keras.callbacks.Callback):
                     print("No available samples: {}".format(step))
                     continue
 
-                plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
                 start_time_test = time.time()
                 samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'])
 
@@ -274,3 +309,17 @@ class TimeCallback(tf.keras.callbacks.Callback):
             with open(self.fname, "w") as f:
                 np.savetxt(f, self.times)
 
+class OptimizerSave(tf.keras.callbacks.Callback):
+
+    def __init__(self, config, checkpoint_path, save_interval = 250):
+        self.save_interval = save_interval
+        self.checkpoint_path = checkpoint_path
+
+    def on_epoch_end(self,epoch, logs = None):
+        
+        if epoch % self.save_interval == 0:
+            sym_weights = getattr(self.model.optimizer, 'weights')
+            weight_values = K.batch_get_value(sym_weights)
+
+            with open(os.path.join(self.checkpoint_path, "optimizer.pkl"),"wb") as f:
+                pickle.dump(weight_values, f)

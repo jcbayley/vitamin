@@ -1,5 +1,5 @@
 import argparse
-from ..vitamin_parser import InputParser
+from .gw_parser import GWInputParser
 import os
 import random
 import stat
@@ -15,6 +15,24 @@ def create_dirs(dirs):
     print("All directories exist")
 
 def write_subfile(sub_filename,p,comment):
+    print(sub_filename)
+    with open(sub_filename,'w') as f:
+        f.write('# filename: {}\n'.format(sub_filename))
+        f.write('universe = vanilla\n')
+        f.write('executable = {}\n'.format(p["exec"]))
+        #f.write('enviroment = ""\n')
+        f.write('getenv  = True\n')
+        #f.write('RequestMemory = {} \n'.format(p["memory"]))
+        f.write('request_disk = {} \n'.format(8*1024))
+        f.write('log = {}/{}_$(cluster).log\n'.format(p["log_dir"],comment))
+        f.write('error = {}/{}_$(cluster).err\n'.format(p["err_dir"],comment))
+        f.write('output = {}/{}_$(cluster).out\n'.format(p["out_dir"],comment))
+        args = "$(start_ind) $(sampler)"
+        f.write('arguments = {}\n'.format(args))
+        f.write('accounting_group = ligo.dev.o4.cbc.explore.test\n')
+        f.write('queue\n')
+
+def write_train_subfile(sub_filename,p,comment):
     print(sub_filename)
     with open(sub_filename,'w') as f:
         f.write('# filename: {}\n'.format(sub_filename))
@@ -44,7 +62,7 @@ def make_train_dag(config, run_type = "training"):
     p["exec"] = os.path.join(p["condor_dir"], "run_{}.sh".format(run_type))
 
     p["run_type"] = run_type
-    p["files_per_job"] = 20
+    p["files_per_job"] = config["data"]["files_per_job"]
 
     for direc in [p["condor_dir"], p["log_dir"], p["err_dir"], p["out_dir"]]:
         if not os.path.exists(direc):
@@ -58,9 +76,14 @@ def make_train_dag(config, run_type = "training"):
             num_jobs = 1
             p["files_per_job"] = num_files
         samplers = [0]
-    elif run_type == "real_noise":
-        num_files = int(1)
-        num_jobs = int(1)
+    elif run_type == "training_noise":
+        num_files = int(config["data"]["n_training_noise_data"])
+        num_jobs = num_files
+        p["files_per_job"] = 1
+        samplers = [0]
+    elif run_type == "validation_noise":
+        num_files = int(config["data"]["n_validation_noise_data"])
+        num_jobs = num_files
         p["files_per_job"] = 1
         samplers = [0]
     elif run_type == "validation":
@@ -90,7 +113,7 @@ def make_train_dag(config, run_type = "training"):
                 jobid = "{}_{}_{}".format(comment,i,uid)
                 job_string = "JOB {} {}\n".format(jobid,run_sub_filename)
                 retry_string = "RETRY {} 1\n".format(jobid)
-                if run_type == "train":
+                if run_type == "training":
                     vars_string = 'VARS {} start_ind="{}"\n'.format(jobid,int(i*p["files_per_job"]))
                 elif run_type == "test":
                     vars_string = 'VARS {} start_ind="{}" sampler="{}"\n'.format(jobid,int(i), samplers[j])
@@ -117,12 +140,13 @@ if __name__ == "__main__":
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
 
     args = parser.parse_args()
-    vitamin_config = InputParser(args.ini_file)
+    vitamin_config = GWInputParser(args.ini_file)
 
     make_train_dag(vitamin_config, run_type = "training")
     make_train_dag(vitamin_config, run_type = "validation")
     make_train_dag(vitamin_config, run_type = "test")
 
     if vitamin_config["data"]["use_real_detector_noise"]:
-        make_train_dag(vitamin_config, run_type = "real_noise")
+        make_train_dag(vitamin_config, run_type = "training_noise")
+        make_train_dag(vitamin_config, run_type = "validation_noise")
 

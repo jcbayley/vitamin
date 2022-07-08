@@ -31,14 +31,14 @@ Make a virtual environment using the environment.yml file supplied in the reposi
 .. code-block:: console
 
    $ conda env create -f environment.yml
-   $ conda activate myenv
+   $ conda activate vitaminenv
    $ pip install --upgrade pip
 
 (optional skyplotting install) cd into your environment and download geos library
 
 .. code-block:: console
 
-   $ cd myenv
+   $ cd vitaminenv
    $ git clone https://github.com/matplotlib/basemap.git
    $ cd basemap/geos-3.3.3/
 

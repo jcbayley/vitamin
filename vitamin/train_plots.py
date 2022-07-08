@@ -19,29 +19,30 @@ from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
 
 
-def plot_losses(train_loss, val_loss, epoch, run='testing'):
+def plot_losses(all_loss, epoch, run='testing'):
     """
     plots the losses
     """
     plt.figure()
-    plt.semilogx(np.arange(1,epoch+1),train_loss[:epoch,0],'b',label='RECON')
-    plt.semilogx(np.arange(1,epoch+1),train_loss[:epoch,1],'r',label='KL')
-    plt.semilogx(np.arange(1,epoch+1),train_loss[:epoch,2],'g',label='TOTAL')
-    plt.semilogx(np.arange(1,epoch+1),val_loss[:epoch,0],'--b',alpha=0.5)
-    plt.semilogx(np.arange(1,epoch+1),val_loss[:epoch,1],'--r',alpha=0.5)
-    plt.semilogx(np.arange(1,epoch+1),val_loss[:epoch,2],'--g',alpha=0.5)
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,1],'b',label='RECON')
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,2],'r',label='KL')
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,3],'g',label='TOTAL')
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,4],'--b',alpha=0.5)
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,5],'--r',alpha=0.5)
+    plt.semilogx(np.arange(1,epoch+1),all_loss[:epoch,6],'--g',alpha=0.5)
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend()
     plt.grid()
-    plt.ylim([np.min(1.1*train_loss[int(0.1*epoch):epoch,:]),np.max(1.1*train_loss[int(0.1*epoch):epoch,:])])
+    plt.ylim([np.min(1.1*all_loss[int(0.1*epoch):epoch,1:]),np.max(1.1*all_loss[int(0.1*epoch):epoch,1:])])
     plt.savefig('%s/loss.png' % (run))
     plt.close()
 
     # save loss data to text file
-    loss_file = '%s/loss.txt' % (run)
-    data = np.concatenate([train_loss[:epoch,:],val_loss[:epoch,:]],axis=1)
-    np.savetxt(loss_file,data)
+    #loss_file = '%s/loss.txt' % (run)
+    #data = np.concatenate([train_loss[:epoch,:],val_loss[:epoch,:]],axis=1)
+    #return data
+    #np.savetxt(loss_file,data)
 
 def plot_batch_losses(train_loss, epoch, run='testing'):
     """
@@ -77,23 +78,23 @@ def plot_gauss_von(train_loss, epoch, run='testing'):
     plt.close(fig)
 
 
-def plot_losses_zoom(train_loss, val_loss, epoch, ind_start, run='testing',label="TOTAL"):
+def plot_losses_zoom(all_loss, epoch, ind_start, run='testing',label="TOTAL"):
     """
     plots the losses
     """
     plt.figure()
     if label == "TOTAL":
-        ind = 2
+        ind = 3
     elif label == "RECON":
-        ind = 0
-    elif label == "KL":
         ind = 1
+    elif label == "KL":
+        ind = 2
     #plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,0],'b',label='RECON')
     #plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,1],'r',label='KL')
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],train_loss[ind_start:epoch,ind],'g',label="{}".format(label))
+    plt.semilogx(np.arange(1,epoch+1)[ind_start:],all_loss[ind_start:epoch,ind],'g',label="{}".format(label))
     #plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,0],'--b',alpha=0.5)
     #plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,1],'--r',alpha=0.5)
-    plt.semilogx(np.arange(1,epoch+1)[ind_start:],val_loss[ind_start:epoch,ind],'--g',alpha=0.5)
+    plt.semilogx(np.arange(1,epoch+1)[ind_start:],all_loss[ind_start:epoch,ind+3],'--g',alpha=0.5)
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend()
@@ -231,8 +232,8 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             np.savetxt(samples_file,vitamin_samples)
 
             # compute KL estimate
-            idx1 = np.random.randint(0,vitamin_samples.shape[0],3000)
-            idx2 = np.random.randint(0,sampler_samples.shape[0],3000)
+            idx1 = np.random.randint(0,vitamin_samples.shape[0],10000)
+            idx2 = np.random.randint(0,sampler_samples.shape[0],10000)
             temp_JS = []
             SMALL_CONST = 1e-162
             def my_kde_bandwidth(obj, fac=1.0):

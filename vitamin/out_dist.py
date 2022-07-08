@@ -4,15 +4,25 @@ import numpy as np
 
 class JointM1M2:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, bounds, index = None):
         """ Distribution that us uniform in m1 and m2 where m1 is always greater than m2
-        ------
         usage in config
         mass_1 = JointM1M2
         mass_2 = JointM1M2
 
+        args
+        ---------------
+        pars: list
+            list of the mass parameters [M_{solar}] input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
         """
         self.name = "JointM1M2"
+        if index is not None:
+            self.name += "_{}".format(index)
         self.pars = pars
         if self.pars[0] == "mass_2":
             self.order_flipped = True
@@ -28,9 +38,13 @@ class JointM1M2:
         self.Root = tfp.distributions.JointDistributionCoroutine.Root
 
     def get_distribution(self, mean, logvar, ramp = 1.0):
+        """
+        Sets up this distribution
+        """
         mean1, mean2 = tf.split(mean, num_or_size_splits=2, axis=1)
         logvar1, logvar2 = tf.split(logvar, num_or_size_splits=2, axis=1)
 
+        # condition m2 on the m1 distribution
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean1, tf.float32),
@@ -44,11 +58,15 @@ class JointM1M2:
         return joint
 
     def get_networks(self,logvar_activation = "none"):
+        """Get the Dense layers for this output distribution
+        """
         mean =  tf.keras.layers.Dense(2,activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
         logvar = tf.keras.layers.Dense(2,use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
         return mean, logvar
 
     def cost_setup(self):
+        """ Evaluate the log probability for this output and get the reduce cost for a batch
+        """
         if self.order_flipped:
             def get_cost(dist, x):
                 x2, x1 = tf.split(x, num_or_size_splits=2, axis=1)
@@ -61,6 +79,7 @@ class JointM1M2:
         return get_cost
 
     def sample_setup(self):
+        """Sample from this distribution """
         if self.order_flipped:
             # reverse the order of the two parmaeters when sampling
             def sample(dist, max_samples):
@@ -73,18 +92,30 @@ class JointM1M2:
 
 class JointChirpmassMR:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, bounds, index=None):
         """
         Joint distribution for Chirpmass and symetric mass ratio
         Takes in the chirp mass and mass ratio as parameters 
-        ------
+
         usage in config
         mass_ratio = JointChirpmassMR
         chirpmass = JointChirpmassMR
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
 
         """
         self.name = "JointChirpmassMR"
-        self.config = config
+        if index is not None:
+            self.name += "_{}".format(index)
+        self.bounds = bounds
+        if self.config is None:
+            raise("Please input a config file with bounds for chirpmass/massration/m1/m2")
         self.pars = pars
         if self.pars[0] == "chirp_mass":
             self.order_flipped = True
@@ -101,27 +132,27 @@ class JointChirpmassMR:
     def Mconstrainm1(self, q_norm, m):
         """Contraint for the chirp mass based on maxmium mass of m1                                                                         
         """
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        q = q_norm*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
         num = (q*m*m)**(3./5.)
         den = (m*(1 + q))**(1./5.)
         chirpmass = num/den
-        inds = tf.where(chirpmass > self.config["bounds"]["chirp_mass_max"])
+        inds = tf.where(chirpmass > self.bounds["chirp_mass_max"])
         if inds.shape[0] is not None:
-            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_max"])
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.bounds["chirp_mass_max"])
             chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
-        return (chirpmass - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        return (chirpmass - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
 
     def Mconstrainm2(self, q_norm, m):
         """Contraint for the chirp mass based on minimum mass of m2"""
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        q = q_norm*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
         num = ((1/q)*m*m)**(3./5.)
         den = (m*(1 + 1/q))**(1./5.)
         chirpmass = num/den
-        inds = tf.where(chirpmass < self.config["bounds"]["chirp_mass_min"])
+        inds = tf.where(chirpmass < self.bounds["chirp_mass_min"])
         if inds.shape[0] is not None:
-            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_min"])
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.bounds["chirp_mass_min"])
             chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
-        return (chirpmass  - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        return (chirpmass  - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
 
     def get_distribution(self, mean, logvar, ramp = 1.0):
         # this is not working yet
@@ -136,8 +167,8 @@ class JointChirpmassMR:
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_cm,dtype=tf.float32),
                 scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
-                low=self.Mconstrainm2(b0, self.config["bounds"]["mass_1_min"]), 
-                high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
+                low=self.Mconstrainm2(b0, self.bounds["mass_1_min"]), 
+                high=self.Mconstrainm1(b0, self.bounds["mass_1_max"])),
         ])
         return joint
 
@@ -173,19 +204,32 @@ class JointChirpmassMR:
 
 class JointChirpmassMRM1M2:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, bounds, index = None):
         """                                                                                                                                
         Joint distribution for Chirpmass and symetric mas ratio
         This takes in m1 and m2 as the parameters and converts to mass ratio and chirp mass internally. 
         The distribution is made in chirpmass and mass ratio space.                                                                            
-        ------
+      
         usage in config
         mass_1 = JointChirpmassMRM1M2
         mass_2 = JointChirpmassMRM1M2
+     
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
 
         """
         self.name = "JointChirpmassMRM1M2"
-        self.config = config
+        if index is not None:
+            self.name += "_{}".format(index)
+        self.bounds = bounds
+        if self.config is None:
+            raise("Please input a config file with bounds for chirpmass/massration/m1/m2")
         self.pars = pars
         if self.pars[0] == "mass_2":
             self.order_flipped = True
@@ -202,33 +246,37 @@ class JointChirpmassMRM1M2:
     def Mconstrainm1(self, q_norm, m):
         """Contraint for the chirp mass based on maxmium mass of m1                                                                         
         """
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        # convert q from normalised q back into real space
+        q = q_norm*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
+        # calculate the chirp mass from the q and given mass
         num = (q*m*m)**(3./5.)
         den = (m*(1 + q))**(1./5.)
         chirpmass = num/den
-        inds = tf.where(chirpmass > self.config["bounds"]["chirp_mass_max"])
+        # if the chirp mass is greater than the maximum allowed chirp mass then set to max chirp mass 
+        inds = tf.where(chirpmass > self.bounds["chirp_mass_max"])
         if inds.shape[0] is not None:
-            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_max"])
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.bounds["chirp_mass_max"])
             chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
-        return (chirpmass - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        # renormalise the chirpmass between ranges
+        return (chirpmass - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
 
     def Mconstrainm2(self, q_norm, m):
         """Contraint for the chirp mass based on minimum mass of m2"""
-        q = q_norm*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        q = q_norm*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
         num = ((1/q)*m*m)**(3./5.)
         den = (m*(1 + 1/q))**(1./5.)
         chirpmass = num/den
-        inds = tf.where(chirpmass < self.config["bounds"]["chirp_mass_min"])
+        inds = tf.where(chirpmass < self.bounds["chirp_mass_min"])
         if inds.shape[0] is not None:
-            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.config["bounds"]["chirp_mass_min"])
+            updates = tf.ones(inds.shape[0], dtype=tf.float32)*np.float32(self.bounds["chirp_mass_min"])
             chirpmass = tf.tensor_scatter_nd_update(chirpmass, inds, updates)
-        return (chirpmass  - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
+        return (chirpmass  - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
     
     def get_distribution(self, mean, logvar, ramp = 1.0):
-        # this is not working yet                                                                                                           
         mean_q, mean_cm = tf.split(mean, num_or_size_splits=2, axis=1)
         logvarq, logvarcm = tf.split(logvar, num_or_size_splits=2, axis=1)
 
+        # sample from q, then set chirpmass limits based on about constraint equations
         joint = tfp.distributions.JointDistributionSequential([
             tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_q,dtype=tf.float32),
@@ -237,8 +285,8 @@ class JointChirpmassMRM1M2:
             lambda b0: tfp.distributions.TruncatedNormal(
                 loc=tf.cast(mean_cm,dtype=tf.float32),
                 scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
-                low=self.Mconstrainm2(b0, self.config["bounds"]["mass_2_min"]),
-                high=self.Mconstrainm1(b0, self.config["bounds"]["mass_1_max"])),
+                low=self.Mconstrainm2(b0, self.bounds["mass_2_min"]),
+                high=self.Mconstrainm1(b0, self.bounds["mass_1_max"])),
         ])
         return joint
 
@@ -250,23 +298,23 @@ class JointChirpmassMRM1M2:
     
     def component_masses_to_chirpmass_massratio(self, normed_mass_1, normed_mass_2):
         """ Convert component masses to normalised chirp mass and mass ratio"""
-        mass_1 = normed_mass_1*(self.config["bounds"]["mass_1_max"] - self.config["bounds"]["mass_1_min"]) + self.config["bounds"]["mass_1_min"]
-        mass_2 = normed_mass_2*(self.config["bounds"]["mass_2_max"] - self.config["bounds"]["mass_2_min"]) + self.config["bounds"]["mass_2_min"]
+        mass_1 = normed_mass_1*(self.bounds["mass_1_max"] - self.bounds["mass_1_min"]) + self.bounds["mass_1_min"]
+        mass_2 = normed_mass_2*(self.bounds["mass_2_max"] - self.bounds["mass_2_min"]) + self.bounds["mass_2_min"]
         chirpmass, massratio = ((mass_1*mass_2)**(0.6))/((mass_1 + mass_2)**(0.2)), mass_2/mass_1
-        normed_chirpmass = (chirpmass - self.config["bounds"]["chirp_mass_min"])/(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"])
-        normed_massratio = (massratio - self.config["bounds"]["mass_ratio_min"])/(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"])
+        normed_chirpmass = (chirpmass - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
+        normed_massratio = (massratio - self.bounds["mass_ratio_min"])/(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"])
         return normed_massratio, normed_chirpmass
 
     def chirpmass_massratio_to_component_masses(self, chirpmass, massratio):
         """ Convert component masses to normalised chirp mass and mass ratio"""
-        chirpmass = chirpmass*(self.config["bounds"]["chirp_mass_max"] - self.config["bounds"]["chirp_mass_min"]) + self.config["bounds"]["chirp_mass_min"]
-        massratio = massratio*(self.config["bounds"]["mass_ratio_max"] - self.config["bounds"]["mass_ratio_min"]) + self.config["bounds"]["mass_ratio_min"]
+        chirpmass = chirpmass*(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"]) + self.bounds["chirp_mass_min"]
+        massratio = massratio*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
         massratio = massratio
         total_mass = chirpmass*(1+massratio)**1.2/massratio**0.6
         mass_1 = total_mass/(1+massratio)
         mass_2 = mass_1*massratio
-        normed_mass_1 = (mass_1 - self.config["bounds"]["mass_1_min"])/(self.config["bounds"]["mass_1_max"] - self.config["bounds"]["mass_1_min"])
-        normed_mass_2 = (mass_2 - self.config["bounds"]["mass_2_min"])/(self.config["bounds"]["mass_2_max"] - self.config["bounds"]["mass_2_min"])
+        normed_mass_1 = (mass_1 - self.bounds["mass_1_min"])/(self.bounds["mass_1_max"] - self.bounds["mass_1_min"])
+        normed_mass_2 = (mass_2 - self.bounds["mass_2_min"])/(self.bounds["mass_2_max"] - self.bounds["mass_2_min"])
         return normed_mass_1, normed_mass_2
     
     def cost_setup(self):
@@ -289,7 +337,7 @@ class JointChirpmassMRM1M2:
             # reverse order of samples based on inputs                                                                                      
             def sample(dist, max_samples):
                 # transpose amd squeeze to get [samples, parameters]                                                                       
-                massratio, chirpmass =  tf.split(tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2), num_or_size_splits=2, axis=1)
+                chirpmass, massratio =  tf.split(tf.squeeze(tf.transpose(dist.sample(), [1, 0, 2]), 2), num_or_size_splits=2, axis=1)
                 mass_1, mass_2 = self.chirpmass_massratio_to_component_masses(chirpmass, massratio)
                 return tf.concat([mass_1,mass_2], axis = 1)
         else:
@@ -299,10 +347,141 @@ class JointChirpmassMRM1M2:
                 return tf.concat([mass_1,mass_2], axis = 1)
         return sample
 
+class DiscardChirpmassMRM1M2:
+
+    def __init__(self, pars, bounds, index = None):
+        """
+        Calculate the distribution on m1 and m2 converting to chirp mass and mass ration internally, no joint distrinution but discards point outside of prior bounds
+
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
+        self.name = "DiscardChirpmassMRM1M2"
+        if index is not None:
+            self.name += "_{}".format(index)
+
+        self.pars = pars
+        self.bounds = bounds
+
+        if self.pars[0] == "mass_2":
+            self.order_flipped = True
+        elif self.pars[0] == "mass_1":
+            self.order_flipped = False
+
+        self.num_pars = len(self.pars)
+        if self.num_pars != 2:
+            raise Exception("Please only use two variables for JointM1M2")
+        self.num_outputs = [self.num_pars,self.num_pars]
+        self.get_cost = self.cost_setup()
+        self.sample = self.sample_setup()
+
+    def get_distribution(self, mean, logvar, ramp = 1.0):
+
+        mean_q, mean_cm = tf.split(mean, num_or_size_splits=2, axis=1)
+        logvarq, logvarcm = tf.split(logvar, num_or_size_splits=2, axis=1)
+
+        tmvnq = tfp.distributions.TruncatedNormal(
+            loc=tf.cast(mean_q, dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvarq)),dtype=tf.float32),
+            low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0)
+
+        tmvncm = tfp.distributions.TruncatedNormal(
+            loc=tf.cast(mean_cm, dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvarcm)),dtype=tf.float32),
+            low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0)
+
+        return tmvnq, tmvncm
+
+    def get_networks(self,logvar_activation="none"):
+        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
+        return mean, logvar
+
+    def cost_setup(self):
+        if self.order_flipped:
+            def get_cost(dist, x):
+                # reverse order of true parmaeters to estimate logprob                                                                      
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                normed_massratio, normed_chirpmass = self.component_masses_to_chirpmass_massratio(x1,x2)
+                qcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[1].log_prob(normed_massratio),axis=1),axis=0)
+                mrcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[0].log_prob(normed_chirpmass),axis=1),axis=0)
+                return qcost + mrcost 
+        else:
+            def get_cost(dist, x):
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                normed_massratio, normed_chirpmass = self.component_masses_to_chirpmass_massratio(x1,x2)
+                qcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[0].log_prob(normed_massratio),axis=1),axis=0)
+                mrcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[1].log_prob(normed_chirpmass),axis=1),axis=0)
+                return qcost + mrcost 
+
+        return get_cost
+
+    def sample_setup(self):
+        if self.order_flipped:
+            # reverse order of samples based on inputs                                                                                      
+            def sample(dist, max_samples):
+                # transpose amd squeeze to get [samples, parameters]                                                                       
+                massratio =  dist[1].sample()
+                chirpmass =  dist[0].sample()
+                mass_1, mass_2 = self.chirpmass_massratio_to_component_masses(chirpmass, massratio)
+                return tf.concat([mass_1,mass_2], axis = 1)
+        else:
+            def sample(dist, max_samples):
+                massratio =  dist[0].sample()
+                chirpmass =  dist[1].sample()
+                mass_1, mass_2 = self.chirpmass_massratio_to_component_masses(chirpmass, massratio)
+                return tf.concat([mass_1,mass_2], axis = 1)
+        return sample
+
+    def component_masses_to_chirpmass_massratio(self, normed_mass_1, normed_mass_2):
+        """ Convert component masses to normalised chirp mass and mass ratio"""
+        mass_1 = normed_mass_1*(self.bounds["mass_1_max"] - self.bounds["mass_1_min"]) + self.bounds["mass_1_min"]
+        mass_2 = normed_mass_2*(self.bounds["mass_2_max"] - self.bounds["mass_2_min"]) + self.bounds["mass_2_min"]
+        chirpmass, massratio = ((mass_1*mass_2)**(0.6))/((mass_1 + mass_2)**(0.2)), mass_2/mass_1
+        normed_chirpmass = (chirpmass - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
+        normed_massratio = (massratio - self.bounds["mass_ratio_min"])/(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"])
+        return normed_massratio, normed_chirpmass
+
+    def chirpmass_massratio_to_component_masses(self, chirpmass, massratio):
+        """ Convert component masses to normalised chirp mass and mass ratio"""
+        chirpmass = chirpmass*(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"]) + self.bounds["chirp_mass_min"]
+        massratio = massratio*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
+        massratio = massratio
+        total_mass = chirpmass*(1+massratio)**1.2/massratio**0.6
+        mass_1 = total_mass/(1+massratio)
+        mass_2 = mass_1*massratio
+        normed_mass_1 = (mass_1 - self.bounds["mass_1_min"])/(self.bounds["mass_1_max"] - self.bounds["mass_1_min"])
+        normed_mass_2 = (mass_2 - self.bounds["mass_2_min"])/(self.bounds["mass_2_max"] - self.bounds["mass_2_min"])
+        return normed_mass_1, normed_mass_2
+
+
+
 class TruncatedNormal:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, config, index = None):
+        """
+        Truncated normal distribution within some bounds defined by configs
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
         self.name = "TruncatedNormal"
+        if index is not None:
+            self.name += "_{}".format(index)
+
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [self.num_pars, self.num_pars]
@@ -329,8 +508,23 @@ class TruncatedNormal:
 
 class VonMises:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, config, index = None):
+        """
+        Von mises distribution in 1d
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
         self.name = "VonMises"
+        if index is not None:
+            self.name += "_{}".format(index)
+
         self.pars = pars
         self.num_pars = len(self.pars)
         self.num_outputs = [2*self.num_pars, self.num_pars]
@@ -346,7 +540,7 @@ class VonMises:
         # define the 2D Gaussian scale [size (batch,2*p)]
         vm = tfp.distributions.VonMises(
             loc=tf.cast(mean_angle,dtype=tf.float32),
-            concentration=tf.cast(tf.math.reciprocal(self.fourpisq*tf.exp(logvar)),dtype=tf.float32))
+            concentration=tf.cast(tf.math.reciprocal(tf.exp(logvar)),dtype=tf.float32))
         
         return vm
 
@@ -364,8 +558,23 @@ class VonMises:
 
 class JointVonMisesFisher:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, config, index = None):
+        """
+        Joint von mises fisher distribution on the sky        
+        args
+        ---------------
+        pars: list
+            list of the sky parameters (alpha, delta) [radians] input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this valu
+e
+        """
         self.name = "JointVonMisesFisher"
+        if index is not None:
+            self.name += "_{}".format(index)
+
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
@@ -416,8 +625,11 @@ class JointVonMisesFisher:
 
 class JointPowerSpherical:
 
-    def __init__(self, pars, config):
+    def __init__(self, pars, config, index = None):
         self.name = "JointPowerSpherical"
+        if index is not None:
+            self.name += "_{}".format(index)
+
         self.pars = pars
         self.num_pars = len(self.pars)
         if self.num_pars != 2:

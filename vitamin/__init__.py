@@ -19,7 +19,6 @@ import sys
 
 from . import vitamin_model
 #from . import gw
-from . import initialise_directory
 from . import callbacks
 from . import plotting
 #from . import templates

@@ -1,6 +1,6 @@
 from .create_template import GenerateTemplate
 import argparse
-from ..vitamin_parser import InputParser
+from .gw_parser import GWInputParser
 import os
 import h5py
 import numpy as np
@@ -37,7 +37,7 @@ class DataGenerator():
             # generate training sample source parameter, waveform and snr
             signal.clear_attributes()
 
-            if self.config["data"]["use_real_detector_noise"]:
+            if self.config["data"]["use_real_detector_noise"] and self.config["data"]["save_polarisations"] == False:
                 signal.generate_real_noise()
 
             signal.get_injection_parameters()
@@ -100,6 +100,7 @@ class DataGenerator():
                 print(hf.keys())
                 signal.whitened_signal_td = np.array(hf["y_data_noisefree"])
                 signal.whitened_data_td = np.array(hf["y_data_noisy"])
+                signal.unwhitened_data_td = np.array(hf["unwhitened_data_noisy"])
                 signal.frequency_domain_strain = np.array(hf["frequency_domain_strain"])
                 inj_keys = hf["injection_parameters_keys"]
                 inj_vals = hf["injection_parameters_values"]
@@ -126,6 +127,7 @@ class DataGenerator():
                 with h5py.File(fname,'w') as hf:
                     hf.create_dataset('y_data_noisefree', data=signal.whitened_signals_td)
                     hf.create_dataset('y_data_noisy', data=signal.whitened_data_td)
+                    hf.create_dataset('unwhitened_data_noisy', data=signal.unwhitened_data_td)
                     hf.create_dataset('frequency_domain_strain', data=signal.frequency_domain_strain)
                     inj_keys = []
                     inj_vals = []
@@ -163,6 +165,33 @@ class DataGenerator():
                 hf.create_dataset('run_time', data=getattr(signal,"{}_runtime".format(sampler)))
                 hf.close()
 
+    def create_training_noise_files(self, start_ind=0):
+
+        # Make training set directory
+        if self.write_to_file:
+            save_dir = os.path.join(self.config["data"]["data_directory"], self.run_type)
+            os.system('mkdir -p %s' % save_dir)
+
+        # Make directory for plots
+        #os.system('mkdir -p %s/latest_%s' % (self.config["output"]['output_directory'],self.config["run_info"]['run_tag']))
+
+        signal = GenerateTemplate(config=self.config, run_type = self.run_type, save_dir = save_dir)
+        
+        #generate training noise sample 4096 length file with selected sampling frequency
+        signal.clear_attributes()
+        signal.generate_real_noise()
+
+        if self.write_to_file:
+            fname = os.path.join(save_dir, "data_{}_{}.h5py".format(start_ind,self.config["data"]['n_{}_data'.format(self.run_type)]))
+            print("saving file to {}".format(fname))
+            with h5py.File(fname, 'w') as hf:
+                hf.create_dataset('y_noise', data=signal.noise_examples)
+                hf.create_dataset('start_times', data=signal.noise_start_times)
+                hf.create_dataset('durations', data=signal.noise_durations)
+                hf.create_dataset('sample_rates', data=signal.noise_sample_rates)
+                hf.close()
+        else:
+            return noise_dataset, noise_start_times, noise_durations, noise_sample_rates
 
 
 
@@ -176,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('--sampler', type=str, help='which sampler to compare to', default="dynesty")
 
     args = parser.parse_args()
-    vitamin_config = InputParser(args.ini_file)
+    vitamin_config = GWInputParser(args.ini_file)
 
     data = DataGenerator(vitamin_config, args.run_type, write_to_file = True)
     
@@ -187,6 +216,9 @@ if __name__ == "__main__":
         for i in range(args.num_files):
             data.create_test_file(start_ind=args.start_ind + i, sampler = args.sampler)
         #data.create_test_file(start_ind=args.start_ind, sampler = None)
+    elif args.run_type in ["training_noise","validation_noise"]:
+        for i in range(args.num_files):
+            data.create_training_noise_files(start_ind = args.start_ind + i)
 
 
     
