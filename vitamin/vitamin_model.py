@@ -446,6 +446,7 @@ class CVAE(tf.keras.Model):
 
         out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=tf.keras.regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
         out = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(out)
+        out = self.activation(out)
         return out
 
     def ResBlock(self,input_data, filters, kernel_size, strides, name = ""):
