@@ -163,6 +163,17 @@ class TrainCallback(tf.keras.callbacks.Callback):
         tf.keras.backend.set_value(self.optimizer.learning_rate, new_lr)
         print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
+    def batch_ramp_func(self,epoch):
+        if self.config["training"]["batch_ramp"] == True:
+            ramp = (epoch-self.config["training"]["batch_ramp_start"])/(self.config["training"]["batch_ramp_length"])
+            if ramp<0:
+                ramp = 0.0
+            if epoch > self.config["training"]["batch_ramp_start"] + self.config["training"]["batch_ramp_length"]:
+                ramp = 1.0
+
+            newbatch = int(self.config["training"]["batch_size"] + ramp*(self.config["training"]["batch_size_end"]-self.config["training"]["batch_size_end"]))
+            self.train_dataloader.batch_size =  newbatch
+
 
     def learning_rate_it(self, epoch, epochs_range = 30):
 
@@ -175,6 +186,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
     def on_epoch_begin(self, epoch, logs = None):
         self.learning_rate_modify(epoch)
         self.logmin_ramp_func(epoch)
+        self.batch_ramp_func(epoch)
         #self.learning_rate_it(epoch)
         if epoch > self.config["training"]["ramp_start"]:
             self.ramp_func(epoch)
@@ -323,3 +335,12 @@ class OptimizerSave(tf.keras.callbacks.Callback):
 
             with open(os.path.join(self.checkpoint_path, "optimizer.pkl"),"wb") as f:
                 pickle.dump(weight_values, f)
+
+
+
+
+
+
+
+
+

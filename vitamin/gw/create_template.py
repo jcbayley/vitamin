@@ -23,6 +23,14 @@ class GenerateTemplate():
     def __init__(self, config, run_type = "train", save_dir = None):
         """
         Create a BBH signal template in real noise or Gaussian noise. Run parameter estimation on signal
+        args
+        ------------
+        config: dict
+            dict of configuration parmaeter from config file
+        run_type : str
+            type of data, train, validation, test
+        save_dir: string
+            directory path to save file
         """
         self.config = config
         self.save_dir = save_dir
@@ -96,6 +104,10 @@ class GenerateTemplate():
     def get_detector_response(self, frequency_domain_strain = None):
         """
         Gets the whitened signal from polarisations
+        args
+        -------
+        frequency_domain_strain: array
+            strain in frequency domain, i.e. the noise to use with injection (if None creates Gaussian noise from psd)
         """
 
         
@@ -211,6 +223,12 @@ class GenerateTemplate():
         """
         Run traditional PE on the saved waveform
         Current options are dynesty and nessai
+        args
+        -------------
+        sampler: str
+            which sampler to use (dynesty, nessai)
+        start_ind: int
+            index of injection
         """
         label = "bilby_out_{}".format(start_ind)
         try:
@@ -263,7 +281,7 @@ class GenerateTemplate():
 
     def generate_real_noise(self,):
         """
-        Get a segment of real noise
+        Get a segment of real noise from given ranges
         """
         # compute the number of time domain samples
         Nt = int(self.config["data"]["sampling_frequency"]*self.duration)

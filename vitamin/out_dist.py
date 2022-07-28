@@ -506,6 +506,49 @@ class TruncatedNormal:
     def sample(self, dist, max_samples):
         return dist.sample()
 
+class Normal:
+
+    def __init__(self, pars, config, index = None):
+        """
+        Truncated normal distribution within some bounds defined by configs
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
+        self.name = "Normal"
+        if index is not None:
+            self.name += "_{}".format(index)
+
+        self.pars = pars
+        self.num_pars = len(self.pars)
+        self.num_outputs = [self.num_pars, self.num_pars]
+
+    def get_distribution(self, mean, logvar, ramp = 1.0):
+        # truncated normal for non-periodic params                      
+        tmvn = tfp.distributions.Normal(
+            loc=tf.cast(mean, dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvar)),dtype=tf.float32))
+
+        return tmvn
+
+    def get_networks(self,logvar_activation="none"):
+        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
+        return mean, logvar
+
+    def get_cost(self, dist, x):
+        return -1.0*tf.reduce_mean(tf.reduce_sum(dist.log_prob(x),axis=1),axis=0)
+
+    def sample(self, dist, max_samples):
+        return dist.sample()
+
+
 class VonMises:
 
     def __init__(self, pars, config, index = None):
