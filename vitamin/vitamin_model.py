@@ -135,7 +135,8 @@ class CVAE(tf.keras.Model):
 
         # the shared convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        if type(self.shared_network) == list:
+        print(str(type(self.shared_network)))
+        if "keras" not in str(type(self.shared_network)):
             # if network a list then create the network
             conv = self.get_network(all_input_y, self.shared_network, label="shared")
         else:
@@ -143,7 +144,7 @@ class CVAE(tf.keras.Model):
             conv = self.shared_network(all_input_y)
 
         # r1 encoder network
-        if type(self.r1_network) == list:
+        if "keras" not in str(type(self.shared_network)):
             r1 = self.get_network(conv, self.r1_network, label = "r1")
         else:
             r1 = self.r1_network(conv)
@@ -158,7 +159,7 @@ class CVAE(tf.keras.Model):
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        if type(self.q_network) == list:
+        if "keras" not in str(type(self.shared_network)):
             q = self.get_network(q, self.q_network, label = "q")
         else:
             q = self.q_network(conv)
@@ -172,7 +173,7 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        if type(self.r2_network) == list:
+        if "keras" not in str(type(self.shared_network)):
             r2 = self.get_network(r2, self.r2_network, label = "r2")
         else:
             r2 = self.r2_network(conv)

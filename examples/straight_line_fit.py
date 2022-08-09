@@ -71,7 +71,8 @@ q_network = ['Linear(128)','Linear(32)']
 #r2_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="r2lin1",activation="relu"),
 #                                  tf.keras.layers.Dense(16, name="r2lin2",activation="relu")])
 
-
+#print(type(shared_network) == list)
+#print(shared_network)
 # initialise the model 
 model = vitamin.vitamin_model.CVAE(z_dim=4, # latent space size
                                    n_modes = 2, # number of modes in the latent space
