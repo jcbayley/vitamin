@@ -1,5 +1,12 @@
 vitamin.egg-info/
 __pycache__/*
-*/__pycache__
+*/__pycache__/*
+vitamin/gw/__pycache__/*
 *~
 *.pyc	
+build/
+docs/_build/
+docs/html/
+docs/doctrees/
+old_docs/
+.pyc

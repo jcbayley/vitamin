@@ -29,7 +29,7 @@ def train(config):
     tfd = tfp.distributions
     from tensorflow.keras import regularizers
     from ..vitamin_model import CVAE
-    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, OptimizerSave
+    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, OptimizerSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
     from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
     from keras_adabound import AdaBound
         
@@ -162,7 +162,19 @@ def train(config):
     )
 
 
-    callbacks = [PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), checkpoint, OptimizerSave(config, checkpoint_dir, 10)]
+    callbacks = [checkpoint,PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), OptimizerSave(config, checkpoint_dir, 10)]
+
+    if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
+        lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"])
+
+    if config["training"]["logvarmin_ramp"]:
+        lmr_call = LogminRampCallback(logvarmin_ramp_start=config["training"]["logvarmin_ramp_start"], logvarmin_ramp_length=config["training"]["logvarmin_ramp_length"], logvarmin_start=config["training"]["logvarmin_start"], logvarmin_end=config["training"]["logvarmin_end"], model=model)
+
+    if config["training"]["ramp_length"] != 0:
+        ann_call = AnnealCallback(ramp_start=config["training"]["ramp_start"], ramp_length=config["training"]["ramp_length"])
+
+    if config["training"]["batch_ramp"]:
+        batch_call = BatchRampCallback(batch_ramp_start=config["training"]["batch_ramp_start"], batch_ramp_length=config["training"]["batch_ramp_length"], batch_size=config["training"]["batch_size"], batch_size_end=config["training"]["batch_size_end"])
 
     if config["training"]["test_interval"] != False:
         callbacks.append(TestCallback(config, test_dataset, bilby_samples))

@@ -16,7 +16,7 @@ class CVAE(tf.keras.Model):
         Input to the convolutional variational autoencoder
         kwargs
         --------------
-        z_dimension: int (default 4)
+        z_dim: int (default 4)
             size of the latent space
         n_modes: int (default 2)
             number of modes to allow in latent space
@@ -42,7 +42,7 @@ class CVAE(tf.keras.Model):
         """
         super(CVAE, self).__init__()
         default_kwargs = dict(
-            z_dimension = 4,
+            z_dim = 4,
             n_modes = 2,
             x_modes = 1,
             x_dim = None,
@@ -107,7 +107,7 @@ class CVAE(tf.keras.Model):
         self.logvar_act = self.setup_logvaract()
 
         # variables
-        self.ramp = tf.Variable(0.0, trainable=False)
+        self.ramp = tf.Variable(1.0, trainable=False)
         self.initial_learning_rate = self.initial_learning_rate
 
         self.grouped_params, self.new_params_order, self.reverse_params_order = group_outputs(self.inf_pars, self.bounds)
@@ -221,7 +221,7 @@ class CVAE(tf.keras.Model):
         """
         
         with tf.GradientTape() as tape:
-            r_loss, kl_loss, reconlosses = self.compute_loss(data[1], data[0], self.ramp)
+            r_loss, kl_loss, reconlosses = self.compute_loss(data[1], data[0], ramp=self.ramp)
             loss = r_loss + self.ramp*kl_loss
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
@@ -444,7 +444,7 @@ class CVAE(tf.keras.Model):
 
     def LinearBlock(self,input_data, num_neurons, name = ""):
 
-        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=tf.keras.regularizers.l2(0.001), activation=self.activation, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
+        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=tf.keras.regularizers.l2(0.001), kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
         out = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(out)
         out = self.activation(out)
         return out

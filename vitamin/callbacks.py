@@ -15,10 +15,11 @@ from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_poster
 
 class PlotCallback(tf.keras.callbacks.Callback):
 
-    def __init__(self, plot_dir, epoch_plot = 2, start_epoch = 0):
+    def __init__(self, plot_dir, epoch_plot = 2, start_epoch = 0, save_data = True):
 
         self.plot_dir = plot_dir
         self.epoch_plot = epoch_plot
+        self.save_data = save_data
         self.all_losses = None#np.array([])#np.array([[],[],[],[],[],[],[]]).T
 
         if start_epoch != 0:
@@ -49,16 +50,122 @@ class PlotCallback(tf.keras.callbacks.Callback):
         #print("train_loss_shape", np.shape(self.all_losses))
         
         if epoch % self.epoch_plot == 0 and epoch != 0 or epoch == 2:
-            ind_start = epoch - 1000 if epoch > 1000 else 0
-            with open(os.path.join(self.plot_dir, "loss.txt"), "w") as f:
-                np.savetxt(f,np.array(self.all_losses))
+            if self.save_data:
+                ind_start = epoch - 1000 if epoch > 1000 else 0
+                with open(os.path.join(self.plot_dir, "loss.txt"), "w") as f:
+                    np.savetxt(f,np.array(self.all_losses))
 
-            plot_losses(np.array(self.all_losses), epoch, run = self.plot_dir)
+                plot_losses(np.array(self.all_losses), epoch, run = self.plot_dir)
+            
+                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="TOTAL")
+                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="RECON")
+                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
 
-            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="TOTAL")
-            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="RECON")
-            plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
 
+class AnnealCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, ramp_start, ramp_length, ramp_n_cycles=1):
+        self.ramp_start = ramp_start
+        self.ramp_length = ramp_length
+        self.ramp_n_cycles = ramp_n_cycles
+        #self.model = model
+
+    def ramp_func(self,epoch):
+        ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
+        #print(epoch,ramp)
+        if ramp<0:
+            ramp = 0.0
+        elif ramp>=self.ramp_n_cycles:
+            ramp = 1.0
+        ramp = min(1.0,2.0*np.remainder(ramp,1.0))
+        if epoch > self.ramp_start + self.ramp_length:
+            ramp = 1.0
+        return ramp
+
+    def on_epoch_end(self,epoch,logs=None):
+        ramp = self.ramp_func(epoch)
+        tf.keras.backend.set_value(self.model.ramp, ramp)
+
+class LogminRampCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, logvarmin_ramp_start, logvarmin_ramp_length, logvarmin_start, logvarmin_end, model):
+        self.logvarmin_ramp_start = logvarmin_ramp_start
+        self.logvarmin_ramp_length = logvarmin_ramp_length
+        self.logvarmin_start = logvarmin_start
+        self.logvarmin_end = logvarmin_end
+        self.model = model
+
+    def logmin_ramp_func(self,epoch):
+        ramp = (epoch-self.logvarmin_ramp_start)/(self.logvarmin_ramp_length)
+        if ramp<0:
+            ramp = 0.0
+        if epoch > self.logvarmin_ramp_start + self.logvarmin_ramp_length:
+            ramp = 1.0
+
+        newlogvar = self.logvarmin_start + ramp*self.logvarmin_end
+        tf.keras.backend.set_value(self.model.minlogvar, newlogvar)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.logmin_ramp_func(epoch)
+
+class LearningRateCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, initial_learning_rate, cycle_lr = False, cycle_lr_start = 1000, cycle_lr_length=100, cycle_lr_amp=5, decay_lr=False, decay_lr_start=1000, decay_lr_length=5000, decay_lr_logend = -3, optimizer = None):
+        self.cycle_lr_start = cycle_lr_start
+        self.cycle_lr = cycle_lr
+        self.cycle_lr_amp = cycle_lr_amp
+        self.cycle_lr_length = cycle_lr_length
+        self.decay_lr_start = decay_lr_start
+        self.decay_lr = decay_lr
+        self.decay_lr_logend = decay_lr_logend
+        self.decay_lr_length = decay_lr_length
+        self.initial_learning_rate = initial_learning_rate
+        self.optimizer = optimizer
+
+    def learning_rate_modify(self, epoch):
+        dec_factor = 1
+        cycle_factor = 1
+        if epoch > self.cycle_lr_start and self.cycle_lr:
+            half_fact_arr = np.linspace(1/self.cycle_lr_amp, self.cycle_lr_amp, int(self.cycle_lr_length/2))
+            fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
+            position = np.remainder(epoch - self.cycle_lr_start, self.cycle_lr_length).astype(int)
+            cycle_factor = fact_arr[position]
+
+        if epoch > self.decay_lr_start and self.decay_lr:
+            dec_array = np.logspace(self.decay_lr_logend, 0, self.decay_lr_length)[::-1]
+            decay_pos = epoch - self.decay_lr_start
+            if decay_pos >= self.decay_lr_length:
+                decay_pos = -1
+            dec_factor = dec_array[decay_pos]
+
+        new_lr = cycle_factor*dec_factor*self.initial_learning_rate
+            
+        tf.keras.backend.set_value(self.optimizer.learning_rate, new_lr)
+        print("learning_rate:, {}".format(self.optimizer.learning_rate))
+
+    def on_epoch_begin(self, epoch, logs = None):
+        self.learning_rate_modify(epoch)
+
+class BatchRampCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, batch_ramp_start, batch_ramp_length, batch_size, batch_size_end):
+        self.batch_ramp_start = batch_ramp_start
+        self.batch_ramp_length = batch_ramp_length
+        self.batch_size = batch_size
+        self.batch_size_end = batch_size_end
+
+    def batch_ramp_func(self,epoch):
+        ramp = (epoch-self.batch_ramp_start)/(self.batch_ramp_length)
+        if ramp<0:
+            ramp = 0.0
+        if epoch > self.batch_ramp_start + self.batch_ramp_length:
+            ramp = 1.0
+
+        newbatch = int(self.batch_size + ramp*(self.batch_size_end-self.batch_size_end))
+        self.train_dataloader.batch_size =  newbatch
+
+    def on_epoch_begin(self, epoch, logs = None):
+        self.batch_ramp_func(epoch)
 
 class TrainCallback(tf.keras.callbacks.Callback):
 
@@ -118,80 +225,6 @@ class TrainCallback(tf.keras.callbacks.Callback):
         plt.close(fig)
         sys.exit()
         
-    def ramp_func(self,epoch):
-        ramp = (epoch-self.config["training"]["ramp_start"])/(2.0*self.config["training"]["ramp_length"])
-        #print(epoch,ramp)
-        if ramp<0:
-            ramp = 0.0
-        elif ramp>=self.config["training"]["ramp_n_cycles"]:
-            ramp = 1.0
-        ramp = min(1.0,2.0*np.remainder(ramp,1.0))
-        if epoch > self.config["training"]["ramp_start"] + self.config["training"]["ramp_length"]:
-            ramp = 1.0
-        tf.keras.backend.set_value(self.model.ramp, ramp)
-
-    def logmin_ramp_func(self,epoch):
-        if self.config["training"]["logvarmin_ramp"] == True:
-            ramp = (epoch-self.config["training"]["logvarmin_ramp_start"])/(self.config["training"]["logvarmin_ramp_length"])
-            if ramp<0:
-                ramp = 0.0
-            if epoch > self.config["training"]["logvarmin_ramp_start"] + self.config["training"]["logvarmin_ramp_length"]:
-                ramp = 1.0
-
-            newlogvar = self.config["training"]["logvarmin_start"] + ramp*self.config["training"]["logvarmin_end"]
-            tf.keras.backend.set_value(self.model.minlogvar, newlogvar)
-
-
-    def learning_rate_modify(self, epoch, epochs_range = 100, decay_length = 4000, init_rate = 1e-4):
-        dec_factor = 1
-        cycle_factor = 1
-        if epoch > self.config["training"]["cycle_lr_start"] and self.config["training"]["cycle_lr"]:
-            half_fact_arr = np.linspace(1/config["training"]["cycle_lr_amp"], config["training"]["cycle_lr_amp"], int(self.config["training"]["cycle_lr_length"]/2))
-            fact_arr = np.append(half_fact_arr, half_fact_arr[::-1])
-            position = np.remainder(epoch - self.config["training"]["cycle_lr_start"], self.config["training"]["cycle_lr_length"]).astype(int)
-            cycle_factor = fact_arr[position]
-
-        if epoch > self.config["training"]["decay_lr_start"] and self.config["training"]["decay_lr"]:
-            dec_array = np.logspace(self.config["training"]["decay_lr_logend"], 0, self.config["training"]["decay_lr_length"])[::-1]
-            decay_pos = epoch - self.config["training"]["decay_lr_start"]
-            if decay_pos >= self.config["training"]["decay_lr_length"]:
-                decay_pos = -1
-            dec_factor = dec_array[decay_pos]
-
-        new_lr = cycle_factor*dec_factor*self.config["training"]["initial_learning_rate"]
-            
-        tf.keras.backend.set_value(self.optimizer.learning_rate, new_lr)
-        print("learning_rate:, {}".format(self.optimizer.learning_rate))
-
-    def batch_ramp_func(self,epoch):
-        if self.config["training"]["batch_ramp"] == True:
-            ramp = (epoch-self.config["training"]["batch_ramp_start"])/(self.config["training"]["batch_ramp_length"])
-            if ramp<0:
-                ramp = 0.0
-            if epoch > self.config["training"]["batch_ramp_start"] + self.config["training"]["batch_ramp_length"]:
-                ramp = 1.0
-
-            newbatch = int(self.config["training"]["batch_size"] + ramp*(self.config["training"]["batch_size_end"]-self.config["training"]["batch_size_end"]))
-            self.train_dataloader.batch_size =  newbatch
-
-
-    def learning_rate_it(self, epoch, epochs_range = 30):
-
-        lrrange = np.linspace(-9, -1, 200)
-        lr = 10**lrrange
-        factor = lr[epoch]
-        tf.keras.backend.set_value(self.optimizer.learning_rate, factor)
-        print("learning_rate:, {}".format(self.optimizer.learning_rate))
-
-    def on_epoch_begin(self, epoch, logs = None):
-        self.learning_rate_modify(epoch)
-        self.logmin_ramp_func(epoch)
-        self.batch_ramp_func(epoch)
-        #self.learning_rate_it(epoch)
-        if epoch > self.config["training"]["ramp_start"]:
-            self.ramp_func(epoch)
-
-
     def on_batch_end(self, batch, logs=None):
         self.recon_losses.append(self.model.recon_loss_metric.result())
         self.kl_losses.append(self.model.kl_loss_metric.result())
