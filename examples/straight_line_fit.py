@@ -56,6 +56,22 @@ r1_network = ['Linear(128)','Linear(32)']
 r2_network = ['Linear(128)','Linear(32)']
 q_network = ['Linear(128)','Linear(32)']
 
+# alternatively one can input their own network designs for each of these three networks
+
+#shared_network = tf.keras.Sequential([tf.keras.layers.Conv1D(16,16, name="conv1", activation="relu"), 
+#                                      tf.keras.layers.Conv1D(16,16, name="conv2", activation="relu"),
+#                                      tf.keras.layers.Flatten()])
+
+#r1_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="r1lin1",activation="relu"),
+#                                  tf.keras.layers.Dense(16, name="r1lin2",activation="relu")])
+
+#q_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="qlin1",activation="relu"),
+#                                  tf.keras.layers.Dense(16, name="qlin2",activation="relu")])
+
+#r2_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="r2lin1",activation="relu"),
+#                                  tf.keras.layers.Dense(16, name="r2lin2",activation="relu")])
+
+
 # initialise the model 
 model = vitamin.vitamin_model.CVAE(z_dim=4, # latent space size
                                    n_modes = 2, # number of modes in the latent space

@@ -13,3 +13,7 @@ The avaible layers are:
 Conv1D 
 Resnet
 Linear
+Flatten
+Reshape
+
+One can also input each of the r1,r1 and q networks in indivudually by writing the r1_network option input to the model. see the examples folder for examples of how to do this 

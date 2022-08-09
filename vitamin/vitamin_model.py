@@ -135,11 +135,18 @@ class CVAE(tf.keras.Model):
 
         # the shared convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        conv = self.get_network(all_input_y, self.shared_network, label="shared")
-        conv = tf.keras.layers.Flatten()(conv)
+        if type(self.shared_network) == list:
+            # if network a list then create the network
+            conv = self.get_network(all_input_y, self.shared_network, label="shared")
+        else:
+            #otherwise use the input network
+            conv = self.shared_network(all_input_y)
 
         # r1 encoder network
-        r1 = self.get_network(conv, self.r1_network, label = "r1")
+        if type(self.r1_network) == list:
+            r1 = self.get_network(conv, self.r1_network, label = "r1")
+        else:
+            r1 = self.r1_network(conv)
         r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name = "r1_mean_dense")(r1)
         r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation="relu")(r1)
         #r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation = self.logvar_act)(r1)
@@ -151,7 +158,10 @@ class CVAE(tf.keras.Model):
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        q = self.get_network(q, self.q_network, label = "q")
+        if type(self.q_network) == list:
+            q = self.get_network(q, self.q_network, label = "q")
+        else:
+            q = self.q_network(conv)
         qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name="q_mean_dense")(q)
         qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation="relu")(q)
         #qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation=self.logvar_act)(q)
@@ -162,7 +172,10 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        r2 = self.get_network(r2, self.r2_network, label = "r2")
+        if type(self.r2_network) == list:
+            r2 = self.get_network(r2, self.r2_network, label = "r2")
+        else:
+            r2 = self.r2_network(conv)
         
         
         outputs = []
