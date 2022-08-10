@@ -1,5 +1,5 @@
 =================================
-Customizing Your Parameters Files
+Customizing Your Parameters Files for GW search
 =================================
 
 VItamin allows the user to tailor their run to a reasonable degree. 
@@ -93,7 +93,15 @@ An example config file is:
 		Conv1D(96,64,2)
 		]
    
-   output_network = [Linear(4096),
+   r1_network = [Linear(4096),
+		Linear(2048),
+		Linear(1024)]
+
+   q_network = [Linear(4096),
+		Linear(2048),
+		Linear(1024)]
+
+   r2_network = [Linear(4096),
 		Linear(2048),
 		Linear(1024)]
 
