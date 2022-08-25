@@ -32,7 +32,10 @@ class GWInputParser(InputParser):
 
         if config_file is not None:
             self.config_file = Path(config_file).resolve()
+            if not self.config_file.is_file():
+                raise FileNotFoundError(f"No file {self.config_file}")
             self.ini = configparser.ConfigParser()
+            print(f"Loading: {self.config_file}")
             self.ini.read(self.config_file)
             self.create_config(self.ini)
         else:
