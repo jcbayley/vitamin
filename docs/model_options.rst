@@ -15,18 +15,21 @@ Conv1D
 ------
 This is input as a string within a list.
 1d convolutional layer
+
 .. code-block:: python
 
     Conv1D(nfilters, filtersize, stride)
 Resnet
 ------
 A resnet bottleneck block with three 1d convolutional layers
+
 .. code-block:: python
 
     ResBlock(nfilters, filtersize, stride)
 Linear
 ------
 A dense or linear fully connected layer
+
 .. code-block:: python
 
     Linear(n_neurons)
@@ -34,12 +37,14 @@ A dense or linear fully connected layer
 Flatten
 -------
 Used to flatten the outputs of convolutional layers to put into linear layer
+
 .. code-block:: python
 
     Flatten()
 Reshape
 
 One can then define the shared, r1, q and r2 network:
+
 .. code-block:: python 
 
     shared_network = ['Conv1D(16,16,2)','Conv1D(16,8,2)','Flatten()']
