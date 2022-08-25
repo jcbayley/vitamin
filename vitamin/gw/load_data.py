@@ -124,7 +124,9 @@ class DataLoader(tf.keras.utils.Sequence):
             if self.config["data"]["use_real_detector_noise"]:
                 Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/float(self.config["data"]["y_normscale"])
             else:
-                Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=1.0))/float(self.config["data"]["y_normscale"])
+                # noise scale is a factor of two to match that of the test results out of bilby
+                Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=2.0))/float(self.config["data"]["y_normscale"])
+
 
         return np.array(Y_noisefree), np.array(X)
 
