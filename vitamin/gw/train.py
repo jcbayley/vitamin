@@ -166,15 +166,19 @@ def train(config):
 
     if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
         lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"])
+        callbacks.append(lr_call)
 
     if config["training"]["logvarmin_ramp"]:
         lmr_call = LogminRampCallback(logvarmin_ramp_start=config["training"]["logvarmin_ramp_start"], logvarmin_ramp_length=config["training"]["logvarmin_ramp_length"], logvarmin_start=config["training"]["logvarmin_start"], logvarmin_end=config["training"]["logvarmin_end"], model=model)
+        callbacks.append(lmr_call)
 
     if config["training"]["ramp_length"] != 0:
         ann_call = AnnealCallback(ramp_start=config["training"]["ramp_start"], ramp_length=config["training"]["ramp_length"])
+        callbacks.append(ann_call)
 
     if config["training"]["batch_ramp"]:
         batch_call = BatchRampCallback(batch_ramp_start=config["training"]["batch_ramp_start"], batch_ramp_length=config["training"]["batch_ramp_length"], batch_size=config["training"]["batch_size"], batch_size_end=config["training"]["batch_size_end"])
+        callbacks.append(batch_call)
 
     if config["training"]["test_interval"] != False:
         callbacks.append(TestCallback(config, test_dataset, bilby_samples))
