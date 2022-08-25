@@ -17,6 +17,7 @@ import tensorflow as tf
 from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
+import pandas
 
 
 def plot_losses(all_loss, epoch, run='testing'):
@@ -130,6 +131,147 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.savefig('%s/kl.png' % (run))
     plt.close()
 
+def compute_KL(vitamin_samples, sampler_samples, Nsamp=5000, nstep=200, ntest=100):
+    """compute KL estimate
+        take the mean JS divergence of {nstep} random draws of {Nsamp} samples from each of the sets of samples
+        samples should be of shape (nsampes, nparameters)
+    """
+    temp_JS = np.zeros((ntest, np.shape(vitamin_samples)[1]))
+    if np.shape(vitamin_samples)[1] != np.shape(sampler_samples)[1]:
+        raise Exception("Samples should have the same number of parameters")
+    SMALL_CONST = 1e-162
+    def my_kde_bandwidth(obj, fac=1.0):
+        """We use Scott's Rule, multiplied by a constant factor."""
+        return np.power(obj.n, -1./(obj.d+4)) * fac
+        
+    for n in range(ntest):
+        idx1 = np.random.randint(0,vitamin_samples.shape[0],Nsamp)
+        idx2 = np.random.randint(0,sampler_samples.shape[0],Nsamp)
+        for pr in range(np.shape(vitamin_samples)[1]):
+            kdsampp = vitamin_samples[idx1, pr:pr+1][~np.isnan(vitamin_samples[idx1, pr:pr+1])].flatten()
+            kdsampq = sampler_samples[idx2, pr:pr+1][~np.isnan(sampler_samples[idx2, pr:pr+1])].flatten()
+            eval_points = np.linspace(np.min([np.min(kdsampp), np.min(kdsampq)]), np.max([np.max(kdsampp), np.max(kdsampq)]), nstep)
+            kde_p = st.gaussian_kde(kdsampp)(eval_points)
+            kde_q = st.gaussian_kde(kdsampq)(eval_points)
+            current_JS = np.power(jensenshannon(kde_p, kde_q),2)
+            temp_JS[n][pr] = current_JS
+
+    temp_JS = np.mean(temp_JS, axis = 0)
+
+    return temp_JS
+
+def plot_pp(samples, injection_parameters, confidence_interval=[0.68, 0.95, 0.997],
+                 lines=None, keys=None, 
+                 confidence_interval_alpha=0.1, weight_list=None,
+                 **kwargs):
+    """
+    Make a P-P plot for a set of runs with injected signals. (adapted from bilby)
+
+    Parameters
+    ==========
+    results: list
+        A list of Result objects, each of these should have injected_parameters
+    filename: str, optional
+        The name of the file to save, the default is "outdir/pp.png"
+    save: bool, optional
+        Whether to save the file, default=True
+    confidence_interval: (float, list), optional
+        The confidence interval to be plotted, defaulting to 1-2-3 sigma
+    lines: list
+        If given, a list of matplotlib line formats to use, must be greater
+        than the number of parameters.
+    legend_fontsize: float
+        The font size for the legend
+    keys: list
+        A list of keys to use, if None defaults to search_parameter_keys
+    confidence_interval_alpha: float, list, optional
+        The transparency for the background condifence interval
+    weight_list: list, optional
+        List of the weight arrays for each set of posterior samples.
+    kwargs:
+        Additional kwargs to pass to matplotlib.pyplot.plot
+
+    Returns
+    =======
+    fig, pvals:
+        matplotlib figure and a NamedTuple with attributes `combined_pvalue`,
+        `pvalues`, and `names`.
+    """
+    import bilby
+    results = []
+    for sp in range(len(samples)):
+        res = bilby.result.Result()
+        post = pandas.DataFrame(data = samples[sp], columns = labels)
+        res.posterior = post
+        res.search_parameter_keys = labels
+        res.injection_parameters = {labels[i]:injection_parameters[sp][i] for i in range(len(labels))}
+        #res.priors = {labels[i]:bilby.prior.Gaussian(0,1, name=labels[i]) for i in range(len(labels))}
+        results.append(res)
+
+    if keys is None:
+        keys = results[0].search_parameter_keys
+
+    if weight_list is None:
+        weight_list = [None] * len(results)
+
+    credible_levels = pandas.DataFrame()
+    for i, result in enumerate(results):
+        credible_levels = credible_levels.append(
+            result.get_all_injection_credible_levels(keys),ignore_index=True)
+
+    if lines is None:
+        colors = ["C{}".format(i) for i in range(8)]
+        linestyles = ["-", "--", ":"]
+        lines = ["{}{}".format(a, b) for a, b in product(linestyles, colors)]
+    if len(lines) < len(credible_levels.keys()):
+        raise ValueError("Larger number of parameters than unique linestyles")
+
+    x_values = np.linspace(0, 1, 1001)
+
+    N = len(credible_levels)
+
+    if isinstance(confidence_interval, float):
+        confidence_interval = [confidence_interval]
+    if isinstance(confidence_interval_alpha, float):
+        confidence_interval_alpha = [confidence_interval_alpha] * len(confidence_interval)
+    elif len(confidence_interval_alpha) != len(confidence_interval):
+        raise ValueError(
+            "confidence_interval_alpha must have the same length as confidence_interval")
+
+    lowers = []
+    uppers = []
+    for ci, alpha in zip(confidence_interval, confidence_interval_alpha):
+        edge_of_bound = (1. - ci) / 2.
+        lower = st.binom.ppf(1 - edge_of_bound, N, x_values) / N
+        upper = st.binom.ppf(edge_of_bound, N, x_values) / N
+        # The binomial point percent function doesn't always return 0 @ 0,
+        # so set those bounds explicitly to be sure
+        lower[0] = 0
+        upper[0] = 0
+        lowers.append(lower)
+        uppers.append(upper)
+
+    pvalues = []
+    pps = []
+    for ii, key in enumerate(credible_levels):
+        pp = np.array([sum(credible_levels[key].values < xx) /
+                       len(credible_levels) for xx in x_values])
+        pvalue = st.kstest(credible_levels[key], 'uniform').pvalue
+        pvalues.append(pvalue)
+        pps.append(pp)
+
+        try:
+            name = results[0].priors[key].latex_label
+        except AttributeError:
+            name = key
+        label = "{} ({:2.3f})".format(name, pvalue)
+
+    Pvals = namedtuple('pvals', ['combined_pvalue', 'pvalues', 'names'])
+    pvals = Pvals(combined_pvalue=st.combine_pvalues(pvalues)[1],
+                  pvalues=pvalues,
+                  names=list(credible_levels.keys()))
+
+    return pvals, x_values, pps, lowers, uppers
 
 def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None, scale_other_samples = True, unconvert_parameters = None):
     """
@@ -231,31 +373,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
             np.savetxt(samples_file,vitamin_samples)
 
-            # compute KL estimate
-            idx1 = np.random.randint(0,vitamin_samples.shape[0],10000)
-            idx2 = np.random.randint(0,sampler_samples.shape[0],10000)
-            temp_JS = []
-            SMALL_CONST = 1e-162
-            def my_kde_bandwidth(obj, fac=1.0):
-                """We use Scott's Rule, multiplied by a constant factor."""
-                return np.power(obj.n, -1./(obj.d+4)) * fac
-
-
-
-            for pr in range(np.shape(vitamin_samples)[1]):
-                #try:
-                #print("vit", pr, min(vitamin_samples[idx1, pr:pr+1]), max(vitamin_samples[idx1, pr:pr+1]))
-                #print("samp", pr, min(sampler_samples[idx1, pr:pr+1]), max(sampler_samples[idx1, pr:pr+1]))
-                kdsampp = vitamin_samples[idx1, pr:pr+1][~np.isnan(vitamin_samples[idx1, pr:pr+1])].flatten()
-                kdsampq = sampler_samples[idx2, pr:pr+1][~np.isnan(sampler_samples[idx2, pr:pr+1])].flatten()
-                eval_pointsp = np.linspace(np.min(kdsampp), np.max(kdsampp), len(kdsampp))
-                eval_pointsq = np.linspace(np.min(kdsampq), np.max(kdsampq), len(kdsampq))
-                kde_p = st.gaussian_kde(kdsampp)(eval_pointsp)
-                kde_q = st.gaussian_kde(kdsampq)(eval_pointsq)
-                current_JS = np.power(jensenshannon(kde_p, kde_q),2)
-                #current_JS = 0.5*(estimate(true_XS[idx1,pr:pr+1],true_post[idx2,pr:pr+1],n_jobs=4) + estimate(true_post[idx2,pr:pr+1],true_XS[idx1,pr:pr+1],n_jobs=4))
-                temp_JS.append(current_JS)
-
+            temp_JS = compute_KL(vitamin_samples, sampler_samples)
             JS_est.append(temp_JS)
 
             other_samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
