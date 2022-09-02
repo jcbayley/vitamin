@@ -105,7 +105,7 @@ def train(config):
     # compile and build the model (hardcoded values will change soon)
     model.compile(run_eagerly = None, optimizer = optimizer, loss = model.compute_loss)
 
-    if config["training"]["transfer_model_checkpoint"]:
+    if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
         model.load_weights(config["training"]["transfer_model_checkpoint"])
         #model = tf.keras.models.load_model(config["training"]["transfer_model_checkpoint"])
         """
@@ -116,6 +116,8 @@ def train(config):
         print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
 
     elif config["training"]['resume_training']:
+        if config["training"]["transfer_model_checkpoint"]:
+            print(f"Warning: Continuing training from trained weights, not from pretrained model from {config['training']['transfer_model_checkpoint']}")
         # Load the previously saved weights
         #latest = tf.train.latest_checkpoint(checkpoint_dir)
         model.load_weights(checkpoint_path)
@@ -153,16 +155,19 @@ def train(config):
         filepath=checkpoint_path,
         monitor="val_loss",
         verbose=0,
-        save_best_only=False,
+        save_best_only=True,
         save_weights_only=True,
         mode="auto",
-        save_freq=10,
+        save_freq=10*config["training"]["chunk_batch"],
         options=None,
         initial_value_threshold=None,
     )
 
 
-    callbacks = [checkpoint,PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch), TrainCallback(config, optimizer, train_dataset, model), TimeCallback(config), OptimizerSave(config, checkpoint_dir, 10)]
+    callbacks = [checkpoint]
+    callbacks.append(PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch))
+    callbacks.append(TrainCallback(config, optimizer, train_dataset, model))
+    callbacks.append(TimeCallback(config))#, OptimizerSave(config, checkpoint_dir, 10)]
 
     if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
         lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"])
@@ -181,6 +186,7 @@ def train(config):
         callbacks.append(batch_call)
 
     if config["training"]["test_interval"] != False:
+        pass
         callbacks.append(TestCallback(config, test_dataset, bilby_samples))
         
     if config["training"]["tensorboard_log"]:

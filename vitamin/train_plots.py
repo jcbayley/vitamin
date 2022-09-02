@@ -131,7 +131,7 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.savefig('%s/kl.png' % (run))
     plt.close()
 
-def compute_KL(vitamin_samples, sampler_samples, Nsamp=5000, nstep=200, ntest=100):
+def compute_KL(vitamin_samples, sampler_samples, Nsamp=5000, nstep=100, ntest=100):
     """compute KL estimate
         take the mean JS divergence of {nstep} random draws of {Nsamp} samples from each of the sets of samples
         samples should be of shape (nsampes, nparameters)
@@ -280,7 +280,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     # samples shape [numsamples, numpar]
     # all other shape [numsamplers, numsamples, numpar]
 
-    config["data"]['corner_labels'] = config["testing"]["bilby_pars"]
+    config["data"]['corner_labels'] = config["data"]["prior_pars"]
 
     # make save directories
     directories = {}
@@ -311,7 +311,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
 
     # convert vitamin sample and true parameter back to truths
     if unconvert_parameters is not None:
-        vit_samples = unconvert_parameters(samples)
+        vit_samples = unconvert_parameters(config, samples)
     else:
         vit_samples = samples
         
@@ -361,7 +361,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                 ol_pars.append(inf_par)
                 cnt += 1
             parnames = []
-            for k_idx,k in enumerate(config["testing"]['bilby_pars']):
+            for k_idx,k in enumerate(config["data"]['prior_pars']):
                 if np.isin(k, ol_pars):
                     parnames.append(config["data"]['corner_labels'][k_idx])
 

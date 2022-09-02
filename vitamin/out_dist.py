@@ -375,6 +375,23 @@ class DiscardChirpmassMRM1M2:
         elif self.pars[0] == "mass_1":
             self.order_flipped = False
 
+
+        minchirpmass, minmassratio = ((self.bounds["mass_1_min"]*self.bounds["mass_1_min"])**(0.6))/((self.bounds["mass_1_min"] + self.bounds["mass_2_min"])**(0.2)), self.bounds["mass_2_max"]/self.bounds["mass_2_min"]
+        maxchirpmass, maxmassratio = ((self.bounds["mass_1_max"]*self.bounds["mass_1_max"])**(0.6))/((self.bounds["mass_1_max"] + self.bounds["mass_2_max"])**(0.2)), 1
+
+        # find the minimum and maximum limits based on the chip mass limits or the component mass limits
+        #self.min_chirpmass = np.max([minchirpmass, self.bounds["chirp_mass_min"]])
+        #self.max_chirpmass = np.min([maxchirpmass, self.bounds["chirp_mass_max"]])
+        
+        #self.min_massratio = np.max([minmassratio, self.bounds["mass_ratio_min"]])
+        #self.max_massratio = np.min([maxmassratio, self.bounds["mass_ratio_max"]])
+
+        self.min_chirpmass = self.bounds["chirp_mass_min"]
+        self.max_chirpmass = self.bounds["chirp_mass_max"]
+        
+        self.min_massratio = self.bounds["mass_ratio_min"]
+        self.max_massratio = self.bounds["mass_ratio_max"]
+
         self.num_pars = len(self.pars)
         if self.num_pars != 2:
             raise Exception("Please only use two variables for JointM1M2")
@@ -445,14 +462,14 @@ class DiscardChirpmassMRM1M2:
         mass_1 = normed_mass_1*(self.bounds["mass_1_max"] - self.bounds["mass_1_min"]) + self.bounds["mass_1_min"]
         mass_2 = normed_mass_2*(self.bounds["mass_2_max"] - self.bounds["mass_2_min"]) + self.bounds["mass_2_min"]
         chirpmass, massratio = ((mass_1*mass_2)**(0.6))/((mass_1 + mass_2)**(0.2)), mass_2/mass_1
-        normed_chirpmass = (chirpmass - self.bounds["chirp_mass_min"])/(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"])
-        normed_massratio = (massratio - self.bounds["mass_ratio_min"])/(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"])
+        normed_chirpmass = (chirpmass - self.min_chirpmass)/(self.max_chirpmass - self.min_chirpmass)
+        normed_massratio = (massratio - self.min_massratio)/(self.max_massratio - self.min_massratio)
         return normed_massratio, normed_chirpmass
 
     def chirpmass_massratio_to_component_masses(self, chirpmass, massratio):
         """ Convert component masses to normalised chirp mass and mass ratio"""
-        chirpmass = chirpmass*(self.bounds["chirp_mass_max"] - self.bounds["chirp_mass_min"]) + self.bounds["chirp_mass_min"]
-        massratio = massratio*(self.bounds["mass_ratio_max"] - self.bounds["mass_ratio_min"]) + self.bounds["mass_ratio_min"]
+        chirpmass = chirpmass*(self.max_chirpmass - self.min_chirpmass) + self.min_chirpmass
+        massratio = massratio*(self.max_massratio - self.min_massratio) + self.min_massratio
         massratio = massratio
         total_mass = chirpmass*(1+massratio)**1.2/massratio**0.6
         mass_1 = total_mass/(1+massratio)
@@ -461,7 +478,126 @@ class DiscardChirpmassMRM1M2:
         normed_mass_2 = (mass_2 - self.bounds["mass_2_min"])/(self.bounds["mass_2_max"] - self.bounds["mass_2_min"])
         return normed_mass_1, normed_mass_2
 
+class DiscardSumDifferenceM1M2:
 
+    def __init__(self, pars, bounds, index = None):
+        """
+        Calculate the distribution on m1 and m2 converting to chirp mass and mass ration internally, no joint distrinution but discards point outside of prior bounds
+
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
+        self.name = "DiscardSumDifferenceM1M2"
+        if index is not None:
+            self.name += "_{}".format(index)
+
+        self.pars = pars
+        self.bounds = bounds
+
+        if self.pars[0] == "mass_2":
+            self.order_flipped = True
+        elif self.pars[0] == "mass_1":
+            self.order_flipped = False
+
+        # calculate the limits based on the component mass limits
+        self.min_summass = self.bounds["mass_1_min"] + self.bounds["mass_2_min"]
+        self.max_summass = self.bounds["mass_1_max"] + self.bounds["mass_2_max"]
+        
+        self.min_massdiff = self.bounds["mass_1_max"] - self.bounds["mass_2_max"]
+        self.max_massdiff = self.bounds["mass_1_max"] - self.bounds["mass_2_min"]
+
+        self.num_pars = len(self.pars)
+        if self.num_pars != 2:
+            raise Exception("Please only use two variables for JointM1M2")
+        self.num_outputs = [self.num_pars,self.num_pars]
+        self.get_cost = self.cost_setup()
+        self.sample = self.sample_setup()
+
+    def get_distribution(self, mean, logvar, ramp = 1.0):
+
+        mean_sm, mean_md = tf.split(mean, num_or_size_splits=2, axis=1)
+        logvarsm, logvarmd = tf.split(logvar, num_or_size_splits=2, axis=1)
+
+        tmvnq = tfp.distributions.TruncatedNormal(
+            loc=tf.cast(mean_sm, dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvarsm)),dtype=tf.float32),
+            low=0, high=1)
+            #low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0)
+
+        tmvncm = tfp.distributions.TruncatedNormal(
+            loc=tf.cast(mean_md, dtype=tf.float32),
+            scale=tf.cast(tf.sqrt(tf.exp(logvarmd)),dtype=tf.float32),
+            low=0,high=1)
+            #low=-10.0 + ramp*10.0, high=1.0 + 10.0 - ramp*10.0)
+
+        return tmvnq, tmvncm
+
+    def get_networks(self,logvar_activation="none"):
+        mean =  tf.keras.layers.Dense(self.num_pars, activation='sigmoid', use_bias = True, name="{}_mean".format(self.name))
+        logvar = tf.keras.layers.Dense(self.num_pars, use_bias=True, name="{}_logvar".format(self.name), activation=logvar_activation)
+        return mean, logvar
+
+    def cost_setup(self):
+        if self.order_flipped:
+            def get_cost(dist, x):
+                # reverse order of true parmaeters to estimate logprob                                                                      
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                normed_massdiff, normed_summass = self.component_masses_to_summass_massdiff(x1,x2)
+                smcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[1].log_prob(normed_massdiff),axis=1),axis=0)
+                mdcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[0].log_prob(normed_summass),axis=1),axis=0)
+                return smcost + mdcost 
+        else:
+            def get_cost(dist, x):
+                x1, x2 = tf.split(x, num_or_size_splits=2, axis=1)
+                normed_massdiff, normed_summass = self.component_masses_to_summass_massdiff(x1,x2)
+                smcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[0].log_prob(normed_massdiff),axis=1),axis=0)
+                mdcost = -1.0*tf.reduce_mean(tf.reduce_sum(dist[1].log_prob(normed_summass),axis=1),axis=0)
+                return smcost + mdcost 
+
+        return get_cost
+
+    def sample_setup(self):
+        if self.order_flipped:
+            # reverse order of samples based on inputs                                                                                      
+            def sample(dist, max_samples):
+                # transpose amd squeeze to get [samples, parameters]                                                                       
+                massdiff =  dist[1].sample()
+                summass =  dist[0].sample()
+                mass_1, mass_2 = self.summass_massdiff_to_component_masses(summass, massdiff)
+                return tf.concat([mass_1,mass_2], axis = 1)
+        else:
+            def sample(dist, max_samples):
+                massdiff =  dist[0].sample()
+                summass =  dist[1].sample()
+                mass_1, mass_2 = self.summass_massdiff_to_component_masses(summass, massdiff)
+                return tf.concat([mass_1,mass_2], axis = 1)
+        return sample
+
+    def component_masses_to_summass_massdiff(self, normed_mass_1, normed_mass_2):
+        """ Convert component masses to normalised chirp mass and mass ratio"""
+        mass_1 = normed_mass_1*(self.bounds["mass_1_max"] - self.bounds["mass_1_min"]) + self.bounds["mass_1_min"]
+        mass_2 = normed_mass_2*(self.bounds["mass_2_max"] - self.bounds["mass_2_min"]) + self.bounds["mass_2_min"]
+        summass, massdiff = mass_1 + mass_2, mass_1 - mass_2
+        normed_summass = (summass - self.min_summass)/(self.max_summass - self.min_summass)
+        normed_massdiff = (massdiff - self.min_massdiff)/(self.max_massdiff - self.min_massdiff)
+        return normed_massdiff, normed_summass
+
+    def summass_massdiff_to_component_masses(self, sum_mass, mass_diff):
+        """ Convert component masses to normalised chirp mass and mass ratio"""
+        sum_mass = sum_mass*(self.max_summass - self.min_summass) + self.min_summass
+        mass_diff = mass_diff*(self.max_massdiff - self.min_massdiff) + self.min_massdiff
+        mass_1 = 0.5*(sum_mass + mass_diff)
+        mass_2 = 0.5*(sum_mass - mass_diff)
+        normed_mass_1 = (mass_1 - self.bounds["mass_1_min"])/(self.bounds["mass_1_max"] - self.bounds["mass_1_min"])
+        normed_mass_2 = (mass_2 - self.bounds["mass_2_min"])/(self.bounds["mass_2_max"] - self.bounds["mass_2_min"])
+        return normed_mass_1, normed_mass_2
 
 class TruncatedNormal:
 

@@ -98,7 +98,7 @@ class InputParser():
             print("No prior file, using default prior")
 
         self.config["priors"] = priors
-        self.config["testing"]["bilby_pars"] = list(self.config["priors"].keys())
+        self.config["data"]["prior_pars"] = list(self.config["priors"].sample().keys())
             
     def get_param_index(self, all_pars,pars,sky_extra=None):
         """ 

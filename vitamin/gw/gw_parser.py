@@ -65,7 +65,7 @@ class GWInputParser(InputParser):
         #parameter masks
         for par in self.config["model"]["inf_pars_list"]:
             self.config["masks"]["{}_mask".format(par)], self.config["masks"]["{}_idx_mask".format(par)], self.config["masks"]["{}_len".format(par)] = self.get_param_index(self.config["model"]['inf_pars_list'],[par])
-
+        """
         all_period_params = ['phase','psi','phi_12','phi_jl']
         periodic_params = [p for p in self.config["model"]['inf_pars_list'] if p in all_period_params]
         all_nonperiod_params = ['mass_1','mass_2','luminosity_distance','geocent_time','theta_jn','a_1','a_2','tilt_1','tilt_2']
@@ -76,7 +76,7 @@ class GWInputParser(InputParser):
         self.config["masks"]["nonperiodic_mask"], self.config["masks"]["nonperiodic_idx_mask"], self.config["masks"]["nonperiodic_len"] = self.get_param_index(self.config["model"]["inf_pars_list"],nonperiodic_params)
 
         self.config["masks"]["idx_periodic_mask"] = np.argsort(self.config["masks"]["nonperiodic_idx_mask"] + self.config["masks"]["periodic_idx_mask"] + self.config["masks"]["ra_idx_mask"] + self.config["masks"]["dec_idx_mask"])
-
+        """
 
 
     def get_bounds(self,):
@@ -112,6 +112,7 @@ class GWInputParser(InputParser):
 
         self.config["priors"] = priors
         self.config["testing"]["bilby_pars"] = list(self.config["priors"].keys())
+        self.config["data"]["prior_pars"] = list(self.config["priors"].keys())
         if self.config["testing"]["phase_marginalisation"]:
             self.config["testing"]["bilby_pars"].remove("phase")
             

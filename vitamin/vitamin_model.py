@@ -135,7 +135,6 @@ class CVAE(tf.keras.Model):
 
         # the shared convolutional network
         all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        print(str(type(self.shared_network)))
         if "keras" not in str(type(self.shared_network)):
             # if network a list then create the network
             conv = self.get_network(all_input_y, self.shared_network, label="shared")

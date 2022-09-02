@@ -228,17 +228,17 @@ class TrainCallback(tf.keras.callbacks.Callback):
     def on_batch_end(self, batch, logs=None):
         self.recon_losses.append(self.model.recon_loss_metric.result())
         self.kl_losses.append(self.model.kl_loss_metric.result())
-        metrics = {}
-        for name, group in self.model.grouped_params.items():
-            getattr(self, "{}_losses".format(name)).append(getattr(self.model, "{}_loss_metric".format(name)).result())
-            metrics[name] = getattr(self.model, "{}_loss_metric".format(name)).result()
+        #metrics = {}
+        #for name, group in self.model.grouped_params.items():
+        #    getattr(self, "{}_losses".format(name)).append(getattr(self.model, "{}_loss_metric".format(name)).result())
+        #    metrics[name] = getattr(self.model, "{}_loss_metric".format(name)).result()
         if not np.isfinite(self.recon_losses[-1]):
             print("\n recon loss not finite \n")
             print([layer.name for layer in self.model.decoder_r2.layers])
             for name, group in self.model.grouped_params.items():
                 print(name, getattr(self, "{}_losses".format(name))[-3:])
-                print(name, "mean", self.model.decoder_r2.get_layer("{}_mean".format(name)))
-                print(name, "logvar", self.model.decoder_r2.get_layer("{}_logvar".format(name)))
+                #print(name, "mean", self.model.decoder_r2.get_layer("{}_mean".format(name)))
+                #print(name, "logvar", self.model.decoder_r2.get_layer("{}_logvar".format(name)))
             self.nan_plots()
         if not np.isfinite(self.kl_losses[-1]):
             print("kl loss inf")

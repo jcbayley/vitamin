@@ -1,5 +1,6 @@
 import natsort
 import os
+import sys
 import h5py
 import numpy as np
 import tensorflow as tf
@@ -49,7 +50,8 @@ class DataLoader(tf.keras.utils.Sequence):
         self.epoch_iter = 0
         # will addthis to init files eventually
         self.channel_name = channel_name
-
+        self.unconvert_parameters = unconvert_parameters
+        self.convert_parameters = convert_parameters
 
 
     def __len__(self):
@@ -119,7 +121,9 @@ class DataLoader(tf.keras.utils.Sequence):
 
             start_index = index*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
+
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
+
             # add noise here
             if self.config["data"]["use_real_detector_noise"]:
                 Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/float(self.config["data"]["y_normscale"])
@@ -150,9 +154,10 @@ class DataLoader(tf.keras.utils.Sequence):
         # Sort files by number index in file name using natsorted program
         self.filenames = np.array(natsort.natsorted(os.listdir(self.input_dir),reverse=False))
 
-    def get_whitened_signal_response(self, data):
-
-        ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+    def get_psd_for_ifo(self, ifos):
+        """
+        load the psd from a file or use the default psd for a bilby ifo object
+        """
         num_psd_files = len(self.config["data"]["psd_files"])
         if num_psd_files == 0:
             pass
@@ -176,17 +181,24 @@ class DataLoader(tf.keras.utils.Sequence):
                 else:
                     print('Could not determine whether psd or asd ...')
                     exit()
+        
+
+    def get_whitened_signal_response(self, data):
+
+        ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+        self.get_psd_for_ifo(ifos)
 
         ifos.set_strain_data_from_power_spectral_densities(
             sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
             start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
 
         data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
-
+        
         all_signals = []
             
         for inj in range(len(data["x_data"])):
-            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.config["model"]["inf_pars_list"])}
+            #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
+            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
                     
             #injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
 
@@ -194,10 +206,10 @@ class DataLoader(tf.keras.utils.Sequence):
             whitened_signals_td = []
             polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
             for dt in range(len(self.config["data"]['detectors'])):
-                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters) 
+                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
                 whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
                 whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
-                whitened_signals_td.append(whitened_signal_td)            
+                whitened_signals_td.append(whitened_signal_td)
                     
             all_signals.append(whitened_signals_td)
 
@@ -206,6 +218,7 @@ class DataLoader(tf.keras.utils.Sequence):
         data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+        
 
         y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction*time_correction
         
@@ -283,30 +296,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
         # Get ifos bilby variable
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]["detectors"])
-
-        num_psd_files = len(self.config["data"]["psd_files"])
-        if num_psd_files == 0:
-            pass
-        elif num_psd_files == 1:
-            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
-            for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
-        elif num_psd_files > 1:
-            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
-            for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
+        self.get_psd_for_ifos(ifos)
 
         if self.test_set:
             nkey = "test_noise"
@@ -385,8 +375,10 @@ class DataLoader(tf.keras.utils.Sequence):
                     injection_parameters_values = np.array(h5py_file['injection_parameters_values'])
 
                     self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                    self.injection_parameters = injection_parameters_keys
                     # reorder injection parameters into inference parameters order
-                    data["x_data"].append([injection_parameters_values[self.par_idx]])
+                    data["x_data"].append([injection_parameters_values])#[self.par_idx]])
+                    #data["x_data"].append([injection_parameters_values[self.par_idx]])
 
                 else:
                     if self.config["data"]["save_polarisations"]:
@@ -397,8 +389,10 @@ class DataLoader(tf.keras.utils.Sequence):
                     injection_parameters_values = np.array(h5py_file['injection_parameters_values'])[:, indices[i]]
 
                     self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                    self.injection_parameters = injection_parameters_keys
                     # reorder injection parameters into inference parameters order
-                    data["x_data"].append(np.array(injection_parameters_values[self.par_idx].T))
+                    data["x_data"].append(np.array(injection_parameters_values.T))#[self.par_idx].T))
+                    #data["x_data"].append(np.array(injection_parameters_values[self.par_idx].T))
 
 
                 if not self.silent:
@@ -422,10 +416,11 @@ class DataLoader(tf.keras.utils.Sequence):
 
         
         if self.test_set:
-            truths = copy.copy(data["x_data"])
+            truths = copy.copy(data["x_data"])[:,self.par_idx]
 
         if not self.silent:
             print('...... {} will be inferred'.format(infparlist))
+
 
         y_normscale = self.config["data"]["y_normscale"]
         if not self.test_set:
@@ -450,7 +445,8 @@ class DataLoader(tf.keras.utils.Sequence):
         else:
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
-        data["x_data"] = self.convert_parameters(data["x_data"])
+        data["x_data"] = data["x_data"][:,self.par_idx]
+        data["x_data"] = convert_parameters(self.config, data["x_data"])
 
         # reorder parameters so can be grouped into different distributions
         data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
@@ -475,84 +471,7 @@ class DataLoader(tf.keras.utils.Sequence):
                 return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None
 
         
-    def convert_parameters(self, x_data):
-        # convert the parameters from right ascencsion to hour angle
-        x_data = convert_ra_to_hour_angle(x_data, self.config, self.config["model"]['inf_pars_list'])
-        
-        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
-            #if k.decode('utf-8')=='psi':
-            if k =='psi':
-                psi_idx = i
-            if k =='phase':
-                phi_idx = i
 
-        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
-        x_data[:,psi_idx], x_data[:,phi_idx] = psiphi_to_psiX(x_data[:,psi_idx],x_data[:,phi_idx])
-        
-        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
-            par_min = k + '_min'
-            par_max = k + '_max'
-            # these two are forced du the the psi/X reparameterisation
-            # Ensure that psi is between 0 and pi
-            if par_min == 'psi_min':
-                x_data[:,i] = x_data[:,i]/(np.pi/2.0)
-                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
-            elif par_min=='phase_min':
-                x_data[:,i] = x_data[:,i]/np.pi
-      
-            elif par_min == "ra_min":
-                # set the ramin and ramax as the min max of the hour angle to renormalise
-                ramin = convert_ra_to_hour_angle(float(self.config["bounds"][par_min]), self.config, self.config["model"]['inf_pars_list'])
-                ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
-                x_data[:,i] = (x_data[:,i] - ramin) / (ramax - ramin)
-
-            else:
-                # normalise remaininf parameters between bounds
-                x_data[:,i] = (x_data[:,i] - self.config["bounds"][par_min]) / (self.config["bounds"][par_max] - self.config["bounds"][par_min])
-
-        return x_data
-
-    def unconvert_parameters(self, x_data):
-
-        x_data = np.array(x_data, np.float64)
-        # unnormalise to bounds
-        #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
-        #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])
-        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
-            par_min = k + '_min'
-            par_max = k + '_max'
-
-            # Ensure that psi is between 0 and pi
-            if par_min == 'psi_min':
-                x_data[:,i] = x_data[:,i]*(np.pi/2.0)
-                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
-            elif par_min=='phase_min':
-                x_data[:,i] = x_data[:,i]*np.pi
-            elif par_min == "ra_min":
-                ramin = convert_ra_to_hour_angle(float(self.config["bounds"][par_min]), self.config, self.config["model"]['inf_pars_list'])
-                ramax = convert_ra_to_hour_angle(float(self.config["bounds"][par_max]), self.config, self.config["model"]['inf_pars_list'])
-                x_data[:,i] = x_data[:,i]*(ramax - ramin) + ramax
-
-            else:
-                x_data[:,i] = x_data[:,i]*(float(self.config["bounds"][par_max]) - float(self.config["bounds"][par_min])) + float(self.config["bounds"][par_min])
-
-
-
-        # convert the parameters from right ascencsion to hour angle
-        x_data = convert_hour_angle_to_ra(x_data, self.config, self.config["model"]['inf_pars_list'])
-
-        # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
-        
-        for i,k in enumerate(self.config["model"]["inf_pars_list"]):
-            if k =='psi':
-                psi_idx = i
-            if k =='phase':
-                phi_idx = i
-
-        x_data[:,psi_idx], x_data[:,phi_idx] = psiX_to_psiphi(x_data[:,psi_idx],x_data[:,phi_idx])
-
-        
-        return x_data
 
     
     def get_infer_pars(self,inference_parameters, injection_parameters):
@@ -584,21 +503,21 @@ class DataLoader(tf.keras.utils.Sequence):
         #new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
 
         #x[:, np.where(np.array(self.params["inf_pars_list"])=="geocent_time")[0][0]] = new_geocent_time
-        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="ra")[0][0]] = new_ra
-        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="dec")[0][0]] = new_dec
-        x[:, np.where(np.array(self.config["model"]["inf_pars_list"])=="psi")[0][0]] = new_psi
+        x[:, np.where(np.array(self.injection_parameters)=="ra")[0][0]] = new_ra
+        x[:, np.where(np.array(self.injection_parameters)=="dec")[0][0]] = new_dec
+        x[:, np.where(np.array(self.injection_parameters)=="psi")[0][0]] = new_psi
 
         return x
         
     def randomise_phase(self, x, y):
         """ randomises phase of input parameter x"""
         # get old phase and define new phase
-        old_phase = x[:,np.array(self.config["masks"]["phase_mask"]).astype(np.bool)]
+        old_phase = x[:,np.where(np.array(self.injection_parameters)=="phase")[0]]
         new_x = np.random.uniform(size=np.shape(old_phase), low=0.0, high=1.0)
         new_phase = self.config["bounds"]['phase_min'] + new_x*(self.config["bounds"]['phase_max'] - self.config["bounds"]['phase_min'])
 
         # defice 
-        x[:, np.array(self.config["masks"]["phase_mask"]).astype(np.bool)] = new_phase
+        x[:, np.where(np.array(self.injection_parameters) == "phase")[0]] = new_phase
 
         phase_correction = -1.0*(np.cos(new_phase-old_phase) + 1j*np.sin(new_phase-old_phase))
         phase_correction = np.tile(np.expand_dims(phase_correction,axis=1),(1,self.num_dets,int(np.shape(y)[1]/2) + 1))
@@ -607,12 +526,15 @@ class DataLoader(tf.keras.utils.Sequence):
 
     def randomise_time(self, x):
 
-        old_geocent = x[:,np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)]
+        #old_geocent = x[:,np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)]
+        #print(np.shape(old_geocent))
+        old_geocent = x[:,np.where(np.array(self.injection_parameters) == "geocent_time")[0]]
+        #print(np.shape(old_geocent))
+        #sys.exit()
         new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
         new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
 
-        x[:, np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)] = new_geocent
-
+        x[:, np.where(np.array(self.injection_parameters) == "geocent_time")[0]] = new_geocent
         fvec = np.arange(self.data_length/2 + 1)/self.config["data"]['duration']
 
         time_correction = -2.0*np.pi*fvec*(new_geocent-old_geocent)
@@ -622,11 +544,12 @@ class DataLoader(tf.keras.utils.Sequence):
         return x, time_correction
         
     def randomise_distance(self,x, y):
-        old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
+        #old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
+        old_d = x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]]
         new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
         new_d = self.config["bounds"]['luminosity_distance_min'] + new_x*(self.config["bounds"]['luminosity_distance_max'] - self.config["bounds"]['luminosity_distance_min'])
         
-        x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)] = new_d
+        x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]] = new_d
                                                            
         dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))
 
@@ -709,7 +632,86 @@ class DataLoader(tf.keras.utils.Sequence):
         
         
         
+def convert_parameters(config, x_data):
+    # convert the parameters from right ascencsion to hour angle
+    x_data = convert_ra_to_hour_angle(x_data, config, config["model"]['inf_pars_list'])
+    
+    for i,k in enumerate(config["model"]["inf_pars_list"]):
+        #if k.decode('utf-8')=='psi':
+        if k =='psi':
+            psi_idx = i
+        if k =='phase':
+            phi_idx = i
 
+    # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians  
+    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"]:
+        x_data[:,psi_idx], x_data[:,phi_idx] = psiphi_to_psiX(x_data[:,psi_idx],x_data[:,phi_idx])
+    
+    for i,k in enumerate(config["model"]["inf_pars_list"]):
+        par_min = k + '_min'
+        par_max = k + '_max'
+        # these two are forced du the the psi/X reparameterisation
+        # Ensure that psi is between 0 and pi
+        if par_min == 'psi_min':
+            x_data[:,i] = x_data[:,i]/(np.pi/2.0)
+            #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+        elif par_min=='phase_min':
+            x_data[:,i] = x_data[:,i]/np.pi
+    
+        elif par_min == "ra_min":
+            # set the ramin and ramax as the min max of the hour angle to renormalise
+            ramin = convert_ra_to_hour_angle(float(config["bounds"][par_min]), config, config["model"]['inf_pars_list'])
+            ramax = convert_ra_to_hour_angle(float(config["bounds"][par_max]), config, config["model"]['inf_pars_list'])
+            x_data[:,i] = (x_data[:,i] - ramin) / (ramax - ramin)
+
+        else:
+            # normalise remaininf parameters between bounds
+            x_data[:,i] = (x_data[:,i] - config["bounds"][par_min]) / (config["bounds"][par_max] - config["bounds"][par_min])
+
+    return x_data
+
+def unconvert_parameters(config, x_data):
+
+    x_data = np.array(x_data, np.float64)
+    # unnormalise to bounds
+    #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
+    #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])
+    for i,k in enumerate(config["model"]["inf_pars_list"]):
+        par_min = k + '_min'
+        par_max = k + '_max'
+
+        # Ensure that psi is between 0 and pi
+        if par_min == 'psi_min':
+            x_data[:,i] = x_data[:,i]*(np.pi/2.0)
+            #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+        elif par_min=='phase_min':
+            x_data[:,i] = x_data[:,i]*np.pi
+        elif par_min == "ra_min":
+            ramin = convert_ra_to_hour_angle(float(config["bounds"][par_min]), config, config["model"]['inf_pars_list'])
+            ramax = convert_ra_to_hour_angle(float(config["bounds"][par_max]), config, config["model"]['inf_pars_list'])
+            x_data[:,i] = x_data[:,i]*(ramax - ramin) + ramax
+
+        else:
+            x_data[:,i] = x_data[:,i]*(float(config["bounds"][par_max]) - float(config["bounds"][par_min])) + float(config["bounds"][par_min])
+
+
+
+    # convert the parameters from right ascencsion to hour angle
+    x_data = convert_hour_angle_to_ra(x_data, config, config["model"]['inf_pars_list'])
+
+    # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians   
+    
+    for i,k in enumerate(config["model"]["inf_pars_list"]):
+        if k =='psi':
+            psi_idx = i
+        if k =='phase':
+            phi_idx = i
+
+    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"]:
+        x_data[:,psi_idx], x_data[:,phi_idx] = psiX_to_psiphi(x_data[:,psi_idx],x_data[:,phi_idx])
+
+    
+    return x_data
 
 
 

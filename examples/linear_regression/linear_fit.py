@@ -37,9 +37,9 @@ train_dat = get_dataset(500000, num_params=num_params, length=length)
 val_dat = get_dataset(1000, num_params=num_params, length=length)
 
 # a few conditions to choose which samplers to run
-generate_test = True
-load_test = False
-train_network = True
+generate_test = False
+load_test = True
+train_network = False
 test_network = True
 run_mcmc_sampler = True
 make_test_plots = True
@@ -114,7 +114,7 @@ if test_network:
     # generate some samples (Run each sample through individually with shape (1, datapoints, channels))
     samples = []
     for td in range(len(test_dat[1])):
-        samples.append(model.gen_samples(test_dat[1][td:td+1], nsamples=4000))
+        samples.append(model.gen_samples(test_dat[1][td:td+1], nsamples=10000))
 
     with open(os.path.join(output_dir, "samples.pkl"), "wb") as f:
         pickle.dump(samples, f)
@@ -135,7 +135,7 @@ if run_mcmc_sampler:
             lik = pm.Normal("lik", mu=data_model(xdat,priors), sigma=0.1, observed = np.squeeze(test_dat[1][td]))
 
             # setup sampler and generate samples
-            mcmc_samples.append(pm.sample(1000))
+            mcmc_samples.append(pm.sample(2000, chains=5))
 
     with open(os.path.join(output_dir,"mcmc_samples.pkl"),"wb") as f:
         pickle.dump(mcmc_samples, f)
@@ -148,7 +148,7 @@ if make_test_plots:
 
     mc_samps = []
     for ind in range(len(mcmc_samples)):
-        mc_samps.append(np.array([np.concatenate(np.array(mcmc_samples[ind].posterior.m)),np.concatenate(np.array(mcmc_samples[ind].posterior.c))]))
+        mc_samps.append(np.array([np.concatenate(np.array(getattr(mcmc_samples[ind].posterior,f"p{pnum}"))) for pnum in range(num_params)]))
 
     with open(os.path.join(output_dir, "samples.pkl"), "rb") as f:
         vitamin_samples = pickle.load(f)
