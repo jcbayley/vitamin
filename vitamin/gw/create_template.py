@@ -100,7 +100,41 @@ class GenerateTemplate():
         self.waveform_generator.parameters = self.injection_parameters
         self.waveform_polarisations = self.waveform_generator.frequency_domain_strain()
         #time_signal = self.waveform_generator.time_domain_strain()
-        
+
+    def get_psd(self, ifos):
+        # If user is specifying PSD file (bit of a messy section, will update)
+        num_psd_files = len(self.config["data"]["psd_files"])
+        if num_psd_files == 0:
+            pass
+        elif num_psd_files == 1:
+            # if one file use the same file for all 
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
+
+        elif num_psd_files == len(ifos):
+            # if multiple files then needs to be same number as num detectors
+            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
+            for int_idx,ifo in enumerate(ifos):
+                if self.type_psd == 'psd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
+                elif self.type_psd == 'asd':
+                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
+                else:
+                    print('Could not determine whether psd or asd ...')
+                    exit()
+
+        else:
+            print("Num psd files not valid: should be 0, 1 or number of detectors")
+
+        return ifos
+
     def get_detector_response(self, frequency_domain_strain = None):
         """
         Gets the whitened signal from polarisations
@@ -115,33 +149,7 @@ class GenerateTemplate():
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
         
         # If user is specifying PSD file (bit of a messy section, will update)
-        num_psd_files = len(self.config["data"]["psd_files"])
-        if num_psd_files == 0:
-            pass
-        elif num_psd_files == 1:
-            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
-            for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
-
-        elif num_psd_files == len(ifos):
-            self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
-            for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
-
-        else:
-            print("Num psd files not valid: should be 0, 1 or number of detectors")
+        ifos = self.get_psd(ifos)
 
         # if strain privided set the strain from this
         if frequency_domain_strain is not None:
@@ -249,7 +257,7 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
+                likelihood=likelihood, priors=self.config["priors"], sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1, walks=100, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
             run_endt = time.time()
 
             # save test sample waveform

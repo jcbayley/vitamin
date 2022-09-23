@@ -302,7 +302,7 @@ class TestCallback(tf.keras.callbacks.Callback):
                     continue
 
                 start_time_test = time.time()
-                samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'])
+                samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'], max_samples = 100)
 
                 end_time_test = time.time()
                 if np.any(np.isnan(samples)):
