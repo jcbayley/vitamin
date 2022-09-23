@@ -33,15 +33,15 @@ def get_dataset(num_data, length = 100, sigma=0.1, num_params = 2):
 num_params = 5
 length = 100
 # generate the training dataset and the validation dataset
-train_dat = get_dataset(500000, num_params=num_params, length=length)
+train_dat = get_dataset(2000000, num_params=num_params, length=length)
 val_dat = get_dataset(1000, num_params=num_params, length=length)
 
 # a few conditions to choose which samplers to run
 generate_test = False
 load_test = True
-train_network = False
+train_network = True
 test_network = True
-run_mcmc_sampler = True
+run_mcmc_sampler = False
 make_test_plots = True
 
 if generate_test:   
@@ -63,11 +63,11 @@ inf_pars = {f"p{i}":"TruncatedNormal" for i in range(num_params)}
 bounds = {f"p{i}_{bnd}":val for i in range(num_params) for bnd,val in zip(["min","max"], [0,1])}
 # layers shared across the three networks (all available layers are defined in Docs)
 # alternativly can define own models
-shared_network = ['Conv1D(16,16,1)','Conv1D(16,16,1)','Conv1D(16,8,2)','Conv1D(16,8,2)','Flatten()']
+shared_network = ['Conv1D(64,32,1)','Conv1D(64,16,1)','Conv1D(32,16,1)','Conv1D(16,16,2)','Conv1D(16,8,2)','Flatten()']
 # three individual networks designs to come after the shared network
-r1_network = ['Linear(128)','Linear(64)', 'Linear(32)']
-r2_network = ['Linear(128)','Linear(64)', 'Linear(32)']
-q_network = ['Linear(128)','Linear(64)', 'Linear(32)']
+r1_network = ['Linear(512)','Linear(128)', 'Linear(64)']
+r2_network = ['Linear(512)','Linear(128)', 'Linear(64)']
+q_network = ['Linear(512)','Linear(128)', 'Linear(64)']
 
 # initialise the model 
 model = vitamin.vitamin_model.CVAE(z_dim=4, # latent space size
@@ -84,20 +84,25 @@ model = vitamin.vitamin_model.CVAE(z_dim=4, # latent space size
 
 
 # define the optimiser
-optimizer = tf.keras.optimizers.Adam(2e-4)
+optimizer = tf.keras.optimizers.Adam(1e-4)
 
 # compile the model using optimiser (if using CPU you can run eagerly)
 #model.compile(optimizer=optimizer,run_eagerly = True, loss=model.compute_loss)
 model.compile(optimizer=optimizer, loss=model.compute_loss)
 
 if train_network == True:
+
+    config_gpu = tf.compat.v1.ConfigProto()
+    config_gpu.gpu_options.allow_growth = True
+    session = tf.compat.v1.Session(config=config_gpu)
+
     # define some callbacks to record the loss and anneal the kl divergence loss
     # annealing can be important to avoid local minima
     loss_call = vitamin.callbacks.PlotCallback(None, 1000, save_data=False, start_epoch = 0)
     ann_call = vitamin.callbacks.AnnealCallback(50,10)
 
     # fit the model
-    model.fit(train_dat[1], train_dat[0], validation_data=(val_dat[1],val_dat[0]), epochs = 2000, batch_size = 128, callbacks = [loss_call, ann_call])
+    model.fit(train_dat[1], train_dat[0], validation_data=(val_dat[1],val_dat[0]), epochs = 500, batch_size = 128, callbacks = [loss_call, ann_call])
 
     # save outputs
     with open(os.path.join(output_dir, "loss.pkl"), "wb") as f:
