@@ -103,7 +103,7 @@ def train(config):
         exit()
 
     # compile and build the model (hardcoded values will change soon)
-    model.compile(run_eagerly = None, optimizer = optimizer, loss = model.compute_loss)
+    model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
         model.load_weights(config["training"]["transfer_model_checkpoint"])
@@ -155,7 +155,7 @@ def train(config):
         filepath=checkpoint_path,
         monitor="val_loss",
         verbose=0,
-        save_best_only=True,
+        save_best_only=False,
         save_weights_only=True,
         mode="auto",
         save_freq=10*config["training"]["chunk_batch"],
@@ -170,7 +170,7 @@ def train(config):
     callbacks.append(TimeCallback(config))#, OptimizerSave(config, checkpoint_dir, 10)]
 
     if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
-        lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"])
+        lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"], optimizer = optimizer)
         callbacks.append(lr_call)
 
     if config["training"]["logvarmin_ramp"]:

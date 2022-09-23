@@ -64,7 +64,7 @@ class DataLoader(tf.keras.utils.Sequence):
         Loads in one chunk of data where the size if set by chunk_size
         """
         if self.test_set:
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.truths = self.load_waveforms(self.filenames, None)
+            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.truths, self.psds = self.load_waveforms(self.filenames, None)
         else:
 
             if self.chunk_iter >= self.max_chunk_num:
@@ -83,7 +83,7 @@ class DataLoader(tf.keras.utils.Sequence):
             # if the index falls to zero then split as the file is the next one 
             temp_chunk_indices_split = np.split(temp_chunk_indices, np.where(np.diff(temp_chunk_indices) < 0)[0] + 1)
 
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
+            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise, self.psds = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
 
             self.chunk_size = len(self.X)
             self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
@@ -115,7 +115,7 @@ class DataLoader(tf.keras.utils.Sequence):
         """
         if self.test_set:
             # parameters, waveform noisefree, waveform noisy, snrs
-            X, Y_noisefree, Y_noisy, snrs = self.X, self.Y_noisefree, self.Y_noisy, self.snrs
+            X, Y_noisefree, Y_noisy, snrs, psds = self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.psds
             #Y_noisy = Y_noisy/self.params["y_normscale"]
         else:
 
@@ -123,16 +123,19 @@ class DataLoader(tf.keras.utils.Sequence):
             end_index = (index+1)*self.batch_size #- (self.chunk_iter - 1)*self.chunk_size
 
             X, Y_noisefree = self.X[start_index:end_index], self.Y_noisefree[start_index:end_index]
+            if self.config["model"]["include_psd"]:
+                psds = self.psds[start_index:end_index]
 
             # add noise here
             if self.config["data"]["use_real_detector_noise"]:
                 Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/float(self.config["data"]["y_normscale"])
+            elif self.config["data"]["randomise_psd_factor"] != 0:
+                Y_noisefree = (Y_noisefree)/float(self.config["data"]["y_normscale"])
             else:
                 # noise scale is a factor of two to match that of the test results out of bilby
                 Y_noisefree = (Y_noisefree + np.random.normal(size=np.shape(Y_noisefree), loc=0.0, scale=2.0))/float(self.config["data"]["y_normscale"])
 
-
-        return np.array(Y_noisefree), np.array(X)
+            return np.array(Y_noisefree), np.array(X)
 
 
     def on_epoch_end(self):
@@ -153,44 +156,59 @@ class DataLoader(tf.keras.utils.Sequence):
         """
         # Sort files by number index in file name using natsorted program
         self.filenames = np.array(natsort.natsorted(os.listdir(self.input_dir),reverse=False))
+        if self.test_set:
+            self.filenames = self.filenames[:self.config["data"]["n_test_data"]]
 
-    def get_psd_for_ifo(self, ifos):
+    def get_psd(self, psd_file, randomise_psd = False):
+        """ Get random psd from list of psds (not yet working!!!!!) """
+        psd_type = psd_file.split('/')[-1].split('_')[-1].split('.')[0]
+        with open(psd_file, "r") as f:
+            aparr = np.loadtxt(f)
+        if randomise_psd and self.config["data"]["randomise_psd_factor"] != 0:
+            # define the factor change as positive side of Gaussian with mean of 1 and some variance
+            random_multipl = np.abs(np.random.normal(loc=1,scale = self.config["data"]["randomise_psd_factor"],size = np.shape(aparr)[0]))
+            # for half of the components multiply by 1/fact
+            random_multipl[np.random.randint(0, len(random_multipl),size = int(0.5*len(random_multipl)))] = 1./random_multipl[np.random.randint(0, len(random_multipl),size = int(0.5*len(random_multipl)))]
+        if psd_type == "psd":
+            if randomise_psd and self.config["data"]["randomise_psd_factor"] != 0:
+                aparr[:,1] *= random_multipl
+            psd_data = bilby.gw.detector.PowerSpectralDensity(psd_array=aparr[:,1], frequency_array=aparr[:,0])
+        elif psd_type == "asd":
+            if randomise_psd and self.config["data"]["randomise_psd_factor"] != 0:
+                aparr[:,1] *= np.sqrt(random_multipl)
+            psd_data = bilby.gw.detector.PowerSpectralDensity(asd_array=aparr[:,1], frequency_array=aparr[:,0]) 
+        else:
+            print('Could not determine whether psd or asd ...')
+            exit()
+        return psd_data
+
+    def get_psd_for_ifo(self, ifos, random_psd_factor = False):
         """
-        load the psd from a file or use the default psd for a bilby ifo object
+        load the psd from a file or ue the default psd for a bilby ifo object
         """
         num_psd_files = len(self.config["data"]["psd_files"])
         if num_psd_files == 0:
-            pass
+            raise FileNotFoundError("Please specify some psd file to whiten data with")
         elif num_psd_files == 1:
             self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][0])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][0])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
+                ifo.power_spectral_density = self.get_psd(psd_file=self.config["data"]["psd_files"][0], randomise_psd = random_psd_factor)
         elif num_psd_files > 1:
             self.type_psd = self.config["data"]["psd_files"][0].split('/')[-1].split('_')[-1].split('.')[0]
             for int_idx,ifo in enumerate(ifos):
-                if self.type_psd == 'psd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(psd_file=self.config["data"]["psd_files"][int_idx])
-                elif self.type_psd == 'asd':
-                    ifo.power_spectral_density = bilby.gw.detector.PowerSpectralDensity(asd_file=self.config["data"]["psd_files"][int_idx])
-                else:
-                    print('Could not determine whether psd or asd ...')
-                    exit()
+                ifo.power_spectral_density = self.get_psd(psd_file=self.config["data"]["psd_files"][int_idx], randomise_psd = random_psd_factor)
         
 
     def get_whitened_signal_response(self, data):
 
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+
         self.get_psd_for_ifo(ifos)
 
         ifos.set_strain_data_from_power_spectral_densities(
             sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
             start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
+
 
         data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
         
@@ -224,6 +242,87 @@ class DataLoader(tf.keras.utils.Sequence):
         
         data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])#*distance_correction
         data["y_data_noisefree"] *= distance_correction
+        del y_temp_fft
+        return data
+
+    def get_whitened_signal_noise(self, data):
+
+        ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+        # set the psd once using a random factor (if specified in config) to generate strain data
+        data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
+        
+        # get initial psd to whiten with
+        self.get_psd_for_ifo(ifos, random_psd_factor = False)
+    
+        if not self.config["model"]["include_psd"]:
+            white_psds = []
+            for dt in range(len(self.config["data"]['detectors'])):
+                ifos[dt].sampling_frequency=self.config["data"]["sampling_frequency"]
+                ifos[dt].duration=self.config["data"]["duration"]
+                ifos[dt].start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
+                white_psds.append(ifos[dt].amplitude_spectral_density_array)
+
+        all_signals = []
+        all_psds = []
+        for inj in range(len(data["x_data"])):
+            self.get_psd_for_ifo(ifos, random_psd_factor = True)
+
+            ifos.set_strain_data_from_power_spectral_densities(
+                sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
+                start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
+
+            fdstrain = []
+            for dt in range(len(self.config["data"]['detectors'])):
+                noise_fd = ifos[dt].strain_data.frequency_domain_strain
+                fdstrain.append(noise_fd)
+
+            # redefine the psd based on the original psds without random factor (for whitening)
+            #self.get_psd_for_ifo(ifos, random_psd_factor = False)
+
+            #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
+            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
+                    
+            #injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
+
+            Nt = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
+            whitened_signals_td = []
+            polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
+            psds = []
+            for dt in range(len(self.config["data"]['detectors'])):
+                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
+                psd_noise = ifos[dt].amplitude_spectral_density_array
+                if self.config["model"]["include_psd"]:
+                    whitened_signal_fd = (signal_fd+fdstrain[dt])/psd_noise
+                else:
+                    whitened_signal_fd = (signal_fd+fdstrain[dt])/white_psds[dt]
+                noise_nan = np.isnan(psd_noise) | np.isinf(psd_noise)
+                psd_noise[noise_nan] = 0
+                psds.append(np.array([psd_noise[:-1], psd_noise[:-1]]).flatten())
+                whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                whitened_signals_td.append(whitened_signal_td)
+                    
+            all_signals.append(whitened_signals_td)
+            if self.config["model"]["include_psd"]:
+                all_psds.append(np.array(psds))
+
+        data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
+        if self.config["model"]["include_psd"]:
+            data["y_psds"] = np.transpose(all_psds, [0,2,1])
+               
+        data["x_data"], time_correction = self.randomise_time(data["x_data"])
+        data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
+        
+
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction*time_correction
+        
+        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])#*distance_correction
+        data["y_data_noisefree"] *= distance_correction
+
+        # concat along second axis, (channels)
+        if self.config["model"]["include_psd"]:
+            data["y_data_noisefree"] = tf.concat([data["y_data_noisefree"],data["y_psds"]], axis = 2)
+
         del y_temp_fft
         return data
 
@@ -357,7 +456,7 @@ class DataLoader(tf.keras.utils.Sequence):
         y_data_noisy     : waveform with noise
         """
 
-        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'snrs': [], 'y_hplus_hcross': []}
+        data={'x_data': [], 'y_data_noisefree': [], 'y_data_noisy': [], 'snrs': [], 'y_hplus_hcross': [], 'y_psds':[]}
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
         injpar_order = []
@@ -425,7 +524,10 @@ class DataLoader(tf.keras.utils.Sequence):
         y_normscale = self.config["data"]["y_normscale"]
         if not self.test_set:
             if self.config["data"]["save_polarisations"]:
-                data = self.get_whitened_signal_response(data)
+                if float(self.config["data"]["randomise_psd_factor"]) != 0:
+                    data = self.get_whitened_signal_noise(data)
+                else:
+                    data = self.get_whitened_signal_response(data)
             else:
                 data["x_data"], time_correction = self.randomise_time(data["x_data"])
                 data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
@@ -443,6 +545,23 @@ class DataLoader(tf.keras.utils.Sequence):
             #data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
             #data["y_data_noisefree"] = data["y_data_noisefree"] 
         else:
+            if self.config["model"]["include_psd"]:
+                ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+                # set the psd once using a random factor (if specified in config) to generate strain data
+        
+                # get initial psd to whiten with
+                self.get_psd_for_ifo(ifos, random_psd_factor = False)
+                psds = []
+                for dt in range(len(self.config["data"]['detectors'])):
+                    ifos[dt].sampling_frequency=self.config["data"]["sampling_frequency"]
+                    ifos[dt].duration=self.config["data"]["duration"]
+                    ifos[dt].start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
+                    psd_noise = ifos[dt].amplitude_spectral_density_array
+                    noise_nan = np.isnan(psd_noise) | np.isinf(psd_noise)
+                    psd_noise[noise_nan] = 0
+                    psds.append(np.array([psd_noise[:-1], psd_noise[:-1]]).flatten())
+                data["y_psds"] = tf.repeat(tf.expand_dims(np.array(psds).T,axis=0), np.shape(data["y_data_noisy"])[0], axis=0)
+                data["y_data_noisy"] = tf.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
         data["x_data"] = data["x_data"][:,self.par_idx]
@@ -461,14 +580,16 @@ class DataLoader(tf.keras.utils.Sequence):
         data["x_data"] = tf.cast(data["x_data"], tf.float32)
         data["y_data_noisefree"] = tf.cast(np.array(data["y_data_noisefree"]), tf.float32)
         data["y_data_noisy"] = tf.cast(data["y_data_noisy"], tf.float32)
+        if self.config["model"]["include_psd"]:
+            data["y_psds"] = tf.cast(data["y_psds"], tf.float32)
 
         if self.test_set:
-            return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths
+            return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths, data["y_psds"]
         else:
             if self.config["data"]["use_real_detector_noise"]:
-                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'],data["y_data_noise"]
+                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'],data["y_data_noise"], data["y_psds"]
             else:
-                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None
+                return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], None, data["y_psds"]
 
         
 
@@ -546,9 +667,12 @@ class DataLoader(tf.keras.utils.Sequence):
     def randomise_distance(self,x, y):
         #old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
         old_d = x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]]
-        new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
-        new_d = self.config["bounds"]['luminosity_distance_min'] + new_x*(self.config["bounds"]['luminosity_distance_max'] - self.config["bounds"]['luminosity_distance_min'])
-        
+        # this line only works if we have a uniform prior on distance
+        #new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
+        #new_d = self.config["bounds"]['luminosity_distance_min'] + new_x*(self.config["bounds"]['luminosity_distance_max'] - self.config["bounds"]['luminosity_distance_min'])
+
+        new_d = self.config["priors"].sample(np.shape(old_d))["luminosity_distance"]
+
         x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]] = new_d
                                                            
         dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))

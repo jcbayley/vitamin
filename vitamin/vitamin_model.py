@@ -45,11 +45,13 @@ class CVAE(tf.keras.Model):
             z_dim = 4,
             n_modes = 2,
             x_modes = 1,
+            include_psd = False,
             x_dim = None,
             inf_pars = None,
             bounds = None,
             y_dim = None,
             n_channels = 1,
+            split_channels = False,
             shared_network = ['Conv1D(96,64,2)','Conv1D(64,64,2)','Conv1D(64,64,2)','Conv1D(32,32,2)'],
             r1_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
             q_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
@@ -72,10 +74,12 @@ class CVAE(tf.keras.Model):
             self.config = config
             self.z_dim = self.config["model"]["z_dimension"]
             self.n_modes = self.config["model"]["n_modes"]
+            self.include_psd = self.config["model"]["include_psd"]
             self.x_modes = 1   # hardcoded for testing
             self.x_dim = len(self.config["inf_pars"])
             self.y_dim = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
             self.n_channels = len(self.config["data"]["detectors"])
+            self.split_channels = self.config["model"]["split_channels"]
             self.logvarmin = self.config["training"]["logvarmin"]
             self.shared_network = self.config["model"]["shared_network"]
             self.r1_network = self.config["model"]["r1_network"]
@@ -134,13 +138,33 @@ class CVAE(tf.keras.Model):
     def init_network(self):
 
         # the shared convolutional network
-        all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
+        if self.include_psd:
+            all_input_y = tf.keras.Input(shape=(self.y_dim, 2*self.n_channels))
+        else:
+            all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
+        #if self.include_psd:
+        #    all_input_psd = tf.keras.Input(shape=(self.y_dim, self.n_channels))
         if "keras" not in str(type(self.shared_network)):
             # if network a list then create the network
-            conv = self.get_network(all_input_y, self.shared_network, label="shared")
+            if self.split_channels:
+                conv = []
+                for i in range(self.n_channels):
+                    inch = tf.keras.layers.Lambda(lambda x: x[:, :, i:i+1])(all_input_y)
+                    conv.append(self.get_network(inch, self.shared_network, label=f"shared_{i}"))
+
+                conv = tf.keras.layers.Concatenate()(conv)
+            else:
+                conv = self.get_network(all_input_y, self.shared_network, label="shared")
+            #if self.include_psd:
+            #    convpsd = self.get_network(all_input_psd, self.shared_network, label="sharedpsd")
         else:
             #otherwise use the input network
             conv = self.shared_network(all_input_y)
+            #if self.include_psd:
+            #    convpsd = self.shared_network(all_input_psd)
+
+        #if self.include_psd:
+        #    conv = tf.keras.layers.concatenate([conv,convpsd])
 
         # r1 encoder network
         if "keras" not in str(type(self.shared_network)):
@@ -152,6 +176,9 @@ class CVAE(tf.keras.Model):
         #r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation = self.logvar_act)(r1)
         r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_modes_dense")(r1)
         r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
+        #if self.include_psd:
+        #    self.encoder_r1 = tf.keras.Model(inputs=[all_input_y,all_input_psd], outputs=r1,name="encoder_r1")
+        #else:
         self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1,name="encoder_r1")
 
         # the q encoder network
@@ -166,6 +193,9 @@ class CVAE(tf.keras.Model):
         qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation="relu")(q)
         #qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation=self.logvar_act)(q)
         q = tf.keras.layers.concatenate([qmu,qlogvar])
+        #if self.include_psd:
+        #    self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x, all_input_psd], outputs=q,name = "encoder_q")
+        #else:
         self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q,name = "encoder_q")
 
         # the r2 decoder network
@@ -192,15 +222,20 @@ class CVAE(tf.keras.Model):
         # all outputs
         r2 = tf.keras.layers.concatenate(outputs)
 
+        #if self.include_psd:
+        #    self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z, all_input_psd], outputs=r2,name = "decoder_r2")
+        #else:
         self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2,name = "decoder_r2")
-
         self.compute_loss = self.create_loss_func()
 
         self.gen_samples = self.create_sample_func()
 
 
     def encode_r1(self, y=None):
-        mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
+        if self.include_psd:
+            mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
+        else:
+            mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
         #mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.z_dim*self.n_modes,self.n_modes], axis=1)
         return tf.reshape(mean,[-1,self.n_modes,self.z_dim]), tf.reshape(logvar,[-1,self.n_modes,self.z_dim]), tf.reshape(weight,[-1,self.n_modes])
 
@@ -311,7 +346,7 @@ class CVAE(tf.keras.Model):
                 dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], ramp = self.ramp)
                 cr = group.get_cost(dist, x_grouped[indx])
                 outs[name] = cr
-                #print(group.pars, cr)
+                #(group.pars, cr)
                 cost_recon += cr
                 ind += 2
                 indx += 1
@@ -401,7 +436,7 @@ class CVAE(tf.keras.Model):
         call the function generates one sample of output (only here for the build section)
         '''
         
-        # encode through r1 network                          
+        # encode through r1 network  
         mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
         scale_r1 = tf.sqrt(tf.exp(logvar_r1))
         #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
@@ -420,12 +455,15 @@ class CVAE(tf.keras.Model):
         return means
 
     def get_network(self, in_tensor, layers, label = "share"):
-        
+        """ create the layers of the network from the list of layers in config file or list"""
         conv = in_tensor
         for i, layer in enumerate(layers):
             if layer.split("(")[0] == "Conv1D":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
+            elif layer.split("(")[0] == "SepConv1D":
+                nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
+                conv = self.SepConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
             elif layer.split("(")[0] == "ResBlock":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 # add a bottleneck block
@@ -438,9 +476,14 @@ class CVAE(tf.keras.Model):
                 conv = tf.keras.layers.Reshape((int(s1),int(s2)))(conv)
             elif layer.split("(")[0] == "Flatten":
                 conv = tf.keras.layers.Flatten()(conv)
-
+            elif layer.split("(")[0] == "Transformer":
+                head_size, num_heads, ff_dim = layer.split("(")[1].strip(")").split(",")
+                conv = self.TransformerEncoder(conv, int(head_size), int(num_heads), int(ff_dim), dropout=0)
+            elif layer.split("(")[0] == "MaxPool":
+                pool_size = layer.split("(")[1].strip(")")
+                conv = tf.keras.layers.MaxPooling1D(pool_size=int(pool_size), strides=None, padding="valid", data_format="channels_last")(conv)
             else:
-                print("No layers saved")
+                raise Exception(f"Error: No layer with name {layer.split('(')[0]}, please use one of Conv1D, SepConv1D, ResBlock, Linear, Reshape, Flatten, Transformer, MaxPool")
 
         return conv
 
@@ -450,6 +493,14 @@ class CVAE(tf.keras.Model):
     def ConvBlock(self, input_data, filters, kernel_size, strides, name = ""):
         #, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer
         conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
+        conv = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(conv)
+        conv = self.activation(conv)
+
+        return conv
+
+    def SepConvBlock(self, input_data, filters, kernel_size, strides, name = ""):
+        #, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer
+        conv = tf.keras.layers.SeparableConv1D(filters=filters, kernel_size=kernel_size, strides=strides, depthwise_regularizer=tf.keras.regularizers.l2(0.001), padding="same", depthwise_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
         conv = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(conv)
         conv = self.activation(conv)
 
@@ -490,7 +541,6 @@ class CVAE(tf.keras.Model):
         return conv
 
 
-
     def ResBlock2d(self,input_y, filters, kernel_size, stride=2, activation=None):
         
         F1, F2, F3 = filters
@@ -516,3 +566,20 @@ class CVAE(tf.keras.Model):
         y = self.activation(y)
         
         return y
+
+    def TransformerEncoder(self, inputs, head_size, num_heads, ff_dim, dropout=0):
+        # Normalization and Attention
+        x = tf.keras.layers.LayerNormalization(epsilon=1e-6)(inputs)
+        x = tf.keras.layers.MultiHeadAttention(
+            key_dim=head_size, num_heads=num_heads, dropout=dropout
+        )(x, x)
+        x = tf.keras.layers.Dropout(dropout)(x)
+        res = x + inputs
+
+        # Feed Forward Part
+        x = tf.keras.layers.LayerNormalization(epsilon=1e-6)(res)
+        x = tf.keras.layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(x)
+        x = tf.keras.layers.Dropout(dropout)(x)
+        x = tf.keras.layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
+        return x + res
+
