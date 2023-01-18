@@ -10,7 +10,7 @@ import os
 import sys
 import pickle
 from . import plotting 
-from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_posterior
+from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_posterior, plot_JS_div
 
 
 class PlotCallback(tf.keras.callbacks.Callback):
@@ -311,10 +311,12 @@ class TestCallback(tf.keras.callbacks.Callback):
                 else:
                     print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.config["testing"]['n_samples'],end_time_test - start_time_test))
                     if len(np.shape(self.bilby_samples)) == 4:
-                        KL_est = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:], config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
+                        JS_est, JS_labels = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:], config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
+                        plot_JS_div(JS_est[:10], JS_labels)
                     else:
                         print("not plotting posterior, bilby samples wrong shape")
                         #KL_est = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=None, config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
+
             if self.paper_plots:
                 # This needs to be checked and rewritten
                 epoch = 'pub_plot'; ramp = 1

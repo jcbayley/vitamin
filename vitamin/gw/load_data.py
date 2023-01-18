@@ -321,7 +321,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
         # concat along second axis, (channels)
         if self.config["model"]["include_psd"]:
-            data["y_data_noisefree"] = tf.concat([data["y_data_noisefree"],data["y_psds"]], axis = 2)
+            data["y_data_noisefree"] = np.concat([data["y_data_noisefree"],data["y_psds"]], axis = 2)
 
         del y_temp_fft
         return data
@@ -559,8 +559,8 @@ class DataLoader(tf.keras.utils.Sequence):
                     noise_nan = np.isnan(psd_noise) | np.isinf(psd_noise)
                     psd_noise[noise_nan] = 0
                     psds.append(np.array([psd_noise[:-1], psd_noise[:-1]]).flatten())
-                data["y_psds"] = tf.repeat(tf.expand_dims(np.array(psds).T,axis=0), np.shape(data["y_data_noisy"])[0], axis=0)
-                data["y_data_noisy"] = tf.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
+                data["y_psds"] = np.repeat(np.expand_dims(np.array(psds).T,axis=0), np.shape(data["y_data_noisy"])[0], axis=0)
+                data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
         data["x_data"] = data["x_data"][:,self.par_idx]
@@ -576,11 +576,13 @@ class DataLoader(tf.keras.utils.Sequence):
             data["y_data_noise"] = tf.cast(np.array(real_det_noise), tf.float32)
 
         # cast data to float
+        """
         data["x_data"] = tf.cast(data["x_data"], tf.float32)
         data["y_data_noisefree"] = tf.cast(np.array(data["y_data_noisefree"]), tf.float32)
         data["y_data_noisy"] = tf.cast(data["y_data_noisy"], tf.float32)
         if self.config["model"]["include_psd"]:
             data["y_psds"] = tf.cast(data["y_psds"], tf.float32)
+        """
 
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths, data["y_psds"]

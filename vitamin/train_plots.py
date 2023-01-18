@@ -18,6 +18,7 @@ from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
 import pandas
+import seaborn
 
 
 def plot_losses(all_loss, epoch, run='testing'):
@@ -131,7 +132,17 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.savefig('%s/kl.png' % (run))
     plt.close()
 
-def compute_KL(vitamin_samples, sampler_samples, Nsamp=5000, nstep=100, ntest=100):
+def plot_JS_div(par_vals, labels):
+    seaborn.set(font_scale=1.5)
+    fig, ax = plt.subplots(figsize = (14,8))
+    hm = seaborn.heatmap(par_vals*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
+    ax.set_xticks(np.arange(15) + 0.5,labels=labels, rotation=50)
+    ax.set_ylabel("Injection", fontsize=20)
+    ax.collections[0].colorbar.set_label('JS divergence ($10^{-3}$)', fontsize=20)
+    plt.show()
+    fig.savefig(os.path.join(""))
+
+def compute_JS_div(vitamin_samples, sampler_samples, Nsamp=5000, nstep=100, ntest=100):
     """compute KL estimate
         take the mean JS divergence of {nstep} random draws of {Nsamp} samples from each of the sets of samples
         samples should be of shape (nsampes, nparameters)
@@ -373,7 +384,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
             np.savetxt(samples_file,vitamin_samples)
 
-            temp_JS = compute_KL(vitamin_samples, sampler_samples)
+            temp_JS = compute_JS_div(vitamin_samples, sampler_samples)
             JS_est.append(temp_JS)
 
             other_samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
@@ -388,6 +399,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                               color='tab:green',
                               show_titles=True, fig=figure, hist_kwargs=hist_kwargs_other2)
         
+
         JS_file = os.path.join(directories["JS_divergence"],'JS_divergence_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
         np.savetxt(JS_file,JS_est)
 
@@ -407,7 +419,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             print('Saved output to ', os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
             plt.savefig(os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
-        return JS_est
+        return JS_est, ol_pars
 
 
     else:
