@@ -520,7 +520,6 @@ class DataLoader(tf.keras.utils.Sequence):
         if not self.silent:
             print('...... {} will be inferred'.format(infparlist))
 
-
         y_normscale = self.config["data"]["y_normscale"]
         if not self.test_set:
             if self.config["data"]["save_polarisations"]:
@@ -768,21 +767,25 @@ def convert_parameters(config, x_data):
             phi_idx = i
 
     # convert phi to X=phi+psi and psi on ranges [0,pi] and [0,pi/2] repsectively - both periodic and in radians  
-    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"]:
+
+    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"] and config["model"]["psiphi_to_psix"]:
         x_data[:,psi_idx], x_data[:,phi_idx] = psiphi_to_psiX(x_data[:,psi_idx],x_data[:,phi_idx])
     
     for i,k in enumerate(config["model"]["inf_pars_list"]):
         par_min = k + '_min'
         par_max = k + '_max'
         # these two are forced du the the psi/X reparameterisation
-        # Ensure that psi is between 0 and pi
-        if par_min == 'psi_min':
-            x_data[:,i] = x_data[:,i]/(np.pi/2.0)
-            #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
-        elif par_min=='phase_min':
-            x_data[:,i] = x_data[:,i]/np.pi
-    
-        elif par_min == "ra_min":
+        # Ensure that psi is between 0 and p
+        if config["model"]["psiphi_to_psix"]:
+            if par_min == 'psi_min':
+                x_data[:,i] = x_data[:,i]/(np.pi/2.0)
+                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+            elif par_min=='phase_min':
+                x_data[:,i] = x_data[:,i]/np.pi
+            else:
+                pass
+
+        if par_min == "ra_min":
             # set the ramin and ramax as the min max of the hour angle to renormalise
             ramin = convert_ra_to_hour_angle(float(config["bounds"][par_min]), config, config["model"]['inf_pars_list'])
             ramax = convert_ra_to_hour_angle(float(config["bounds"][par_max]), config, config["model"]['inf_pars_list'])
@@ -805,11 +808,15 @@ def unconvert_parameters(config, x_data):
         par_max = k + '_max'
 
         # Ensure that psi is between 0 and pi
-        if par_min == 'psi_min':
-            x_data[:,i] = x_data[:,i]*(np.pi/2.0)
-            #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
-        elif par_min=='phase_min':
-            x_data[:,i] = x_data[:,i]*np.pi
+        if config["model"]["psiphi_to_psix"]:
+            if par_min == 'psi_min':
+                x_data[:,i] = x_data[:,i]*(np.pi/2.0)
+                #data['x_data'][:,i] = np.remainder(data['x_data'][:,i], np.pi)
+            elif par_min=='phase_min':
+                x_data[:,i] = x_data[:,i]*np.pi
+            else:
+                pass
+
         elif par_min == "ra_min":
             ramin = convert_ra_to_hour_angle(float(config["bounds"][par_min]), config, config["model"]['inf_pars_list'])
             ramax = convert_ra_to_hour_angle(float(config["bounds"][par_max]), config, config["model"]['inf_pars_list'])
@@ -831,7 +838,7 @@ def unconvert_parameters(config, x_data):
         if k =='phase':
             phi_idx = i
 
-    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"]:
+    if "psi" in config["model"]["inf_pars_list"] and "phase" in config["model"]["inf_pars_list"] and config["model"]["psiphi_to_psix"]:
         x_data[:,psi_idx], x_data[:,phi_idx] = psiX_to_psiphi(x_data[:,psi_idx],x_data[:,phi_idx])
 
     

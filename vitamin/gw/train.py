@@ -84,7 +84,7 @@ def train(config):
     model = CVAE(config)
 
     if config["training"]["optimiser"] == "adam":
-        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 5)
+        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 0.005)
     elif config["training"]["optimiser"] == "sgd":
         optimizer = tf.keras.optimizers.SGD(config["training"]["initial_learning_rate"], clipvalue = 5)
     elif config["training"]["optimiser"] == "adabound":

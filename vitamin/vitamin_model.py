@@ -45,6 +45,7 @@ class CVAE(tf.keras.Model):
             z_dim = 4,
             n_modes = 2,
             x_modes = 1,
+            hidden_activation = "leakyrelu",
             include_psd = False,
             x_dim = None,
             inf_pars = None,
@@ -87,11 +88,25 @@ class CVAE(tf.keras.Model):
             self.r2_network = self.config["model"]["r2_network"]
             self.bounds = self.config["bounds"]
             self.inf_pars = self.config["inf_pars"]
+            self.hidden_activation = self.config["model"]["hidden_activation"]
             if self.logvarmin:
                 self.logvarmin_start = self.config["training"]["logvarmin_start"]
 
-        self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
-        self.activation_relu = tf.keras.layers.ReLU()
+        #self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
+        if self.hidden_activation == "leakyrelu":
+            self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
+        elif self.hidden_activation == "tanh":
+            self.activation = tf.keras.activations.tanh
+        elif self.hidden_activation == "swish":
+            self.activation = tf.keras.activations.swish
+        elif self.hidden_activation == "relu":
+            self.activation = tf.keras.activations.relu
+        elif self.hidden_activation == "gelu":
+            self.activation = tf.keras.activations.gelu
+        else:
+            raise NotImplementedError(f"{self.hidden_activation} is not implemented, use: [leakyrelu, relu, tanh, swish]")
+
+        self.activation_relu = tf.keras.activations.relu
         self.kernel_initializer = "glorot_uniform"#tf.keras.initializers.HeNormal() 
         self.bias_initializer = "zeros"#tf.keras.initializers.HeNormal() 
         self.bias_initializer_2 = tf.keras.initializers.HeNormal() 
@@ -510,7 +525,7 @@ class CVAE(tf.keras.Model):
 
         out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=tf.keras.regularizers.l2(0.001), kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
         out = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(out)
-        out = self.activation(out)
+        out = self.activation_relu(out)
         return out
 
     def ResBlock(self,input_data, filters, kernel_size, strides, name = ""):

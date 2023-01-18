@@ -351,8 +351,8 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
                     vitamin_samples[:,cnt] = vit_samples[:,inf_idx] - config["data"]["ref_geocent_time"]
                     sampler_samples[:,cnt] = other_samples[:,bilby_idx] - config["data"]["ref_geocent_time"]
                     true_params[cnt] = x_truth[inf_idx] - config["data"]["ref_geocent_time"]
-                elif inf_par == "phase":
-                    continue
+                #elif inf_par == "phase":
+                #    continue
                 else:
                     vitamin_samples[:,cnt] = vit_samples[:,inf_idx]
                     sampler_samples[:,cnt] = other_samples[:,bilby_idx]
