@@ -81,6 +81,28 @@ def train(config):
 
     start_epoch = 0
     
+    
+    base_model = tf.keras.applications.Xception(
+                weights='imagenet',
+                input_shape=(72, 72, 3),
+                include_top=False)
+    """
+    sinputs = tf.keras.Input(shape=(4096, 3))
+    #flinputs = tf.keras.layers.Flatten()(sinputs)
+    ##dinputs = tf.keras.layers.Dense(15552)(flinputs)
+    #reinputs = tf.keras.layers.Reshape((72,72,3))(dinputs)
+    permin = tf.keras.layers.Permute((2,1))(sinputs)
+    dinputs = tf.keras.layers.Dense(5184)(permin)
+    permin = tf.keras.layers.Permute((2,1))(dinputs)
+    reinputs = tf.keras.layers.Reshape((72,72,3))(permin)
+    sx = base_model(reinputs, training=True)
+    sx = tf.keras.layers.GlobalAveragePooling2D()(sx)
+    soutputs = tf.keras.layers.Dense(1024)(sx)
+    sh_model = tf.keras.Model(sinputs, soutputs)
+    
+    model = CVAE(config, shared_network = sh_model)
+    """
+    
     model = CVAE(config)
 
     if config["training"]["optimiser"] == "adam":

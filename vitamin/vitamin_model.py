@@ -65,12 +65,6 @@ class CVAE(tf.keras.Model):
         for key, val in default_kwargs.items():
             setattr(self, key, val)
 
-        for key, val in kwargs.items():
-            if key in default_kwargs.keys():
-                setattr(self, key, val)
-            else:
-                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
-
         if config is not None:
             self.config = config
             self.z_dim = self.config["model"]["z_dimension"]
@@ -91,6 +85,12 @@ class CVAE(tf.keras.Model):
             self.hidden_activation = self.config["model"]["hidden_activation"]
             if self.logvarmin:
                 self.logvarmin_start = self.config["training"]["logvarmin_start"]
+
+        for key, val in kwargs.items():
+            if key in default_kwargs.keys():
+                setattr(self, key, val)
+            else:
+                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
 
         #self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
         if self.hidden_activation == "leakyrelu":
@@ -182,7 +182,7 @@ class CVAE(tf.keras.Model):
         #    conv = tf.keras.layers.concatenate([conv,convpsd])
 
         # r1 encoder network
-        if "keras" not in str(type(self.shared_network)):
+        if "keras" not in str(type(self.r1_network)):
             r1 = self.get_network(conv, self.r1_network, label = "r1")
         else:
             r1 = self.r1_network(conv)
@@ -200,7 +200,7 @@ class CVAE(tf.keras.Model):
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        if "keras" not in str(type(self.shared_network)):
+        if "keras" not in str(type(self.q_network)):
             q = self.get_network(q, self.q_network, label = "q")
         else:
             q = self.q_network(conv)
@@ -217,7 +217,7 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        if "keras" not in str(type(self.shared_network)):
+        if "keras" not in str(type(self.r2_network)):
             r2 = self.get_network(r2, self.r2_network, label = "r2")
         else:
             r2 = self.r2_network(conv)
@@ -333,6 +333,7 @@ class CVAE(tf.keras.Model):
             y = tf.keras.activations.tanh(y)
             x = tf.cast(x, dtype=tf.float32)
             
+            # This section sets up the latent spacce distribution from the R1(y) encoder
             mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
             scale_r1 = tf.sqrt(tf.exp(logvar_r1))
             gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
@@ -343,6 +344,7 @@ class CVAE(tf.keras.Model):
             #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
 
 
+            # This section sets up the latent spacce distribution from the q(x, y) encoder
             mean_q, logvar_q = self.encode_q(x=x,y=y)
             scale_q = tf.sqrt(tf.exp(logvar_q))
             mvn_q = tfp.distributions.MultivariateNormalDiag(
@@ -361,7 +363,6 @@ class CVAE(tf.keras.Model):
                 dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], ramp = self.ramp)
                 cr = group.get_cost(dist, x_grouped[indx])
                 outs[name] = cr
-                #(group.pars, cr)
                 cost_recon += cr
                 ind += 2
                 indx += 1

@@ -209,10 +209,9 @@ class DataLoader(tf.keras.utils.Sequence):
             sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
             start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
 
-
         data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
         
-        all_signals = []
+        all_signals = np.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
             
         for inj in range(len(data["x_data"])):
             #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
@@ -226,22 +225,22 @@ class DataLoader(tf.keras.utils.Sequence):
             for dt in range(len(self.config["data"]['detectors'])):
                 signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
                 whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
-                whitened_signal_td = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
-                whitened_signals_td.append(whitened_signal_td)
+                all_signals[inj,dt] = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                #whitened_signals_td.append(whitened_signal_td)
                     
-            all_signals.append(whitened_signals_td)
+            #all_signals.append(whitened_signals_td)
 
         data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
                
-        data["x_data"], time_correction = self.randomise_time(data["x_data"])
+        #data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
 
-        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction*time_correction
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
         
-        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])#*distance_correction
-        data["y_data_noisefree"] *= distance_correction
+        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+
         del y_temp_fft
         return data
 
@@ -561,6 +560,7 @@ class DataLoader(tf.keras.utils.Sequence):
                     psds.append(np.array([psd_noise[:-1], psd_noise[:-1]]).flatten())
                 data["y_psds"] = np.repeat(np.expand_dims(np.array(psds).T,axis=0), np.shape(data["y_data_noisy"])[0], axis=0)
                 data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
+
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
         data["x_data"] = data["x_data"][:,self.par_idx]
@@ -622,9 +622,9 @@ class DataLoader(tf.keras.utils.Sequence):
         # uniform in the sin of the declination (doesnt yet change if input prior is changed)
         new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.config["bounds"]["dec_min"]), high = np.sin(self.config["bounds"]["dec_max"])))
         new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
-        #new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
+        new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
 
-        #x[:, np.where(np.array(self.params["inf_pars_list"])=="geocent_time")[0][0]] = new_geocent_time
+        x[:, np.where(np.array(self.injection_parameters)=="geocent_time")[0][0]] = new_geocent_time
         x[:, np.where(np.array(self.injection_parameters)=="ra")[0][0]] = new_ra
         x[:, np.where(np.array(self.injection_parameters)=="dec")[0][0]] = new_dec
         x[:, np.where(np.array(self.injection_parameters)=="psi")[0][0]] = new_psi
