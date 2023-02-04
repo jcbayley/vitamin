@@ -1,5 +1,17 @@
+import torch
+from ..tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
+from .test import test_model
 
-def train(config):
+def adjust_learning_rate(lr, optimiser, epoch, factor = 1.0, epoch_num = 5, low_cut = 1e-12):
+    """Sets the learning rate to the initial LR decayed by a factor 0.999 (factor) every 5 (epoch_num) epochs"""
+    if lr <= low_cut:
+        lr = lr
+    else:
+        lr = lr * (factor ** (epoch // epoch_num))
+    for param_group in optimiser.param_groups:
+        param_group['lr'] = lr
+
+def setup_and_train(config):
 
     #params, bounds, masks, fixed_vals = get_params(params_dir = params_dir)
     run = time.strftime('%y-%m-%d-%X-%Z')
@@ -22,22 +34,12 @@ def train(config):
     from scipy.spatial.distance import jensenshannon
     import scipy.stats as st
     import pickle
-    #from keras_adamw import AdamW
-    import tensorflow as tf
-    import tensorflow_addons as tfa
-    import tensorflow_probability as tfp
-    tfd = tfp.distributions
-    from tensorflow.keras import regularizers
+    import torchsummary
     from ..vitamin_model import CVAE
-    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, OptimizerSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
-    from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
-    from keras_adabound import AdaBound
+    #pip infrom ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, optimiserSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
+    from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
         
-    # Let GPU consumption grow as needed
-    config_gpu = tf.compat.v1.ConfigProto()
-    config_gpu.gpu_options.allow_growth = True
-    session = tf.compat.v1.Session(config=config_gpu)
-    print('... letting GPU consumption grow as needed')
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     train_log_dir = os.path.join(config["output"]['output_directory'],'logs')
 
@@ -47,8 +49,7 @@ def train(config):
 
     epochs = config["training"]['num_iterations']
     plot_cadence = int(0.5*config["training"]["plot_interval"])
-    # Include the epoch in the file name (uses `str.format`)
-    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model")
+    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model.pt")
     checkpoint_dir = os.path.dirname(checkpoint_path)
     dirs = [checkpoint_dir]
     for direc in dirs:
@@ -56,20 +57,19 @@ def train(config):
             os.makedirs(direc)
 
     make_paper_plots = config["testing"]['make_paper_plots']
-    hyper_par_tune = False
 
     # load the training data
     if not make_paper_plots:
-        train_dataset = DataLoader(training_directory,config = config) 
-        validation_dataset = DataLoader(validation_directory,config=config,val_set = True)
+        train_dataset = DataSet(training_directory,config = config)
+        validation_dataset = DataSet(validation_directory,config=config,val_set = True)
         train_dataset.load_next_chunk()
         validation_dataset.load_next_chunk()
 
-        #enq = tf.keras.utils.OrderedEnqueuer(train_dataset)
-        #enq.start(workers = 4)
+        print("VAL_SIZE: ", len(validation_dataset))
+        print("TRAIN_SIZE: ", len(train_dataset))
         
     if config["training"]["test_interval"] != False:
-        test_dataset = DataLoader(test_directory,config=config, test_set = True)
+        test_dataset = DataSet(test_directory,config=config, test_set = True)
         test_dataset.load_next_chunk()
         test_dataset.load_bilby_samples()
 
@@ -81,144 +81,310 @@ def train(config):
 
     start_epoch = 0
     
-    
-    base_model = tf.keras.applications.Xception(
-                weights='imagenet',
-                input_shape=(72, 72, 3),
-                include_top=False)
-    """
-    sinputs = tf.keras.Input(shape=(4096, 3))
-    #flinputs = tf.keras.layers.Flatten()(sinputs)
-    ##dinputs = tf.keras.layers.Dense(15552)(flinputs)
-    #reinputs = tf.keras.layers.Reshape((72,72,3))(dinputs)
-    permin = tf.keras.layers.Permute((2,1))(sinputs)
-    dinputs = tf.keras.layers.Dense(5184)(permin)
-    permin = tf.keras.layers.Permute((2,1))(dinputs)
-    reinputs = tf.keras.layers.Reshape((72,72,3))(permin)
-    sx = base_model(reinputs, training=True)
-    sx = tf.keras.layers.GlobalAveragePooling2D()(sx)
-    soutputs = tf.keras.layers.Dense(1024)(sx)
-    sh_model = tf.keras.Model(sinputs, soutputs)
-    
-    model = CVAE(config, shared_network = sh_model)
-    """
-    
-    model = CVAE(config)
+    model = CVAE(config, device=device).to(device)
 
     if config["training"]["optimiser"] == "adam":
-        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 0.005)
-    elif config["training"]["optimiser"] == "sgd":
-        optimizer = tf.keras.optimizers.SGD(config["training"]["initial_learning_rate"], clipvalue = 5)
-    elif config["training"]["optimiser"] == "adabound":
-        optimizer = AdaBound(lr=config["training"]["initial_learning_rate"], final_lr=config["training"]["final_learning_rate"], clipvalue = 5)
-    elif config["training"]["optimiser"] == "lookahead":
-        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 5)
-        optimizer = tfa.optimizers.Lookahead(optimizer)
-
-    #optimizer = tf.keras.optimizers.Adam(config["training"]["initial_learning_rate"])
-
-    # Keras hyperparameter optimization
-    if hyper_par_tune:
-        import keras_hyper_optim
-        del model
-        keras_hyper_optim.main(train_dataset, val_dataset)
-        exit()
-
-    # compile and build the model (hardcoded values will change soon)
-    model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
+        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
-        model.load_weights(config["training"]["transfer_model_checkpoint"])
-        #model = tf.keras.models.load_model(config["training"]["transfer_model_checkpoint"])
-        """
-        with open(os.path.join(checkpoint_dir, "optimizer.pkl"),"rb") as f:
-            weight_values = pickle.load(f)
-        model.optimizer.set_weights(weight_values)
-        """
+        model = torch.load(config["training"]["transfer_model_checkpoint"]).to(device)
         print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
 
     elif config["training"]['resume_training']:
         if config["training"]["transfer_model_checkpoint"]:
             print(f"Warning: Continuing training from trained weights, not from pretrained model from {config['training']['transfer_model_checkpoint']}")
         # Load the previously saved weights
-        #latest = tf.train.latest_checkpoint(checkpoint_dir)
-        model.load_weights(checkpoint_path)
-        #model = tf.keras.models.load_model(checkpoint_path)
-        """
-        with open(os.path.join(checkpoint_dir, "optimizer.pkl"),"rb") as f:
-            weight_values = pickle.load(f)
-        for i,w in enumerate(model.optimizer.weights):
-            print(i, np.shape(w))
-            if i > 10:break
-            #if np.shape(w) == (64,2,96):
-            #    print(i,np.shape(w))
-        for i,w in enumerate(weight_values):
-            print(i, np.shape(w))
-            if i > 10:break
-            #if np.shape(w) == (64,2,96):
-            #    print(i,np.shape(w))
-                
-        model.optimizer.set_weights(np.roll(weight_values[1:], -1))
-        """
+        model = torch.load(checkpoint_path).to(device)
+
         print('... loading in previous model %s' % checkpoint_path)
-        with open(os.path.join(config["output"]['output_directory'], "loss.txt"),"r") as f:
+        with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"r") as f:
             start_epoch = len(np.loadtxt(f))
-
-
-    #model([test_data, test_pars])
-    #model.build([(None, 1024,2), (None, 15)])
-
+    
     with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
-        model.encoder_r1.summary(print_fn=lambda x: f.write(x + '\n'))
-        model.encoder_q.summary(print_fn=lambda x: f.write(x + '\n'))
-        model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
-    
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path,
-        monitor="val_loss",
-        verbose=0,
-        save_best_only=False,
-        save_weights_only=True,
-        mode="auto",
-        save_freq=10*config["training"]["chunk_batch"],
-        options=None,
-        initial_value_threshold=None,
-    )
+        summary = torchsummary.summary(model, [(1, model.y_dim, model.n_channels), (model.x_dim, )], depth = 3)
+        f.write(str(summary))
+
+    train_loop(
+        model=model, 
+        device=device, 
+        optimiser=optimiser, 
+        epochs=config["training"]['num_iterations'], 
+        train_iterator=train_dataset, 
+        learning_rate=config["training"]["initial_learning_rate"],
+        validation_iterator=validation_dataset, 
+        ramp_start = config["training"]["ramp_start"],
+        ramp_end = config["training"]["ramp_start"] + config["training"]["ramp_length"],
+        save_dir = config["output"]["output_directory"], 
+        dec_rate = 0.999, 
+        dec_start = config["training"]["decay_lr_start"], 
+        do_test=True, 
+        low_cut = 1e-10, 
+        test_data = test_dataset, 
+        ramp = True,
+        continue_train = config["training"]['resume_training'],
+        start_epoch = start_epoch,
+        test_interval=config["training"]["test_interval"],
+        checkpoint_dir=checkpoint_dir,
+        samplers = config["testing"]["samplers"],
+        plot_interval=config["training"]["plot_interval"],
+        config=config)
 
 
-    callbacks = [checkpoint]
-    callbacks.append(PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch))
-    callbacks.append(TrainCallback(config, optimizer, train_dataset, model))
-    callbacks.append(TimeCallback(config))#, OptimizerSave(config, checkpoint_dir, 10)]
+def train_batch(
+    epoch, 
+    model, 
+    optimiser, 
+    device, 
+    batch, 
+    labels, 
+    pause = 0, 
+    train = True, 
+    ramp = 1.0):
 
-    if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
-        lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"], optimizer = optimizer)
-        callbacks.append(lr_call)
+    model.train(train)
+    if train:
+        optimiser.zero_grad()
+    length = float(batch.size(0))
+    # calculate r2, q and r1 means and variances
 
-    if config["training"]["logvarmin_ramp"]:
-        lmr_call = LogminRampCallback(logvarmin_ramp_start=config["training"]["logvarmin_ramp_start"], logvarmin_ramp_length=config["training"]["logvarmin_ramp_length"], logvarmin_start=config["training"]["logvarmin_start"], logvarmin_end=config["training"]["logvarmin_end"], model=model)
-        callbacks.append(lmr_call)
+    recon_loss, kl_loss = model.compute_loss(batch, labels, ramp)
+    # calcualte total loss
+    loss = recon_loss + ramp*kl_loss
+    if train:
+        loss.backward()
+        # update the weights                                                                                                                              
+        optimiser.step()
 
-    if config["training"]["ramp_length"] != 0:
-        ann_call = AnnealCallback(ramp_start=config["training"]["ramp_start"], ramp_length=config["training"]["ramp_length"])
-        callbacks.append(ann_call)
+    return loss.item(), kl_loss.item(), -recon_loss.item() 
 
-    if config["training"]["batch_ramp"]:
-        batch_call = BatchRampCallback(batch_ramp_start=config["training"]["batch_ramp_start"], batch_ramp_length=config["training"]["batch_ramp_length"], batch_size=config["training"]["batch_size"], batch_size_end=config["training"]["batch_size_end"])
-        callbacks.append(batch_call)
 
-    if config["training"]["test_interval"] != False:
-        pass
-        callbacks.append(TestCallback(config, test_dataset, bilby_samples))
+def train_loop(
+    model, 
+    device, 
+    optimiser, 
+    epochs, 
+    train_iterator, 
+    learning_rate, 
+    validation_iterator, 
+    ramp_start = -1,
+    ramp_end =-1,
+    save_dir = "./", 
+    dec_rate = 1.0, 
+    dec_start = 0, 
+    do_test=True, 
+    low_cut = 1e-12, 
+    test_data = None, 
+    ramp = True,
+    continue_train = True,
+    start_epoch = 0,
+    num_epoch_load = 1,
+    test_interval = 1000,
+    checkpoint_dir=None, 
+    samplers = None, 
+    config=None,
+    plot_interval = 100
+    ):
+
+
+    train_losses = []
+    kl_losses = []
+    lik_losses = []
+    val_losses = []
+    val_kl_losses = []
+    val_lik_losses = []
+    train_times = []
+    kl_start = ramp_start
+    kl_end = ramp_end
+    min_val_loss = np.inf
+    prev_save_ep = 0
+
+    if continue_train:
+        with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"r") as f:
+            old_epochs, train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses = np.loadtxt(f)
+            old_epochs = list(old_epochs)
+            train_losses = list(train_losses)
+            kl_losses = list(kl_losses)
+            lik_losses = list(lik_losses)
+            val_losses = list(val_losses)
+            val_kl_losses = list(val_kl_losses)
+            val_lik_losses = list(val_lik_losses)
+            
+    start_train_time = time.time()
+    print("RAMP: ", ramp, kl_start, kl_end)
+    for epoch in range(epochs):
+        if continue_train:
+            epoch = epoch + old_epochs[-1]
+
+        model.train()
+
+        if epoch > dec_start:
+            adjust_learning_rate(learning_rate, optimiser, epoch - dec_start, factor=dec_rate, low_cut = low_cut)
+            
+        if ramp:
+            ramp = 0.0
+            if epoch>kl_start and epoch<=kl_end:
+                #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
+                ramp = (epoch - kl_start)/(kl_end - kl_start)
+            elif epoch>kl_end:
+                ramp = 1.0 
+        else:
+            ramp = 1.0
         
-    if config["training"]["tensorboard_log"]:
-        logdir = os.path.join(config["output"]["output_directory"], "profile")
-        if not os.path.isdir(logdir):
-            os.makedirs(logdir)
-        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir = logdir,histogram_freq = 50,profile_batch = 200,update_freq = 500))
-    
-    model.fit(train_dataset, use_multiprocessing = False, workers = 1, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 1, initial_epoch = start_epoch)
+
+        # Training    
+
+        temp_train_loss = 0
+        temp_kl_loss = 0
+        temp_lik_loss = 0
+        it = 0
+        total_time = 0
+
+        #for local_batch, local_labels in train_iterator:
+        for ind in range(len(train_iterator)):
+            # Transfer to GPU            
+            local_batch, local_labels = train_iterator[ind]
+            local_batch, local_labels = torch.Tensor(local_batch).to(device), torch.Tensor(local_labels).to(device)
+            start_time = time.time()
+            train_loss,kl_loss,lik_loss = train_batch(epoch, model, optimiser, device, local_batch,local_labels, ramp=ramp, train=True)
+            temp_train_loss += train_loss
+            temp_kl_loss += kl_loss
+            temp_lik_loss += lik_loss
+            it += 1
+            total_time += time.time() - start_time
         
+
+        val_it = 0
+        temp_val_loss = 0
+        temp_val_kl_loss = 0
+        temp_val_lik_loss = 0
+        
+        # validation
+        print("VAL_LEN:", len(validation_iterator))
+        #for val_batch, val_labels in validation_iterator:
+        for ind in range(len(validation_iterator)):
+            # Transfer to GPU            
+            val_batch, val_labels = validation_iterator[ind]
+            val_batch, val_labels = torch.Tensor(val_batch).to(device), torch.Tensor(val_labels).to(device)
+            val_loss,val_kl_loss,val_lik_loss = train_batch(epoch, model, optimiser, device, val_batch, val_labels, ramp=ramp, train=False)
+            temp_val_loss += val_loss
+            temp_val_kl_loss += val_kl_loss
+            temp_val_lik_loss += val_lik_loss
+            val_it += 1
+
+        temp_val_loss /= val_it
+        temp_val_kl_loss /= val_it
+        temp_val_lik_loss /= val_it
+
+        temp_train_loss /= it
+        temp_kl_loss /= it
+        temp_lik_loss /= it
+        batch_time = total_time/it
+        post_train_time = time.time()
+        
+        val_losses.append(temp_val_loss)
+        val_kl_losses.append(temp_val_kl_loss)
+        val_lik_losses.append(temp_val_lik_loss)
+        train_losses.append(temp_train_loss)
+        kl_losses.append(temp_kl_loss)
+        lik_losses.append(temp_lik_loss)
+        train_times.append(post_train_time - start_train_time)
+
+        diff_ep = epoch - prev_save_ep
+        if epochs % 2 == 0:
+            print(f"Train:      Epoch: {epoch}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
+            print(f"Validation: Epoch: {epoch}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
+
+        if epoch % plot_interval == 0:
+            loss_plot(save_dir, train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses)
+            with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"w+") as f:
+                if len(train_losses) > epoch+1:
+                    epoch = len(train_losses) - 1
+                savearr =  np.array([np.arange(epoch+1), train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses]).astype(float)
+                np.savetxt(f,savearr)
+            torch.save(model, os.path.join(checkpoint_dir,"model.pt"))  # save the model
+            min_val_loss = temp_val_loss#np.inf
+            prev_save_ep = 0
+            """
+            with open(os.path.join(checkpoint_dir, "checkpoint_times.txt"),"w+") as f:
+                if len(train_times) > epoch+1:
+                    t_epoch = len(train_times) - 1
+                else:
+                    t_epoch = epoch
+                savearr =  np.array([np.arange(t_epoch+1), train_times]).astype(float)
+                np.savetxt(f,savearr)
+            """
+                
+        
+        if epoch % test_interval == 0:
+            if do_test or epoch == epochs - 1:
+                # test plots
+                if not os.path.isdir(os.path.join(save_dir, f"epochs_{int(epoch)}")):
+                    os.makedirs(os.path.join(save_dir, f"epochs_{int(epoch)}"))
+                samples,tr,zr_sample,zq_sample = run_latent(model,validation_iterator,num_samples=1000,device=device)                                                   
+                lat2_fig = latent_samp_fig(zr_sample,zq_sample,tr)
+                lat2_fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"zsample_epoch{int(epoch)}.png"))
+                del samples, tr, zr_sample
+                plt.close(lat2_fig)
+                if test_data is not None:
+                    # load precomputed samples
+                    bilby_samples = []
+                    for sampler in samplers[1:]:
+                        bilby_samples.append(test_data.sampler_outputs[sampler])
+                    bilby_samples = np.array(bilby_samples)
+                    test_model(
+                        os.path.join(save_dir,f"epochs_{int(epoch)}"), 
+                        model=model,
+                        test_dataset=test_data, 
+                        bilby_samples=bilby_samples,
+                        epoch=epoch,
+                        n_samples=5000,
+                        config=config,
+                        device=device
+                        ) 
+                    torch.save(model, os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))  # save the model
+                    print("done_test")
+
+        
+        if epoch % num_epoch_load == 0:
+            train_iterator.load_next_chunk()
+
+    return train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses
+
+
+def run_latent(model,test_it,num_samples = 500,device="cpu",transform_func=None):
+    # set the evaluation mode                                                                                                                                                                                    
+    model.eval()
+
+    # test loss for the data                                                                                                                                                                                     
+    test_loss = 0
+    samples = []
+    # do not need to track gradients                                                                                                
+    with torch.no_grad():
+        #for local_batch, local_labels in test_it:
+        for ind in range(len(test_it)):
+            # Transfer to GPU         
+            local_batch, local_labels  = test_it[ind]
+            local_batch, local_labels = torch.Tensor(local_batch).to(device), torch.Tensor(local_labels).to(device)
+            x_samples, zr_samples, zq_samples = model.test_latent(local_batch, local_labels, num_samples)
+            truths = local_labels
+            break
+    return x_samples, truths, zr_samples, zq_samples
+
+
+def run_latent2(model,test_it,num_samples = 500,device="cpu",transform_func=None, return_latent = True):
+    # set the evaluation mode                                                                                                                                                                                    
+    model.eval()
+
+    # test loss for the data                                                                                                                                                                                     
+    test_loss = 0
+    samples = []
+    # do not need to track gradients                                                                                                
+    with torch.no_grad():
+        local_batch, local_labels = torch.Tensor(test_it.dataset.data).to(device), torch.Tensor(test_it.dataset.labels).to(device)
+        transformed_samples, net_samples, zr_samples, zq_samples = model.test(local_batch, local_freqs, num_samples, par = local_labels, transform_func = transform_func, return_latent=return_latent)
+        truths = local_labels.to("cpu")
+    return transformed_samples, net_samples, truths, zr_samples, zq_samples
+
 
 
 if __name__ == "__main__":
@@ -253,5 +419,5 @@ if __name__ == "__main__":
 
     vitamin_config = GWInputParser(args.ini_file)
 
-    train(vitamin_config)
+    setup_and_train(vitamin_config)
 

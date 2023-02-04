@@ -1,88 +1,72 @@
+import torch
+import numpy as np
+import time
+from ..train_plots import plot_posterior, plot_JS_div
 
-def test(config):
+def test_model(
+    save_dir, 
+    model, 
+    test_dataset, 
+    bilby_samples,
+    epoch, 
+    n_samples,
+    plot_latent = False, 
+    latent_dir = None, 
+    config=None,
+    device="cpu"
+    ):
+    """ Test the model by comparing posterior distributions"""
 
-    #params, bounds, masks, fixed_vals = get_params(params_dir = params_dir)
-    run = time.strftime('%y-%m-%d-%X-%Z')
+    model.eval()
+    with torch.no_grad():
+        n_test_data = len(test_dataset)
 
-    # define which gpu to use during training
-    try:
-        #gpu_num = str(vitamin_config["training"]['gpu_num'])   
-        #os.environ["CUDA_VISIBLE_DEVICES"]=gpu_num
-        print("CUDA DEV: ",os.environ["CUDA_VISIBLE_DEVICES"])
-    except:
-        print("No CUDA devices")
+        samples = model.test(
+                torch.Tensor(test_dataset.Y_noisy).to(device), 
+                num_samples=n_samples, 
+                transform_func = None,
+                return_latent = False)
 
+        for step in range(n_test_data):
+            if step > len(test_dataset):
+                break
+            if plot_latent:
+                mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = model.gen_z_samples(
+                    torch.unsqueeze(torch.Tensor(test_dataset.X[step]).to(device),0), 
+                    torch.unsqueeze(torch.Tensor(test_dataset.Y_noisy[step]).to(device),0), 
+                    nsamples=1000)
 
-    from lal import GreenwichMeanSiderealTime
-    from astropy.time import Time
-    from astropy import coordinates as coord
-    import corner
-    from universal_divergence import estimate
-    import natsort
-    from scipy.spatial.distance import jensenshannon
-    import scipy.stats as st
-    #from keras_adamw import AdamW
-    import tensorflow as tf
-    import tensorflow_addons as tfa
-    import tensorflow_probability as tfp
-    tfd = tfp.distributions
-    from tensorflow.keras import regularizers
-    from ..vitamin_model import CVAE
-    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback
-    from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
-    from keras_adabound import AdaBound
-        
-    # Let GPU consumption grow as needed
-    config_gpu = tf.compat.v1.ConfigProto()
-    config_gpu.gpu_options.allow_growth = True
-    session = tf.compat.v1.Session(config=config_gpu)
-    print('... letting GPU consumption grow as needed')
+                plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=latent_dir)
 
-    train_log_dir = os.path.join(config["output"]['output_directory'],'logs')
+            allinds = []
+            for samp, sampind in test_dataset.samples_available.items():
+                if step not in sampind:
+                    allinds.append(step)
+            if len(allinds) == len(test_dataset.samples_available):
+                print("No available samples: {}".format(step))
+                continue
 
-    test_directory = os.path.join(config["data"]["data_directory"], "test", "waveforms")
+            start_time_test = time.time()
 
-    epochs = config["training"]['num_iterations']
-    plot_cadence = int(0.5*config["training"]["plot_interval"])
-    # Include the epoch in the file name (uses `str.format`)
-    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model")
-    checkpoint_dir = os.path.dirname(checkpoint_path)
-    dirs = [checkpoint_dir]
-    for direc in dirs:
-        if not os.path.isdir(direc):
-            os.makedirs(direc)
-
-
-    test_dataset = DataLoader(test_directory,config=config, test_set = True)
-    test_dataset.load_next_chunk()
-    test_dataset.load_bilby_samples()
-    
-    # load precomputed samples
-    bilby_samples = []
-    for sampler in config["testing"]["samplers"][1:]:
-        bilby_samples.append(test_dataset.sampler_outputs[sampler])
-    bilby_samples = np.array(bilby_samples)
-
-    start_epoch = 0
-    
-    model = CVAE(config)
-    if config["training"]["transfer_model_checkpoint"]:
-        model.load_weights(config["training"]["transfer_model_checkpoint"])
-        print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
-
-    elif config["training"]['resume_training']:
-        # Load the previously saved weights
-        #latest = tf.train.latest_checkpoint(checkpoint_dir)
-        model.load_weights(checkpoint_path)
-        print('... loading in previous model %s' % checkpoint_path)
-        with open(os.path.join(config["output"]['output_directory'], "loss.txt"),"r") as f:
-            start_epoch = len(np.loadtxt(f))
-
-    # compile and build the model (hardcoded values will change soon)
-    model.compile(run_eagerly = None, optimizer = optimizer, loss = model.compute_loss)
-
-    test_call = TestCallback(config, test_dataset, bilby_samples)
-
+            end_time_test = time.time()
+            if np.any(np.isnan(samples[step])):
+                print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
+                KL_est = [-1,-1,-1]
+            else:
+                print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,n_samples,end_time_test - start_time_test))
+                if len(np.shape(bilby_samples)) == 4:
+                    JS_est, JS_labels = plot_posterior(
+                        save_dir,
+                        samples[step],
+                        test_dataset.truths[step],
+                        epoch,
+                        step,
+                        all_other_samples=bilby_samples[:,step,:], 
+                        config=config, 
+                        unconvert_parameters = test_dataset.unconvert_parameters)
+                    plot_JS_div(JS_est[:10], JS_labels)
+                else:
+                    print("not plotting posterior, bilby samples wrong shape")
 
 if __name__ == "__main__":
 

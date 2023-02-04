@@ -1,8 +1,4 @@
-import tensorflow as tf
-from tensorflow.keras import regularizers
-import tensorflow_probability as tfp
-tfd = tfp.distributions
-from tensorflow.keras import backend as K
+import torch
 import numpy as np
 import time 
 import matplotlib.pyplot as plt
@@ -13,36 +9,22 @@ from . import plotting
 from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_posterior, plot_JS_div
 
 
-class PlotCallback(tf.keras.callbacks.Callback):
+class PlotCallback():
 
     def __init__(self, plot_dir, epoch_plot = 2, start_epoch = 0, save_data = True):
 
         self.plot_dir = plot_dir
         self.epoch_plot = epoch_plot
         self.save_data = save_data
-        self.all_losses = None#np.array([])#np.array([[],[],[],[],[],[],[]]).T
+        self.all_losses = None
 
         if start_epoch != 0:
             with open(os.path.join(plot_dir, "loss.txt")) as f:
                 losses = np.loadtxt(f)
-            self.all_losses = np.array(losses)#[list(losses[:,0]),list(losses[:,1]),list(losses[:,2]),list(losses[:,3]),list(losses[:,4]),list(losses[:,5]),list(losses[:,6])])
-            #if len(np.shape(self.all_losses)) == 1:
-            #    self.all_losses = np.reshape(self.all_losses, (7,-1)).T
-            #self.train_losses = [list(losses[:,0]),list(losses[:,1]),list(losses[:,2]),list(losses[:,3])]
-            #self.val_losses = [list(losses[:,4]),list(losses[:,5]),list(losses[:,6])]
+            self.all_losses = np.array(losses)
 
     def on_epoch_end(self, epoch, logs = None):
-        """
-        self.all_losses[3].append(logs["total_loss"])
-        self.all_losses[1].append(logs["recon_loss"])
-        self.all_losses[2].append(logs["kl_loss"])
 
-        self.all_losses[6].append(logs["val_total_loss"])
-        self.all_losses[4].append(logs["val_recon_loss"])
-        self.all_losses[5].append(logs["val_kl_loss"])
-
-        self.all_losses[0].append(time.time())
-        """
         if self.all_losses is None:
             self.all_losses = np.array([[time.time(), logs["recon_loss"], logs["kl_loss"], logs["total_loss"], logs["val_recon_loss"], logs["val_kl_loss"], logs["val_total_loss"]]])
         else:
@@ -62,13 +44,13 @@ class PlotCallback(tf.keras.callbacks.Callback):
                 plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
 
 
-class AnnealCallback(tf.keras.callbacks.Callback):
+class AnnealCallback():
 
-    def __init__(self, ramp_start, ramp_length, ramp_n_cycles=1):
+    def __init__(self, model, ramp_start, ramp_length, ramp_n_cycles=1):
         self.ramp_start = ramp_start
         self.ramp_length = ramp_length
         self.ramp_n_cycles = ramp_n_cycles
-        #self.model = model
+        self.model = model
 
     def ramp_func(self,epoch):
         ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
@@ -83,10 +65,9 @@ class AnnealCallback(tf.keras.callbacks.Callback):
         return ramp
 
     def on_epoch_end(self,epoch,logs=None):
-        ramp = self.ramp_func(epoch)
-        tf.keras.backend.set_value(self.model.ramp, ramp)
+        self.model.ramp = self.ramp_func(epoch)
 
-class LogminRampCallback(tf.keras.callbacks.Callback):
+class LogminRampCallback():
 
     def __init__(self, logvarmin_ramp_start, logvarmin_ramp_length, logvarmin_start, logvarmin_end, model):
         self.logvarmin_ramp_start = logvarmin_ramp_start
@@ -103,12 +84,12 @@ class LogminRampCallback(tf.keras.callbacks.Callback):
             ramp = 1.0
 
         newlogvar = self.logvarmin_start + ramp*self.logvarmin_end
-        tf.keras.backend.set_value(self.model.minlogvar, newlogvar)
+        self.model.minlogvar = newlogvar
 
     def on_epoch_begin(self, epoch, logs=None):
         self.logmin_ramp_func(epoch)
 
-class LearningRateCallback(tf.keras.callbacks.Callback):
+class LearningRateCallback():
 
     def __init__(self, initial_learning_rate, cycle_lr = False, cycle_lr_start = 1000, cycle_lr_length=100, cycle_lr_amp=5, decay_lr=False, decay_lr_start=1000, decay_lr_length=5000, decay_lr_logend = -3, optimizer = None):
         self.cycle_lr_start = cycle_lr_start
@@ -139,14 +120,14 @@ class LearningRateCallback(tf.keras.callbacks.Callback):
             dec_factor = dec_array[decay_pos]
 
         new_lr = cycle_factor*dec_factor*self.initial_learning_rate
-            
-        tf.keras.backend.set_value(self.optimizer.learning_rate, new_lr)
+        
+        self.optimizer.learning_rate = new_lr
         print("learning_rate:, {}".format(self.optimizer.learning_rate))
 
     def on_epoch_begin(self, epoch, logs = None):
         self.learning_rate_modify(epoch)
 
-class BatchRampCallback(tf.keras.callbacks.Callback):
+class BatchRampCallback():
 
     def __init__(self, batch_ramp_start, batch_ramp_length, batch_size, batch_size_end):
         self.batch_ramp_start = batch_ramp_start
@@ -167,7 +148,7 @@ class BatchRampCallback(tf.keras.callbacks.Callback):
     def on_epoch_begin(self, epoch, logs = None):
         self.batch_ramp_func(epoch)
 
-class TrainCallback(tf.keras.callbacks.Callback):
+class TrainCallback():
 
     def __init__(self, config,  optimizer, train_dataloader, model):
         super(TrainCallback, self).__init__()
@@ -265,7 +246,7 @@ class TrainCallback(tf.keras.callbacks.Callback):
         #    self.model.save_weights(self.checkpoint_path)
         #    print('... Saved model %s ' % self.checkpoint_path)
 
-class TestCallback(tf.keras.callbacks.Callback):
+class TestCallback():
 
 
     def __init__(self, config, test_dataset, bilby_samples):
@@ -289,7 +270,7 @@ class TestCallback(tf.keras.callbacks.Callback):
                 if step > len(self.test_dataset):
                     break
                 if self.config["training"]["plot_latent"]:
-                    mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(tf.expand_dims(self.test_dataset.X[step],0), tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
+                    mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(torch.expand_dims(self.test_dataset.X[step],0), torch.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
 
                     plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
 
@@ -302,7 +283,7 @@ class TestCallback(tf.keras.callbacks.Callback):
                     continue
 
                 start_time_test = time.time()
-                samples = self.model.gen_samples(tf.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'], max_samples = 100)
+                samples = self.model.gen_samples(torch.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'], max_samples = 100)
 
                 end_time_test = time.time()
                 if np.any(np.isnan(samples)):
@@ -331,7 +312,7 @@ class TestCallback(tf.keras.callbacks.Callback):
 
 
 
-class TimeCallback(tf.keras.callbacks.Callback):
+class TimeCallback():
     def __init__(self, config, start_epoch = 0):
         self.config = config
         self.save_interval = self.config["training"]["plot_interval"]
@@ -356,7 +337,7 @@ class TimeCallback(tf.keras.callbacks.Callback):
             with open(self.fname, "w") as f:
                 np.savetxt(f, self.times)
 
-class OptimizerSave(tf.keras.callbacks.Callback):
+class OptimizerSave():
 
     def __init__(self, config, checkpoint_path, save_interval = 250):
         self.save_interval = save_interval

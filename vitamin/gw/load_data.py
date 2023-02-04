@@ -3,7 +3,7 @@ import os
 import sys
 import h5py
 import numpy as np
-import tensorflow as tf
+import torch
 import time
 from lal import GreenwichMeanSiderealTime
 from astropy.time import Time
@@ -13,8 +13,9 @@ from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
 from ..group_inference_parameters import group_outputs
+from .make_signal import get_detector_response, get_detectors
 
-class DataLoader(tf.keras.utils.Sequence):
+class DataSet(torch.utils.data.Dataset):
 
     def __init__(self, input_dir, config=None, test_set = False, silent = True, val_set = False, num_epoch_load = 4, shuffle=False,channel_name="DCS-CALIB_STRAIN_C01"):
         
@@ -52,6 +53,7 @@ class DataLoader(tf.keras.utils.Sequence):
         self.channel_name = channel_name
         self.unconvert_parameters = unconvert_parameters
         self.convert_parameters = convert_parameters
+        self.verbose = False
 
 
     def __len__(self):
@@ -201,6 +203,7 @@ class DataLoader(tf.keras.utils.Sequence):
 
     def get_whitened_signal_response(self, data):
 
+        stload = time.time()
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
 
         self.get_psd_for_ifo(ifos)
@@ -209,10 +212,21 @@ class DataLoader(tf.keras.utils.Sequence):
             sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
             start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
 
+        if self.verbose:
+            print("Time ifo setup", time.time() - stload)
+
+        stload = time.time()
+
         data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
+
+        if self.verbose:
+            print("Random par setup", time.time() - stload)
         
-        all_signals = np.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
+        all_signals = torch.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
             
+        frequencies = torch.arange(int(0.5*self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]) + 1) * 1./(self.config["data"]["duration"])
+        detector_dict = get_detectors(self.config["data"]['detectors'])
+        stload = time.time()
         for inj in range(len(data["x_data"])):
             #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
             injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
@@ -223,23 +237,39 @@ class DataLoader(tf.keras.utils.Sequence):
             whitened_signals_td = []
             polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
             for dt in range(len(self.config["data"]['detectors'])):
-                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
+                #signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
+                signal_fd = get_detector_response(
+                    detector_dict[dt], 
+                    polarisations, 
+                    injection_parameters, 
+                    self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2, 
+                    frequencies, 
+                    lal=True
+                    )
+
                 whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
-                all_signals[inj,dt] = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                all_signals[inj,dt] = torch.sqrt(2.0*Nt)*torch.fft.irfft(whitened_signal_fd)
                 #whitened_signals_td.append(whitened_signal_td)
                     
             #all_signals.append(whitened_signals_td)
+        if self.verbose:
+            print("Response setup", time.time() - stload)
 
-        data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
+        stload = time.time()
+        #data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
+        data["y_data_noisefree"] = torch.transpose(all_signals, 2,1)
                
         #data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
 
-        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
+        y_temp_fft = torch.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
         
-        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+        data["y_data_noisefree"] = np.transpose(torch.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+
+        if self.verbose:
+            print("Rand phase/dist setup", time.time() - stload)
 
         del y_temp_fft
         return data
@@ -461,6 +491,7 @@ class DataLoader(tf.keras.utils.Sequence):
         injpar_order = []
         for i,filename in enumerate(filenames):
             try:
+                stload = time.time()
                 h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
                 # dont like the below code, will rewrite at some point
                 if self.test_set:
@@ -498,19 +529,23 @@ class DataLoader(tf.keras.utils.Sequence):
             except OSError:
                 print('Could not load requested file: {}'.format(filename))
                 continue
-                
-                
+        if self.verbose:
+            print("File load: ", time.time() - stload)
         # concatentation all the x data (parameters) from each of the files
 
-        data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
+        stload = time.time()
+        data['x_data'] = torch.cat(np.array(data['x_data']), dim=0).squeeze()
 
         if self.test_set:
-            data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
+            #data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
+            data['y_data_noisy'] = torch.transpose(torch.cat(np.array(data['y_data_noisy']), dim=0),2,1)
         else:
             if self.config["data"]["save_polarisations"] == True:
-                data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
+                #data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
+                data['y_hplus_hcross'] = torch.transpose(torch.cat(np.array(data['y_hplus_hcross']), dim=0),2,1)
             else:
-                data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+                #data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+                data['y_data_noisefree'] = torch.transpose(torch.cat(np.array(data['y_data_noisefree']), dim=0),2,1)
 
         
         if self.test_set:
@@ -519,13 +554,19 @@ class DataLoader(tf.keras.utils.Sequence):
         if not self.silent:
             print('...... {} will be inferred'.format(infparlist))
 
+        if self.verbose:
+            print("Time transpose: ", time.time() - stload)
+
         y_normscale = self.config["data"]["y_normscale"]
+        stload = time.time()
         if not self.test_set:
             if self.config["data"]["save_polarisations"]:
                 if float(self.config["data"]["randomise_psd_factor"]) != 0:
                     data = self.get_whitened_signal_noise(data)
                 else:
                     data = self.get_whitened_signal_response(data)
+                if self.verbose:
+                    print("Time getresponse: ", time.time() - stload)
             else:
                 data["x_data"], time_correction = self.randomise_time(data["x_data"])
                 data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
@@ -538,10 +579,6 @@ class DataLoader(tf.keras.utils.Sequence):
                 pass
                 #del y_temp_fft
         
-            # add noise to the noisefree waveforms and normalise and normalise
-
-            #data["y_data_noisefree"] = (data["y_data_noisefree"] + self.params["noiseamp"]*tf.random.normal(shape=tf.shape(data["y_data_noisefree"]), mean=0.0, stddev=1.0, dtype=tf.float32))/y_normscale
-            #data["y_data_noisefree"] = data["y_data_noisefree"] 
         else:
             if self.config["model"]["include_psd"]:
                 ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
@@ -562,27 +599,28 @@ class DataLoader(tf.keras.utils.Sequence):
                 data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
 
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
+            np.swapaxes(data["y_data_noisy"], 1,2)
 
+        stload = time.time()
         data["x_data"] = data["x_data"][:,self.par_idx]
         data["x_data"] = convert_parameters(self.config, data["x_data"])
 
         # reorder parameters so can be grouped into different distributions
         data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
+
+        if self.verbose:
+            print("Time covert pars: ", time.time() - stload)
         
         if self.config["data"]["use_real_detector_noise"] and not self.test_set:
             real_det_noise = self.load_real_noise(len(data["y_data_noisefree"]))
 
             # cast data to float
-            data["y_data_noise"] = tf.cast(np.array(real_det_noise), tf.float32)
+            data["y_data_noisy"] = np.array(real_det_noise)
+            np.swapaxes(data["y_data_noisy"], 1,2)
 
-        # cast data to float
-        """
-        data["x_data"] = tf.cast(data["x_data"], tf.float32)
-        data["y_data_noisefree"] = tf.cast(np.array(data["y_data_noisefree"]), tf.float32)
-        data["y_data_noisy"] = tf.cast(data["y_data_noisy"], tf.float32)
-        if self.config["model"]["include_psd"]:
-            data["y_psds"] = tf.cast(data["y_psds"], tf.float32)
-        """
+        print(np.shape(data["y_data_noisefree"]))
+        torch.transpose(data["y_data_noisefree"], 1,2)
+        
 
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths, data["y_psds"]
@@ -668,9 +706,6 @@ class DataLoader(tf.keras.utils.Sequence):
     def randomise_distance(self,x, y):
         #old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
         old_d = x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]]
-        # this line only works if we have a uniform prior on distance
-        #new_x = np.random.uniform(size=tf.shape(old_d), low=0.0, high=1.0)
-        #new_d = self.config["bounds"]['luminosity_distance_min'] + new_x*(self.config["bounds"]['luminosity_distance_max'] - self.config["bounds"]['luminosity_distance_min'])
 
         new_d = self.config["priors"].sample(np.shape(old_d))["luminosity_distance"]
 

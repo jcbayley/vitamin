@@ -12,9 +12,8 @@ import json
 import sys
 from sys import exit
 from universal_divergence import estimate
+import torch
 import natsort
-import tensorflow as tf
-from tensorflow.keras import regularizers
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
 import pandas
@@ -135,7 +134,7 @@ def plot_KL(KL_samples, step, run='testing'):
 def plot_JS_div(par_vals, labels):
     seaborn.set(font_scale=1.5)
     fig, ax = plt.subplots(figsize = (14,8))
-    hm = seaborn.heatmap(par_vals*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
+    hm = seaborn.heatmap(np.array(par_vals)*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
     ax.set_xticks(np.arange(15) + 0.5,labels=labels, rotation=50)
     ax.set_ylabel("Injection", fontsize=20)
     ax.collections[0].colorbar.set_label('JS divergence ($10^{-3}$)', fontsize=20)
@@ -284,7 +283,16 @@ def plot_pp(samples, injection_parameters, confidence_interval=[0.68, 0.95, 0.99
 
     return pvals, x_values, pps, lowers, uppers
 
-def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None, scale_other_samples = True, unconvert_parameters = None):
+def plot_posterior(
+    save_dir,
+    samples,
+    x_truth,
+    epoch,
+    idx,
+    all_other_samples=None, 
+    config=None, 
+    scale_other_samples = True, 
+    unconvert_parameters = None):
     """
     plots the posteriors
     """
@@ -296,7 +304,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
     # make save directories
     directories = {}
     for dname in ["comparison_posteriors", "full_posteriors","JS_divergence","samples"]:
-        directories[dname] = os.path.join(config["output"]["output_directory"], dname)
+        directories[dname] = os.path.join(save_dir, dname)
         if not os.path.isdir(directories[dname]):
             os.makedirs(directories[dname])
     
@@ -308,7 +316,9 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
         else:
             mask.append(False)
 
-    samples = tf.boolean_mask(samples,mask,axis=0)
+    print("SAmple shapes", torch.Tensor(samples).shape, torch.BoolTensor(mask).shape)
+    #samples = torch.masked_select(torch.Tensor(samples),torch.BoolTensor(mask))
+    samples = torch.Tensor(np.array(samples)[mask])
     print('identified {} good samples'.format(samples.shape[0]))
 
     if samples.shape[0]<100:
@@ -374,12 +384,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
             parnames = []
             for k_idx,k in enumerate(config["data"]['prior_pars']):
                 if np.isin(k, ol_pars):
-                    parnames.append(config["data"]['corner_labels'][k_idx])
-
-            # convert to RA
-            #vit_samples = convert_hour_angle_to_ra(vit_samples,params,ol_pars)
-            #true_x = convert_hour_angle_to_ra(np.reshape(true_x,[1,true_XS.shape[1]]),params,ol_pars).flatten()
-            #old_true_post = true_post                 
+                    parnames.append(config["data"]['corner_labels'][k_idx])            
 
             samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
             np.savetxt(samples_file,vitamin_samples)
@@ -438,7 +443,7 @@ def plot_posterior(samples,x_truth,epoch,idx,all_other_samples=None, config=None
         else:
             plt.savefig(os.path.join(directories["full_posterior"],'full_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
-    return -1.0
+        return -1.0, -1.0
 
 def plot_latent(mu_r1, z_r1, mu_q, z_q, epoch, idx, run='testing'):
 
