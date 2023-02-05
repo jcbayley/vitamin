@@ -222,9 +222,9 @@ class DataSet(torch.utils.data.Dataset):
         if self.verbose:
             print("Random par setup", time.time() - stload)
         
-        all_signals = torch.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
+        all_signals = np.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
             
-        frequencies = torch.arange(int(0.5*self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]) + 1) * 1./(self.config["data"]["duration"])
+        frequencies = np.arange(int(0.5*self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]) + 1) * 1./(self.config["data"]["duration"])
         detector_dict = get_detectors(self.config["data"]['detectors'])
         stload = time.time()
         for inj in range(len(data["x_data"])):
@@ -248,7 +248,7 @@ class DataSet(torch.utils.data.Dataset):
                     )
 
                 whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
-                all_signals[inj,dt] = torch.sqrt(2.0*Nt)*torch.fft.irfft(whitened_signal_fd)
+                all_signals[inj,dt] = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
                 #whitened_signals_td.append(whitened_signal_td)
                     
             #all_signals.append(whitened_signals_td)
@@ -257,16 +257,16 @@ class DataSet(torch.utils.data.Dataset):
 
         stload = time.time()
         #data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
-        data["y_data_noisefree"] = torch.transpose(all_signals, 2,1)
+        data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
                
         #data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
 
-        y_temp_fft = torch.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
         
-        data["y_data_noisefree"] = np.transpose(torch.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
 
         if self.verbose:
             print("Rand phase/dist setup", time.time() - stload)
@@ -534,18 +534,19 @@ class DataSet(torch.utils.data.Dataset):
         # concatentation all the x data (parameters) from each of the files
 
         stload = time.time()
-        data['x_data'] = torch.cat(np.array(data['x_data']), dim=0).squeeze()
+        #data['x_data'] = torch.Tensor(np.concatenate(np.array(data['x_data']), axis=0)).squeeze()
+        data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
 
         if self.test_set:
-            #data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
-            data['y_data_noisy'] = torch.transpose(torch.cat(np.array(data['y_data_noisy']), dim=0),2,1)
+            data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
+            #data['y_data_noisy'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_data_noisy']), axis=0)),2,1)
         else:
             if self.config["data"]["save_polarisations"] == True:
-                #data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
-                data['y_hplus_hcross'] = torch.transpose(torch.cat(np.array(data['y_hplus_hcross']), dim=0),2,1)
+                data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
+                #data['y_hplus_hcross'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_hplus_hcross']), axis=0)),2,1)
             else:
-                #data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
-                data['y_data_noisefree'] = torch.transpose(torch.cat(np.array(data['y_data_noisefree']), dim=0),2,1)
+                data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+                #data['y_data_noisefree'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_data_noisefree']), axis=0)),2,1)
 
         
         if self.test_set:
@@ -618,8 +619,8 @@ class DataSet(torch.utils.data.Dataset):
             data["y_data_noisy"] = np.array(real_det_noise)
             np.swapaxes(data["y_data_noisy"], 1,2)
 
-        print(np.shape(data["y_data_noisefree"]))
-        torch.transpose(data["y_data_noisefree"], 1,2)
+        #print(np.shape(data["y_data_noisefree"]))
+        #np.transpose(data["y_data_noisefree"], 1,2)
         
 
         if self.test_set:
