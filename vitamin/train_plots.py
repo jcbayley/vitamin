@@ -135,7 +135,7 @@ def plot_KL(KL_samples, step, run='testing'):
 def plot_JS_div(par_vals, labels):
     seaborn.set(font_scale=1.5)
     fig, ax = plt.subplots(figsize = (14,8))
-    hm = seaborn.heatmap(par_vals*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
+    hm = seaborn.heatmap(np.array(par_vals)*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
     ax.set_xticks(np.arange(15) + 0.5,labels=labels, rotation=50)
     ax.set_ylabel("Injection", fontsize=20)
     ax.collections[0].colorbar.set_label('JS divergence ($10^{-3}$)', fontsize=20)
