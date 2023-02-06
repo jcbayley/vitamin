@@ -120,7 +120,7 @@ def setup_and_train(config):
         do_test=True, 
         low_cut = 1e-10, 
         test_data = test_dataset, 
-        ramp = True,
+        do_ramp = True,
         continue_train = config["training"]['resume_training'],
         start_epoch = start_epoch,
         test_interval=config["training"]["test_interval"],
@@ -174,7 +174,7 @@ def train_loop(
     do_test=True, 
     low_cut = 1e-12, 
     test_data = None, 
-    ramp = True,
+    do_ramp = True,
     continue_train = True,
     start_epoch = 0,
     num_epoch_load = 1,
@@ -210,27 +210,31 @@ def train_loop(
             val_lik_losses = list(val_lik_losses)
             
     start_train_time = time.time()
-    print("RAMP: ", ramp, kl_start, kl_end)
+
     for epoch in range(epochs):
         if continue_train:
             epoch = epoch + old_epochs[-1]
 
         model.train()
+        model.device = device
+        model.to(device)
 
         if epoch > dec_start:
             adjust_learning_rate(learning_rate, optimiser, epoch - dec_start, factor=dec_rate, low_cut = low_cut)
             
-        if ramp:
+        if do_ramp:
             ramp = 0.0
             if epoch>kl_start and epoch<=kl_end:
                 #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
                 ramp = (epoch - kl_start)/(kl_end - kl_start)
             elif epoch>kl_end:
                 ramp = 1.0 
+            else:
+                ramp = 0.0
         else:
             ramp = 1.0
         
-
+        model.ramp = ramp
         # Training    
 
         temp_train_loss = 0
@@ -290,6 +294,7 @@ def train_loop(
         train_times.append(post_train_time - start_train_time)
 
         diff_ep = epoch - prev_save_ep
+        print("Model ramp: ", model.ramp, ramp)
         if epochs % 2 == 0:
             print(f"Train:      Epoch: {epoch}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
             print(f"Validation: Epoch: {epoch}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
@@ -320,17 +325,19 @@ def train_loop(
                 # test plots
                 if not os.path.isdir(os.path.join(save_dir, f"epochs_{int(epoch)}")):
                     os.makedirs(os.path.join(save_dir, f"epochs_{int(epoch)}"))
-                samples,tr,zr_sample,zq_sample = run_latent(model,validation_iterator,num_samples=1000,device=device)                                                   
-                lat2_fig = latent_samp_fig(zr_sample,zq_sample,tr)
-                lat2_fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"zsample_epoch{int(epoch)}.png"))
-                del samples, tr, zr_sample
-                plt.close(lat2_fig)
+                #samples,tr,zr_sample,zq_sample = run_latent(model,validation_iterator,num_samples=1000,device=device)                                                   
+                #lat2_fig = latent_samp_fig(zr_sample,zq_sample,tr)
+                #lat2_fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"zsample_epoch{int(epoch)}.png"))
+                #del samples, tr, zr_sample
+                #plt.close(lat2_fig)
                 if test_data is not None:
                     # load precomputed samples
                     bilby_samples = []
                     for sampler in samplers[1:]:
                         bilby_samples.append(test_data.sampler_outputs[sampler])
                     bilby_samples = np.array(bilby_samples)
+                    model.device = "cpu"
+                    model.to("cpu")
                     test_model(
                         os.path.join(save_dir,f"epochs_{int(epoch)}"), 
                         model=model,
@@ -339,8 +346,10 @@ def train_loop(
                         epoch=epoch,
                         n_samples=5000,
                         config=config,
-                        device=device
+                        device="cpu",
+                        plot_latent = True
                         ) 
+                        
                     torch.save(model, os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))  # save the model
                     print("done_test")
 

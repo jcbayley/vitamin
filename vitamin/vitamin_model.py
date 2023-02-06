@@ -11,7 +11,7 @@ class CVAE(nn.Module):
         args
         ----------
         y_dim: int
-            length of input time series
+           zq_sample = self.multi_gauss_dist(mu_q, log_var_q, cat_weight_r).sample( length of input time series
         hidden_dim: int
             size of hidden layers in all encoders
         z_dim: int
@@ -94,6 +94,8 @@ class CVAE(nn.Module):
         self.drop = nn.Dropout(p=0.0)
 
         self.small_const = 1e-13
+        self.ramp = 1.0
+        self.logvarfactor = 1
         
         
         # encoder r1(z|y) 
@@ -103,7 +105,9 @@ class CVAE(nn.Module):
             self.z_dim, 
             append_dim=0, 
             fc_layers = self.r1_network, 
-            conv_layers = self.shared_network)
+            conv_layers = self.shared_network,
+            weight = True,
+            n_modes = self.n_modes)
 
         # conv layers not used for next two networks, they both use the same rencoder
         # encoder q(z|x, y) 
@@ -113,7 +117,9 @@ class CVAE(nn.Module):
             self.z_dim, 
             append_dim=self.x_dim , 
             fc_layers = self.q_network, 
-            conv_layers = self.shared_network)
+            conv_layers = self.shared_network,
+            weight=False,
+            n_modes = self.n_modes)
 
         # decoder r2(x|z, y) 
         decoder_conv, self.decoder_lin = self.create_network(
@@ -125,7 +131,7 @@ class CVAE(nn.Module):
             conv_layers = self.shared_network, 
             meansize = self.output_dim)
         
-    def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None):
+    def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None, n_modes = 1):
         """ Generate arbritrary network, with convolutional layers or not
         args
         ------
@@ -190,9 +196,18 @@ class CVAE(nn.Module):
         if mean:
             if meansize is None:
                 meansize = output_dim
-            setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
+            if weight:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+            else:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
         if variance:
-            setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+            if weight:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+            else:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+
+        if weight:
+            setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
 
 
         return conv_network, lin_network
@@ -210,8 +225,9 @@ class CVAE(nn.Module):
         lin_in = torch.flatten(conv,start_dim=1)
         lin = self.rencoder_lin(lin_in)
         z_mu = self.mu_r(lin) # latent means
-        z_log_var = self.logvar_act(self.log_var_r(lin)) + self.small_const # latent variances
-        return z_mu, z_log_var
+        z_log_var = self.logvar_act(self.log_var_r(lin)) # latent variances
+        z_cat_weight = self.sigmoid(self.cat_weight_r(lin))
+        return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
     
     def encode_q(self,y,par):
         """ encoder q(z|x, y) , takes in observation y and paramters par (x)"""
@@ -219,8 +235,11 @@ class CVAE(nn.Module):
         lin_in = torch.cat([torch.flatten(conv,start_dim=1), par],1)
         lin = self.qencoder_lin(lin_in)
         z_mu = self.mu_q(lin)  # latent means
-        z_log_var = self.logvar_act(self.log_var_q(lin)) + self.small_const # latent vairances
+        z_log_var = self.logvar_act(self.log_var_q(lin))  # latent vairances
+        #z_cat_weight = self.sigmoid(self.cat_weight_q(lin))
         return z_mu, z_log_var
+        #return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
+
     
     def decode(self, z, y):
         """ decoder r2(x|z, y) , takes in observation y and latent paramters z"""
@@ -229,7 +248,7 @@ class CVAE(nn.Module):
         lin = self.decoder_lin(lin_in)
         par_mu = self.mu_d(lin) # parameter means
         par_mu = self.sigmoid(par_mu)
-        par_log_var = self.logvar_act(self.log_var_d(lin)) + self.small_const # parameter variances
+        par_log_var = self.logvar_act(self.log_var_d(lin))  # parameter variances
         return par_mu, par_log_var
 
     def gauss_sample(self, mean, log_var, num_batch, dim):
@@ -240,23 +259,36 @@ class CVAE(nn.Module):
         sample = torch.add(torch.mul(eps,std),mean)
         return sample
 
-    def trunc_gauss_sample(self, mu, log_var, ramp = 1.0):
+    def cat_gauss_dist(self, mean, log_var, cat_weight):
+        """ KL divergence for Multi dimension categorical gaussian"""
+        mix = torch.distributions.Categorical(probs=cat_weight)
+        comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var + (1-self.ramp)*self.logvarfactor)), 1)
+        gmm = torch.distributions.MixtureSameFamily(mix, comp)
+        return gmm
+
+    def multi_gauss_dist(self, mean, log_var):
+        """ KL divergence for Multi dimension categorical gaussian"""
+        comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var+(1-self.ramp)*self.logvarfactor)))
+        return comp
+
+    def trunc_gauss_sample(self, mu, log_var):
         """Gaussian log-likelihood """
         sigma = torch.sqrt(torch.exp(log_var))
-        #dist = TruncatedNormal(mu, sigma, self.trunc_mins - 10 + ramp*10, self.trunc_maxs + 10 - ramp*10)
+        #dist = TruncatedNormal(mu, sigma, self.trunc_mins - 10 + self.ramp*10, self.trunc_maxs + 10 - self.ramp*10)
         dist = TruncatedNormal(mu, sigma, 0, 1)
         return dist.sample()
 
-    def log_likelihood_trunc_gauss(self,par, mu, log_var, ramp = 1.0):
+    def log_likelihood_trunc_gauss(self,par, mu, log_var):
         """Gaussian log-likelihood """
         sigma = torch.sqrt(torch.exp(log_var))
-        #dist = TruncatedNormal(mu, sigma, a=self.trunc_mins - 10 + ramp*10, b=self.trunc_maxs + 10 - ramp*10)
+        #dist = TruncatedNormal(mu, sigma, a=self.trunc_mins - 10 + self.ramp*10, b=self.trunc_maxs + 10 - self.ramp*10)
         dist = TruncatedNormal(mu, sigma, a=0, b=1)
         return dist.log_prob(par)
 
     
     def KL_gauss(self,mu_r,log_var_r,mu_q,log_var_q):
         """Gaussian KL divergence between two distributions"""
+        # user torch.distributions.kl_divergence(qdist, r1dist)
         sigma_q = torch.exp(0.5 * (log_var_q))
         sigma_r = torch.exp(0.5 * (log_var_r))
         t2 = torch.log(sigma_r/sigma_q)
@@ -265,16 +297,24 @@ class CVAE(nn.Module):
         kl_loss = torch.sum(t2 + t3 - 0.5,dim=1)
         return kl_loss
 
+    def KL_multigauss(self, r1_dist, q_dist, z_samp):
+        """ KL divergence for Multi dimension categorical gaussian"""
+        selfent_q = -1.0*torch.mean(q_dist.entropy())
+        log_r1_q = r1_dist.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
+        cost_KL = selfent_q - torch.mean(log_r1_q)
+        return cost_KL
 
     def forward(self, y, par):
         """forward pass for training"""
         batch_size = y.size(0) # set the batch size
         # encode data into latent space
-        mu_r, log_var_r = self.encode_r(y) # encode r1(z|y)
+        mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y)
         mu_q, log_var_q = self.encode_q(y, par) # encode q(z|x, y)
         
         # sample z from gaussian with mean and variance from q(z|x, y)
-        z_sample = self.gauss_sample(mu_q, log_var_q, batch_size, self.z_dim)
+        z_sample = self.multi_gauss_dist(mu_q, log_var_q).sample()
+
+        #z_sample = self.gauss_sample(mu_q, log_var_q, batch_size, self.z_dim)
         #z_sample = self.lorentz_sample(mu_q, log_var_q)[0]
         # get the mean and variance in parameter space from decoder
         mu_par, log_var_par = self.decode(z_sample,y) # decode r2(x|z, y)                                                                              
@@ -282,17 +322,23 @@ class CVAE(nn.Module):
 
     def compute_loss(self, y, par, ramp):
 
-        mu_r, log_var_r = self.encode_r(y) # encode r1(z|y)     
+        mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y)     
         mu_q, log_var_q = self.encode_q(y, par) # encode q(z|x, y)  
 
-        z_sample = self.gauss_sample(mu_q, log_var_q, mu_q.size(0), mu_q.size(1))
+        #z_sample = self.gauss_sample(mu_q, log_var_q, mu_q.size(0), mu_q.size(1))
+
+        z_dist = self.multi_gauss_dist(mu_q, log_var_q)
+        r1_dist = self.cat_gauss_dist(mu_r, log_var_r, cat_weight_r)
+
+        z_sample = z_dist.sample()
 
         mu_par, log_var_par = self.decode(z_sample,y) # decode r2(x|z, y)
 
-        kl_loss = torch.mean(self.KL_gauss(mu_r, log_var_r, mu_q, log_var_q))
-        
+        #kl_loss = torch.mean(self.KL_gauss(mu_r, log_var_r, mu_q, log_var_q))
+        kl_loss = self.KL_multigauss(r1_dist, z_dist, z_sample)
+
         #print(np.shape(par), np.shape(mu_par), np.shape(log_var_par))
-        gauss_loss = self.log_likelihood_trunc_gauss(par, mu_par, log_var_par, ramp)
+        gauss_loss = self.log_likelihood_trunc_gauss(par, mu_par, log_var_par)
         #print(np.shape(gauss_loss))
 
         recon_loss = -1.0*torch.mean(torch.sum(gauss_loss, axis = 1))
@@ -301,9 +347,13 @@ class CVAE(nn.Module):
 
         
     
-    def draw_samples(self, y, mu_r, log_var_r, num_samples, z_dim, x_dim, return_latent = False):
+    def draw_samples(self, y, mu_r, log_var_r, cat_weight_r, num_samples, z_dim, x_dim, return_latent = False):
         """ Draw samples from network for testing"""
-        z_sample = self.gauss_sample(mu_r, log_var_r, num_samples, z_dim)
+        #z_sample = self.gauss_sample(mu_r, log_var_r, num_samples, z_dim)
+        z_sample = self.cat_gauss_dist(
+            mu_r.repeat(num_samples, 1, 1), 
+            log_var_r.repeat(num_samples, 1, 1), 
+            cat_weight_r.repeat(num_samples, 1)).sample()
 
         # input the latent space samples into decoder r2(x|z, y)  
         #ys = y.repeat(1,num_samples).view(-1, y.size(0)) # repeat data so same size as the z samples
@@ -323,20 +373,26 @@ class CVAE(nn.Module):
         num_data = y.size(0)                                                                                                                                                     
         x_samples = []
         # encode the data into latent space with r1(z,y)          
-        mu_r, log_var_r = self.encode_r(y) # encode r1(z|y) 
+        mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y) 
         mu_q, log_var_q = self.encode_q(y,par) # encode q(z|y) 
         # get the latent space samples
         zr_samples = []
         zq_samples = []
         for i in range(num_data):
             # sample from both r and q networks
-            zr_sample = self.gauss_sample(mu_r[i], log_var_r[i], num_samples, self.z_dim)
-            zq_sample = self.gauss_sample(mu_q[i], log_var_q[i], num_samples, self.z_dim)
+            #zr_sample = self.gauss_sample(mu_r[i], log_var_r[i], num_samples, self.z_dim)
+            #zq_sample = self.gauss_sample(mu_q[i], log_var_q[i], num_samples, self.z_dim)
+            zr_sample = self.cat_gauss_dist(
+                mu_r[i].repeat(num_samples, 1, 1), 
+                log_var_r[i].repeat(num_samples, 1, 1), 
+                cat_weight_r[i].repeat(num_samples, 1)).sample()
+            zq_sample = self.multi_gauss_dist(
+                mu_q[i].repeat(num_samples, 1), 
+                log_var_q[i].repeat(num_samples, 1)).sample()
             zr_samples.append(zr_sample.cpu().numpy())
             zq_samples.append(zq_sample.cpu().numpy())
             # input the latent space samples into decoder r2(x|z, y)  
             ys = y[i].repeat(num_samples,1,1).view(-1, y.size(1), y.size(2)) # repeat data so same size as the z samples
-
 
             mu_par, log_var_par = self.decode(zr_sample,ys) # decode r2(x|z, y) from z        
             samp = self.trunc_gauss_sample(mu_par, log_var_par)
@@ -369,7 +425,7 @@ class CVAE(nn.Module):
             z_samples = []
             q_samples = []
         # encode the data into latent space with r1(z,y)          
-        mu_r, log_var_r = self.encode_r(y) # encode r1(z|y) 
+        mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y) 
         if return_latent:
             mu_q, log_var_q = self.encode_q(y,par) # encode q(z|y) 
         # get the latent space samples for each input
@@ -380,22 +436,26 @@ class CVAE(nn.Module):
                 y[i], 
                 mu_r[i], 
                 log_var_r[i], 
+                cat_weight_r[i],
                 num_samples, 
                 self.z_dim, 
                 self.x_dim, 
                 return_latent = return_latent
                 )
-            print(f"index: {i}, sampleshape: {t_net_samples.shape}")
 
             if return_latent:
                 q_samples.append(
-                    self.gauss_sample(
-                        mu_q[i], 
-                        log_var_q[i], 
-                        num_samples, 
-                        self.z_dim
-                        ).cpu().numpy()
-                    )
+                    self.multi_gauss_dist(
+                        mu_q[i].repeat(num_samples, 1, 1), 
+                        log_var_q[i].repeat(num_samples, 1, 1)).sample()
+                )
+                    #self.gauss_sample(
+                    #    mu_q[i], 
+                    #    log_var_q[i], 
+                    #    num_samples, 
+                    #   self.z_dim
+                    #   ).cpu().numpy()
+                    
 
             # if nans in samples then keep drawing samples until there are no Nans (for whan samples are outside prior)
             if np.any(np.isnan(t_net_samples)):
@@ -410,6 +470,7 @@ class CVAE(nn.Module):
                         y[i], 
                         mu_r[i], 
                         log_var_r[i], 
+                        cat_weight_r[i],
                         num_nans, 
                         self.z_dim, 
                         self.x_dim, 

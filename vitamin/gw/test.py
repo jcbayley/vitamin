@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import time
 from ..train_plots import plot_posterior, plot_JS_div
+from ..tools import latent_corner_plot
+import os
 
 def test_model(
     save_dir, 
@@ -21,22 +23,25 @@ def test_model(
     with torch.no_grad():
         n_test_data = len(test_dataset)
 
-        samples = model.test(
+        samples, samples_r, samples_q = model.test(
                 torch.Tensor(test_dataset.Y_noisy).to(device), 
                 num_samples=n_samples, 
                 transform_func = None,
-                return_latent = False)
+                return_latent = True,
+                par = torch.Tensor(test_dataset.X).to(device)
+                )
 
         for step in range(n_test_data):
+            if step not in test_dataset.samples_available["dynesty"]:
+                continue
+            
             if step > len(test_dataset):
                 break
             if plot_latent:
-                mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = model.gen_z_samples(
-                    torch.unsqueeze(torch.Tensor(test_dataset.X[step]).to(device),0), 
-                    torch.unsqueeze(torch.Tensor(test_dataset.Y_noisy[step]).to(device),0), 
-                    nsamples=1000)
-
-                plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=latent_dir)
+                if not os.path.isdir(os.path.join(save_dir, "latent_dir")):
+                    os.makedirs(os.path.join(save_dir, "latent_dir"))
+                fig = latent_corner_plot(samples_r[step].squeeze(), samples_q[step].squeeze())
+                fig.savefig(os.path.join(save_dir, "latent_dir", f"latent_plot_{step}.png"))
 
             allinds = []
             for samp, sampind in test_dataset.samples_available.items():
@@ -64,7 +69,7 @@ def test_model(
                         all_other_samples=bilby_samples[:,step,:], 
                         config=config, 
                         unconvert_parameters = test_dataset.unconvert_parameters)
-                    plot_JS_div(JS_est[:10], JS_labels)
+                    #plot_JS_div(JS_est[:10], JS_labels)
                 else:
                     print("not plotting posterior, bilby samples wrong shape")
 

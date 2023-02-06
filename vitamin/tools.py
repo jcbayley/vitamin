@@ -2,6 +2,7 @@ import bilby
 import pandas
 import numpy as np
 import matplotlib.pyplot as plt
+import corner
 import os
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -13,13 +14,20 @@ def latent_corner_plot(zr_sample, zq_sample):
     zrshape = np.shape(zr_sample)
     num_latent = zrshape[-1]
     randint = np.random.randint(0,len(zr_sample),size = 1000)
-    cfig = corner.corner(zq_sample[randint], labels = ["z_{}".format(i) for i in range(num_latent)], color="C0")
+    cfig = corner.corner(zq_sample[randint].numpy(), labels = ["z_{}".format(i) for i in range(num_latent)], color="C0")
     corner.corner(zr_sample[randint], fig = cfig, color="C1")
 
     return cfig
 
-
 def latent_samp_fig(zr_sample, zq_sample, truths):
+
+    print(zr_sample.shape, zq_sample.shape)
+    fig = corner.corner(zr_sample, truths = truths)
+    corner.corner(zq_sample, fig = fig)
+
+    return fig
+
+def latent_samp_fig_old(zr_sample, zq_sample, truths):
     """
     plot latent space samples as histogram
     """

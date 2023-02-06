@@ -138,9 +138,9 @@ def get_detectors(dets):
         detectors[i] = {}
         detectors[i]["detector_tensor"] = detval.response
 
-        detectors[i]["vertex"] = get_vertex_position_geocentric(
-            detval.frDetector.vertexLongitudeRadians, 
+        detectors[i]["vertex"] = get_vertex_position_geocentric( 
             detval.frDetector.vertexLatitudeRadians, 
+            detval.frDetector.vertexLongitudeRadians,
             detval.frDetector.vertexElevation
             )
 
