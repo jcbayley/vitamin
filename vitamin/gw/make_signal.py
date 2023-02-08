@@ -23,7 +23,7 @@ def time_delay_from_geocenter(detector, ra, dec, time):
         np.sin(theta)*np.sin(phi),
         np.cos(theta)
     ]
-    delta_d = detector["vertex"] - np.array([0,0,0])
+    delta_d = np.array([0,0,0]) - detector["vertex"]
     return np.dot(omega, delta_d)/speed_of_light
 
 def get_polarisation_tensors(ra, dec, time, psi):
