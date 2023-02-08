@@ -96,6 +96,8 @@ class CVAE(nn.Module):
         self.small_const = 1e-13
         self.ramp = 1.0
         self.logvarfactor = 1
+        self.latent_minlogvar = -4
+        self.latent_maxlogvar = 3
         
         
         # encoder r1(z|y) 
@@ -198,13 +200,21 @@ class CVAE(nn.Module):
                 meansize = output_dim
             if weight:
                 setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+                torch.nn.init.xavier_uniform(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
             else:
                 setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
+                torch.nn.init.xavier_uniform(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
         if variance:
             if weight:
                 setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+                getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(0.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
             else:
                 setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+                getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(0.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
 
         if weight:
             setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
@@ -218,6 +228,9 @@ class CVAE(nn.Module):
 
     def logvar_act(self, x):
         return (self.maxlogvar - self.minlogvar)*torch.sigmoid(x) + self.minlogvar
+
+    def latent_logvar_act(self, x):
+        return (self.latent_maxlogvar - self.latent_minlogvar)*torch.sigmoid(x) + self.latent_minlogvar
         
     def encode_r(self,y):
         """ encoder r1(z|y) , takes in observation y"""
@@ -225,7 +238,7 @@ class CVAE(nn.Module):
         lin_in = torch.flatten(conv,start_dim=1)
         lin = self.rencoder_lin(lin_in)
         z_mu = self.mu_r(lin) # latent means
-        z_log_var = self.logvar_act(self.log_var_r(lin)) # latent variances
+        z_log_var = self.latent_logvar_act(self.log_var_r(lin)) # latent variances
         z_cat_weight = self.sigmoid(self.cat_weight_r(lin))
         return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
     
@@ -235,7 +248,7 @@ class CVAE(nn.Module):
         lin_in = torch.cat([torch.flatten(conv,start_dim=1), par],1)
         lin = self.qencoder_lin(lin_in)
         z_mu = self.mu_q(lin)  # latent means
-        z_log_var = self.logvar_act(self.log_var_q(lin))  # latent vairances
+        z_log_var = self.latent_logvar_act(self.log_var_q(lin))  # latent vairances
         #z_cat_weight = self.sigmoid(self.cat_weight_q(lin))
         return z_mu, z_log_var
         #return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
@@ -262,13 +275,15 @@ class CVAE(nn.Module):
     def cat_gauss_dist(self, mean, log_var, cat_weight):
         """ KL divergence for Multi dimension categorical gaussian"""
         mix = torch.distributions.Categorical(probs=cat_weight)
-        comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var + (1-self.ramp)*self.logvarfactor)), 1)
+        #comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var + (1-self.ramp)*self.logvarfactor)), 1)
+        comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var)), 1)
         gmm = torch.distributions.MixtureSameFamily(mix, comp)
         return gmm
 
     def multi_gauss_dist(self, mean, log_var):
         """ KL divergence for Multi dimension categorical gaussian"""
-        comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var+(1-self.ramp)*self.logvarfactor)))
+        #comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var+(1-self.ramp)*self.logvarfactor)))
+        comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var)))
         return comp
 
     def trunc_gauss_sample(self, mu, log_var):
@@ -299,10 +314,10 @@ class CVAE(nn.Module):
 
     def KL_multigauss(self, r1_dist, q_dist, z_samp):
         """ KL divergence for Multi dimension categorical gaussian"""
-        selfent_q = -1.0*torch.mean(q_dist.entropy())
+        selfent_q = -1.0*q_dist.entropy()
         log_r1_q = r1_dist.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
-        cost_KL = selfent_q - torch.mean(log_r1_q)
-        return cost_KL
+        cost_KL = selfent_q - log_r1_q
+        return torch.mean(cost_KL)
 
     def forward(self, y, par):
         """forward pass for training"""
@@ -321,7 +336,21 @@ class CVAE(nn.Module):
         return mu_par, log_var_par, mu_q, log_var_q, mu_r, log_var_r
 
     def compute_loss(self, y, par, ramp):
+        """ 
+        Compute the cost over a batch of input data (y) and its associated parameters (par)
+        args
+        ---------
+        y: Tensor
+            Input data
+        par: Tensor
+            Parameters associated with y data
 
+        Returns
+        recon_loss: Tensor
+            Reconstruction loss of the r2 distribution
+        kl_loss: Tensor
+            KL divergence between the q and r1 distributions
+        """
         mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y)     
         mu_q, log_var_q = self.encode_q(y, par) # encode q(z|x, y)  
 
@@ -447,16 +476,9 @@ class CVAE(nn.Module):
                 q_samples.append(
                     self.multi_gauss_dist(
                         mu_q[i].repeat(num_samples, 1, 1), 
-                        log_var_q[i].repeat(num_samples, 1, 1)).sample()
+                        log_var_q[i].repeat(num_samples, 1, 1)).sample().cpu().numpy()
                 )
-                    #self.gauss_sample(
-                    #    mu_q[i], 
-                    #    log_var_q[i], 
-                    #    num_samples, 
-                    #   self.z_dim
-                    #   ).cpu().numpy()
                     
-
             # if nans in samples then keep drawing samples until there are no Nans (for whan samples are outside prior)
             if np.any(np.isnan(t_net_samples)):
                 num_nans = np.inf
@@ -491,6 +513,10 @@ class CVAE(nn.Module):
             net_samples.append(t_net_samples)
             if return_latent:
                 z_samples.append(t_znet_samples)
+
+        print(np.shape(net_samples))
+        print(np.shape(z_samples))
+        print(np.shape(q_samples))
         
         if return_latent:
             return np.array(net_samples), np.array(z_samples), np.array(q_samples)

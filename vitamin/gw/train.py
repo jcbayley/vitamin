@@ -319,8 +319,7 @@ def train_loop(
                 np.savetxt(f,savearr)
             """
                 
-        
-        if epoch % test_interval == 0:
+        if int(epoch % test_interval) == 0:
             if do_test or epoch == epochs - 1:
                 # test plots
                 if not os.path.isdir(os.path.join(save_dir, f"epochs_{int(epoch)}")):
@@ -352,6 +351,10 @@ def train_loop(
                         
                     torch.save(model, os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))  # save the model
                     print("done_test")
+                else:
+                    print("No test data")
+            else:
+                print("Not doing test")
 
         
         if epoch % num_epoch_load == 0:

@@ -2,12 +2,15 @@ from signal import SIGRTMAX
 from tarfile import LENGTH_LINK
 import vitamin
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
 import os
 import pickle
 import pymc as pm
 
-output_dir = "./outputs/"
+output_dir = "./outputs_analytic/"
+
+if not os.path.isdir(output_dir):
+    os.makedirs(output_dir)
 
 def data_model(x, ms):
     #define a simple straight line model
@@ -30,18 +33,18 @@ def get_dataset(num_data, length = 100, sigma=0.1, num_params = 2):
         x.append(ms)
     return np.array(x),np.array(y)
 
-num_params = 5
-length = 100
+num_params = 8
+length = 512
 # generate the training dataset and the validation dataset
 train_dat = get_dataset(2000000, num_params=num_params, length=length)
 val_dat = get_dataset(1000, num_params=num_params, length=length)
 
 # a few conditions to choose which samplers to run
-generate_test = False
-load_test = True
+generate_test = True
+load_test = False
 train_network = True
 test_network = True
-run_mcmc_sampler = False
+run_mcmc_sampler = True
 make_test_plots = True
 
 if generate_test:   
