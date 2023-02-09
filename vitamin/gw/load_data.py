@@ -13,7 +13,6 @@ from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
 from ..group_inference_parameters import group_outputs
-from .make_signal import get_detector_response, get_detectors
 
 class DataSet(torch.utils.data.Dataset):
 
@@ -224,8 +223,6 @@ class DataSet(torch.utils.data.Dataset):
         
         all_signals = np.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
             
-        frequencies = np.arange(int(0.5*self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]) + 1) * 1./(self.config["data"]["duration"])
-        detector_dict = get_detectors(self.config["data"]['detectors'])
         stload = time.time()
         for inj in range(len(data["x_data"])):
             #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
@@ -237,16 +234,7 @@ class DataSet(torch.utils.data.Dataset):
             whitened_signals_td = []
             polarisations = {"plus":data["y_hplus_hcross"][inj][:,0], "cross":data["y_hplus_hcross"][inj][:,1]}
             for dt in range(len(self.config["data"]['detectors'])):
-                #signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
-                signal_fd = get_detector_response(
-                    detector_dict[dt], 
-                    polarisations, 
-                    injection_parameters, 
-                    self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2, 
-                    frequencies, 
-                    lal=True
-                    )
-
+                signal_fd = ifos[dt].get_detector_response(polarisations, injection_parameters)
                 whitened_signal_fd = signal_fd/ifos[dt].amplitude_spectral_density_array
                 all_signals[inj,dt] = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
                 #whitened_signals_td.append(whitened_signal_td)
@@ -256,7 +244,6 @@ class DataSet(torch.utils.data.Dataset):
             print("Response setup", time.time() - stload)
 
         stload = time.time()
-        #data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
         data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
                
         #data["x_data"], time_correction = self.randomise_time(data["x_data"])
@@ -534,19 +521,15 @@ class DataSet(torch.utils.data.Dataset):
         # concatentation all the x data (parameters) from each of the files
 
         stload = time.time()
-        #data['x_data'] = torch.Tensor(np.concatenate(np.array(data['x_data']), axis=0)).squeeze()
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
 
         if self.test_set:
             data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
-            #data['y_data_noisy'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_data_noisy']), axis=0)),2,1)
         else:
             if self.config["data"]["save_polarisations"] == True:
                 data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
-                #data['y_hplus_hcross'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_hplus_hcross']), axis=0)),2,1)
             else:
                 data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
-                #data['y_data_noisefree'] = torch.transpose(torch.Tensor(np.concatenate(np.array(data['y_data_noisefree']), axis=0)),2,1)
 
         
         if self.test_set:
@@ -619,8 +602,9 @@ class DataSet(torch.utils.data.Dataset):
             data["y_data_noisy"] = np.array(real_det_noise)
             np.swapaxes(data["y_data_noisy"], 1,2)
 
-        #print(np.shape(data["y_data_noisefree"]))
-        #np.transpose(data["y_data_noisefree"], 1,2)
+        print("beforeswap:", np.shape(data["y_data_noisefree"]))
+        data["y_data_noisefree"]= np.swapaxes(data["y_data_noisefree"], 1,2)
+        print("afterswap:", np.shape(data["y_data_noisefree"]))
         
 
         if self.test_set:

@@ -100,8 +100,57 @@ class CVAE(nn.Module):
         self.latent_maxlogvar = 3
         
         
+        self.shared_conv = torch.nn.Sequential(
+            nn.Conv1d(3, 64, 1, stride = 1),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(64, 32, 1, stride = 1),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(32, 32, 1, stride = 1),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(32, 16, 1, stride = 1),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+        )
+
+        self.rencoder_lin = torch.nn.Sequential(
+            nn.LazyLinear(2048),
+            nn.ReLU(),
+            nn.LazyLinear(1024),
+            nn.ReLU(),
+            nn.LazyLinear(512),
+            nn.ReLU(),
+            nn.LazyLinear(self.z_dim*self.n_modes*2 + self.n_modes)
+        )
+
+        self.qencoder_lin = torch.nn.Sequential(
+            nn.LazyLinear(2048),
+            nn.ReLU(),
+            nn.LazyLinear(1024),
+            nn.ReLU(),
+            nn.LazyLinear(512),
+            nn.ReLU(),
+            nn.LazyLinear(self.z_dim*2)
+        )
+        
+
+        self.decoder_lin = torch.nn.Sequential(
+            nn.LazyLinear(2048),
+            nn.ReLU(),
+            nn.LazyLinear(1024),
+            nn.ReLU(),
+            nn.LazyLinear(512),
+            nn.ReLU(),
+            nn.LazyLinear(self.x_dim*2)
+        )
+        
+        
+        
+        """
         # encoder r1(z|y) 
-        self.rencoder_conv, self.rencoder_lin = self.create_network(
+        self.shared_conv, self.rencoder_lin, shared_out_sizes = self.create_network(
             "r",
             self.y_dim, 
             self.z_dim, 
@@ -113,27 +162,30 @@ class CVAE(nn.Module):
 
         # conv layers not used for next two networks, they both use the same rencoder
         # encoder q(z|x, y) 
-        qencoder_conv, self.qencoder_lin = self.create_network(
+        self.qencoder_lin = self.create_network(
             "q", 
             self.y_dim, 
             self.z_dim, 
             append_dim=self.x_dim , 
             fc_layers = self.q_network, 
-            conv_layers = self.shared_network,
+            conv_layers = None,
             weight=False,
-            n_modes = self.n_modes)
+            n_modes = self.n_modes,
+            layer_out_sizes = shared_out_sizes)
 
         # decoder r2(x|z, y) 
-        decoder_conv, self.decoder_lin = self.create_network(
+        self.decoder_lin = self.create_network(
             "d", 
             self.y_dim, 
             self.x_dim, 
             append_dim=self.z_dim, 
             fc_layers = self.r2_network, 
-            conv_layers = self.shared_network, 
-            meansize = self.output_dim)
+            conv_layers = None, 
+            meansize = self.output_dim,
+            layer_out_sizes = shared_out_sizes)
+        """
         
-    def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None, n_modes = 1):
+    def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None, n_modes = 1, layer_out_sizes=[]):
         """ Generate arbritrary network, with convolutional layers or not
         args
         ------
@@ -154,15 +206,15 @@ class CVAE(nn.Module):
         conv_layers: list
             list of convolutional layers, format:[(8,8,2,1), (8,8,2,1)] = [(num_filt1, conv_size1, max_pool_size1, dilation1), (num_filt2, conv_size2, max_pool_size2, dilation2)] 
         """
-
-        conv_network = nn.Sequential() # initialise networks
+         # initialise networks
         lin_network = nn.Sequential()
-        layer_out_sizes = []
         num_fc = len(fc_layers)
         n_channels = self.n_channels
         insize = self.y_dim
         num_conv = 0
         if conv_layers is not None:
+            layer_out_sizes = []
+            conv_network = nn.Sequential()
             num_conv = len(conv_layers)
             # add convolutional layers
             for i in range(num_conv):
@@ -180,8 +232,8 @@ class CVAE(nn.Module):
                 n_channels = conv_layers[i][0]
 
         # define the input size to fully connected layer
-        print(f"LIN OUTPUT SIZE: {layer_out_sizes} ------------------------------------------------------")
-        lin_input_size = np.prod(layer_out_sizes[-1]) if num_conv > 0 else self.y_dim
+        
+        lin_input_size = np.prod(layer_out_sizes[-1]) if len(layer_out_sizes) > 0 else self.y_dim
         if append_dim:
             lin_input_size += append_dim
         
@@ -219,8 +271,10 @@ class CVAE(nn.Module):
         if weight:
             setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
 
-
-        return conv_network, lin_network
+        if conv_layers is not None:
+            return conv_network, lin_network, layer_out_sizes
+        else:
+            return lin_network
 
     def conv_out_size(self, in_dim, padding, dilation, kernel, stride):
         """ Get output size of a convolutional layer (or one filter from that layer)"""
@@ -232,9 +286,10 @@ class CVAE(nn.Module):
     def latent_logvar_act(self, x):
         return (self.latent_maxlogvar - self.latent_minlogvar)*torch.sigmoid(x) + self.latent_minlogvar
         
+    '''
     def encode_r(self,y):
         """ encoder r1(z|y) , takes in observation y"""
-        conv = self.rencoder_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
         lin_in = torch.flatten(conv,start_dim=1)
         lin = self.rencoder_lin(lin_in)
         z_mu = self.mu_r(lin) # latent means
@@ -244,7 +299,7 @@ class CVAE(nn.Module):
     
     def encode_q(self,y,par):
         """ encoder q(z|x, y) , takes in observation y and paramters par (x)"""
-        conv = self.rencoder_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
         lin_in = torch.cat([torch.flatten(conv,start_dim=1), par],1)
         lin = self.qencoder_lin(lin_in)
         z_mu = self.mu_q(lin)  # latent means
@@ -256,21 +311,37 @@ class CVAE(nn.Module):
     
     def decode(self, z, y):
         """ decoder r2(x|z, y) , takes in observation y and latent paramters z"""
-        conv = self.rencoder_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
         lin_in = torch.cat([torch.flatten(conv,start_dim=1),z],1) 
         lin = self.decoder_lin(lin_in)
         par_mu = self.mu_d(lin) # parameter means
         par_mu = self.sigmoid(par_mu)
         par_log_var = self.logvar_act(self.log_var_d(lin))  # parameter variances
         return par_mu, par_log_var
+    '''
 
-    def gauss_sample(self, mean, log_var, num_batch, dim):
-        """ Sample trom a gaussian with given mean and log variance 
-        (takes in a number (dim) of means and variances, and samples num_batch times)"""
-        std = torch.exp(0.5 * (log_var))
-        eps = torch.randn([num_batch, dim]).to(self.device)
-        sample = torch.add(torch.mul(eps,std),mean)
-        return sample
+    def encode_r(self,y):
+        """ encoder r1(z|y) , takes in observation y"""
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim)))
+        lin = self.rencoder_lin(torch.flatten(conv, start_dim=1))
+        linsplit = torch.tensor_split(lin, (self.n_modes*self.z_dim, 2*self.n_modes*self.z_dim), dim=1)
+        return self.sigmoid(linsplit[0].reshape(-1, self.n_modes, self.z_dim)), self.latent_logvar_act(linsplit[1].reshape(-1, self.n_modes, self.z_dim)), self.sigmoid(linsplit[2])
+    
+    def encode_q(self,y,par):
+        """ encoder q(z|x, y) , takes in observation y and paramters par (x)"""
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim)))
+        lin_in = torch.cat([torch.flatten(conv,start_dim=1), par],1)
+        lin = self.qencoder_lin(lin_in)
+        linsplit = torch.tensor_split(lin, 2, dim=1)
+        return self.sigmoid(linsplit[0]), self.latent_logvar_act(linsplit[1])
+    
+    def decode(self, z, y):
+        """ decoder r2(x|z, y) , takes in observation y and latent paramters z"""
+        conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        lin_in = torch.cat([torch.flatten(conv,start_dim=1),z],1) 
+        lin = self.decoder_lin(lin_in)
+        linsplit = torch.tensor_split(lin, 2, dim=1)
+        return self.sigmoid(linsplit[0]), self.logvar_act(linsplit[1])
 
     def cat_gauss_dist(self, mean, log_var, cat_weight):
         """ KL divergence for Multi dimension categorical gaussian"""
@@ -300,6 +371,17 @@ class CVAE(nn.Module):
         dist = TruncatedNormal(mu, sigma, a=0, b=1)
         return dist.log_prob(par)
 
+    def log_likelihood_gauss(self, par, mu, log_var):
+        """ Gausisan log likelihood"""
+        sigma = torch.sqrt(torch.exp(log_var))
+        dist = torch.distributions.Normal(mu, sigma)
+        return dist.log_prob(par)
+
+    def gauss_sample(self, mu, log_var):
+        """ Gausisan log likelihood"""
+        sigma = torch.sqrt(torch.exp(log_var))
+        dist = torch.distributions.Normal(mu, sigma)
+        return dist.sample()
     
     def KL_gauss(self,mu_r,log_var_r,mu_q,log_var_q):
         """Gaussian KL divergence between two distributions"""
@@ -313,11 +395,21 @@ class CVAE(nn.Module):
         return kl_loss
 
     def KL_multigauss(self, r1_dist, q_dist, z_samp):
-        """ KL divergence for Multi dimension categorical gaussian"""
-        selfent_q = -1.0*q_dist.entropy()
+        """ KL divergence for Multi dimension categorical gaussian
+        args
+        --------
+        r1_dist: torch.distribution
+        q_dist: torch.distribution
+        z_samp: torch.Tensor
+            Tensor of samples of shape [batch_size, z_dim]
+        returns
+        --------
+        mean KL over batch
+        """
+        selfent_q = -1.0*q_dist.entropy() # shape [batch_size]
         log_r1_q = r1_dist.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
         cost_KL = selfent_q - log_r1_q
-        return torch.mean(cost_KL)
+        return cost_KL
 
     def forward(self, y, par):
         """forward pass for training"""
@@ -364,14 +456,14 @@ class CVAE(nn.Module):
         mu_par, log_var_par = self.decode(z_sample,y) # decode r2(x|z, y)
 
         #kl_loss = torch.mean(self.KL_gauss(mu_r, log_var_r, mu_q, log_var_q))
-        kl_loss = self.KL_multigauss(r1_dist, z_dist, z_sample)
+        kl_div = self.KL_multigauss(r1_dist, z_dist, z_sample)
 
-        #print(np.shape(par), np.shape(mu_par), np.shape(log_var_par))
-        gauss_loss = self.log_likelihood_trunc_gauss(par, mu_par, log_var_par)
+        gauss_loss = self.log_likelihood_gauss(par, mu_par, log_var_par)
         #print(np.shape(gauss_loss))
 
-        recon_loss = -1.0*torch.mean(torch.sum(gauss_loss, axis = 1))
-        
+        recon_loss = 1.0*torch.mean(torch.sum(gauss_loss, axis = 1))
+        kl_loss = torch.mean(kl_div)
+
         return recon_loss, kl_loss
 
         
@@ -390,7 +482,7 @@ class CVAE(nn.Module):
 
         # sample parameter space from returned mean and variance 
         mu_par, log_var_par = self.decode(z_sample,ys) # decode r2(x|z, y) from z        
-        samp = self.trunc_gauss_sample(mu_par, log_var_par)
+        samp = self.gauss_sample(mu_par, log_var_par)
 
         if return_latent:
             return samp.cpu().numpy(), z_sample.cpu().numpy()
@@ -424,7 +516,7 @@ class CVAE(nn.Module):
             ys = y[i].repeat(num_samples,1,1).view(-1, y.size(1), y.size(2)) # repeat data so same size as the z samples
 
             mu_par, log_var_par = self.decode(zr_sample,ys) # decode r2(x|z, y) from z        
-            samp = self.trunc_gauss_sample(mu_par, log_var_par)
+            samp = self.gauss_sample(mu_par, log_var_par)
 
             # add samples to list    
             x_samples.append(samp.cpu().numpy())

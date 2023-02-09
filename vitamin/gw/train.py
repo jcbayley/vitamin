@@ -83,8 +83,6 @@ def setup_and_train(config):
     
     model = CVAE(config, device=device).to(device)
 
-    if config["training"]["optimiser"] == "adam":
-        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
         model = torch.load(config["training"]["transfer_model_checkpoint"]).to(device)
@@ -100,9 +98,14 @@ def setup_and_train(config):
         with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"r") as f:
             start_epoch = len(np.loadtxt(f))
     
+    model.forward(torch.ones((1, model.n_channels, model.y_dim)).to(device), torch.ones((1, model.x_dim)).to(device))
     with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
-        summary = torchsummary.summary(model, [(1, model.y_dim, model.n_channels), (model.x_dim, )], depth = 3)
+        summary = torchsummary.summary(model, [(1, model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
         f.write(str(summary))
+
+    if config["training"]["optimiser"] == "adam":
+        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
+
 
     train_loop(
         model=model, 
@@ -155,7 +158,7 @@ def train_batch(
         # update the weights                                                                                                                              
         optimiser.step()
 
-    return loss.item(), kl_loss.item(), -recon_loss.item() 
+    return loss.item(), kl_loss.item(), recon_loss.item() 
 
 
 def train_loop(
@@ -211,6 +214,9 @@ def train_loop(
             
     start_train_time = time.time()
 
+    for param in model.rencoder_lin.parameters():
+        param.requires_grad = False
+
     for epoch in range(epochs):
         if continue_train:
             epoch = epoch + old_epochs[-1]
@@ -218,6 +224,11 @@ def train_loop(
         model.train()
         model.device = device
         model.to(device)
+
+        if epoch == kl_start:
+            for param in model.rencoder_lin.parameters():
+                param.requires_grad = True
+
 
         if epoch > dec_start:
             adjust_learning_rate(learning_rate, optimiser, epoch - dec_start, factor=dec_rate, low_cut = low_cut)
