@@ -64,6 +64,12 @@ class CVAE(tf.keras.Model):
         
         for key, val in default_kwargs.items():
             setattr(self, key, val)
+        
+        for key, val in kwargs.items():
+            if key in default_kwargs.keys():
+                setattr(self, key, val)
+            else:
+                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
 
         if config is not None:
             self.config = config
@@ -85,12 +91,6 @@ class CVAE(tf.keras.Model):
             self.hidden_activation = self.config["model"]["hidden_activation"]
             if self.logvarmin:
                 self.logvarmin_start = self.config["training"]["logvarmin_start"]
-
-        for key, val in kwargs.items():
-            if key in default_kwargs.keys():
-                setattr(self, key, val)
-            else:
-                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
 
         #self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
         if self.hidden_activation == "leakyrelu":
@@ -182,14 +182,31 @@ class CVAE(tf.keras.Model):
         #    conv = tf.keras.layers.concatenate([conv,convpsd])
 
         # r1 encoder network
-        if "keras" not in str(type(self.r1_network)):
+        if "keras" not in str(type(self.shared_network)):
             r1 = self.get_network(conv, self.r1_network, label = "r1")
         else:
             r1 = self.r1_network(conv)
-        r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name = "r1_mean_dense")(r1)
-        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation="relu")(r1)
+
+        r1mu = tf.keras.layers.Dense(
+            self.z_dim*self.n_modes, 
+            kernel_initializer = self.kernel_initializer, 
+            bias_initializer = self.bias_initializer_2, 
+            name = "r1_mean_dense")(r1)
+
+        r1logvar = tf.keras.layers.Dense(
+            self.z_dim*self.n_modes, 
+            kernel_initializer = self.kernel_initializer, 
+            bias_initializer = self.bias_initializer,
+            name="r1_logvar_dense",
+
+            activation="relu")(r1)
         #r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation = self.logvar_act)(r1)
-        r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_modes_dense")(r1)
+        r1modes = tf.keras.layers.Dense(
+            self.n_modes, 
+            kernel_initializer = self.kernel_initializer, 
+            bias_initializer = self.bias_initializer,
+            name="r1_modes_dense")(r1)
+
         r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
         #if self.include_psd:
         #    self.encoder_r1 = tf.keras.Model(inputs=[all_input_y,all_input_psd], outputs=r1,name="encoder_r1")
@@ -200,12 +217,22 @@ class CVAE(tf.keras.Model):
         q_input_x = tf.keras.Input(shape=(self.x_dim))
         q_inx = tf.keras.layers.Flatten()(q_input_x)
         q = tf.keras.layers.concatenate([conv,q_inx])
-        if "keras" not in str(type(self.q_network)):
+        if "keras" not in str(type(self.shared_network)):
             q = self.get_network(q, self.q_network, label = "q")
         else:
             q = self.q_network(conv)
-        qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name="q_mean_dense")(q)
-        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation="relu")(q)
+        qmu = tf.keras.layers.Dense(
+            self.z_dim, 
+            kernel_initializer = self.kernel_initializer, 
+            bias_initializer = self.bias_initializer_2, 
+            name="q_mean_dense")(q)
+
+        qlogvar = tf.keras.layers.Dense(
+            self.z_dim, kernel_initializer = self.kernel_initializer, 
+            bias_initializer = self.bias_initializer,
+            name="q_logvar_dense",
+            activation="relu")(q)
+            
         #qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation=self.logvar_act)(q)
         q = tf.keras.layers.concatenate([qmu,qlogvar])
         #if self.include_psd:
@@ -217,7 +244,7 @@ class CVAE(tf.keras.Model):
         r2_input_z = tf.keras.Input(shape=(self.z_dim))
         r2_inz = tf.keras.layers.Flatten()(r2_input_z)
         r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        if "keras" not in str(type(self.r2_network)):
+        if "keras" not in str(type(self.shared_network)):
             r2 = self.get_network(r2, self.r2_network, label = "r2")
         else:
             r2 = self.r2_network(conv)
@@ -371,6 +398,7 @@ class CVAE(tf.keras.Model):
             selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
             log_r1_q = gm_r1.log_prob(tf.cast(z_samp,dtype=tf.float32))   # evaluate the log prob of r1 at the q samples
             cost_KL = tf.cast(selfent_q,dtype=tf.float32) - tf.reduce_mean(log_r1_q)
+
             return cost_recon, cost_KL, outs 
             
         return loss_func

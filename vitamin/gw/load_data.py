@@ -233,12 +233,12 @@ class DataLoader(tf.keras.utils.Sequence):
 
         data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
                
-        data["x_data"], time_correction = self.randomise_time(data["x_data"])
+        #data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
 
-        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction*time_correction
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction#*time_correction
         
         data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])#*distance_correction
         data["y_data_noisefree"] *= distance_correction
@@ -279,7 +279,6 @@ class DataLoader(tf.keras.utils.Sequence):
             # redefine the psd based on the original psds without random factor (for whitening)
             #self.get_psd_for_ifo(ifos, random_psd_factor = False)
 
-            #injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
             injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
                     
             #injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
@@ -309,7 +308,7 @@ class DataLoader(tf.keras.utils.Sequence):
         if self.config["model"]["include_psd"]:
             data["y_psds"] = np.transpose(all_psds, [0,2,1])
                
-        data["x_data"], time_correction = self.randomise_time(data["x_data"])
+        #data["x_data"], time_correction = self.randomise_time(data["x_data"])
         data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
         data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
@@ -389,7 +388,7 @@ class DataLoader(tf.keras.utils.Sequence):
         return np.transpose(np.array(noise_samples), (0,2,1))
 
     def load_real_noise(self, num_segments):
-
+        
         # compute the number of time domain samples
         Nt = int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])
 
@@ -561,6 +560,7 @@ class DataLoader(tf.keras.utils.Sequence):
                     psds.append(np.array([psd_noise[:-1], psd_noise[:-1]]).flatten())
                 data["y_psds"] = np.repeat(np.expand_dims(np.array(psds).T,axis=0), np.shape(data["y_data_noisy"])[0], axis=0)
                 data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
+                
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
 
         data["x_data"] = data["x_data"][:,self.par_idx]
