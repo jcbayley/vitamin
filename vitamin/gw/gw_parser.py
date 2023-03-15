@@ -9,7 +9,7 @@ from collections import OrderedDict
 import bilby
 import os 
 from pathlib import Path
-from ..group_inference_parameters import group_outputs
+#from ..group_inference_parameters import group_outputs
 import regex
 from ..vitamin_parser import InputParser
 

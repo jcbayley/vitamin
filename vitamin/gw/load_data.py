@@ -12,7 +12,7 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
-from ..group_inference_parameters import group_outputs
+#from ..group_inference_parameters import group_outputs
 
 class DataSet(torch.utils.data.Dataset):
 
@@ -53,6 +53,24 @@ class DataSet(torch.utils.data.Dataset):
         self.unconvert_parameters = unconvert_parameters
         self.convert_parameters = convert_parameters
         self.verbose = False
+
+        if self.config['training']['make_sig']:
+            # define the start time of the timeseries
+            self.start_time = self.config["data"]["ref_geocent_time"]-self.config["data"]["duration"]/2.0
+            
+            # Fixed arguments passed into the source model 
+            waveform_arguments = dict(waveform_approximant=self.config["data"]["waveform_approximant"],
+                                    reference_frequency=self.config["data"]["reference_frequency"], 
+                                    minimum_frequency=self.config["data"]["minimum_frequency"],
+                                    maximum_frequency=self.config["data"]["sampling_frequency"]/2.0)
+
+            # Create the waveform_generator using a LAL BinaryBlackHole source function
+            self.waveform_generator = bilby.gw.WaveformGenerator(
+                duration=self.config["data"]["duration"], sampling_frequency=self.config["data"]["sampling_frequency"],
+                frequency_domain_source_model=bilby.gw.source.lal_binary_black_hole,
+                parameter_conversion=bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters,
+                waveform_arguments=waveform_arguments,
+                start_time=self.start_time)
 
 
     def __len__(self):
@@ -131,6 +149,8 @@ class DataSet(torch.utils.data.Dataset):
             if self.config["data"]["use_real_detector_noise"]:
                 Y_noisefree = (Y_noisefree + self.Y_noise[start_index:end_index])/float(self.config["data"]["y_normscale"])
             elif self.config["data"]["randomise_psd_factor"] != 0:
+                Y_noisefree = (Y_noisefree)/float(self.config["data"]["y_normscale"])
+            elif self.config['training']['make_sig']:
                 Y_noisefree = (Y_noisefree)/float(self.config["data"]["y_normscale"])
             else:
                 # noise scale is a factor of two to match that of the test results out of bilby
@@ -259,6 +279,43 @@ class DataSet(torch.utils.data.Dataset):
             print("Rand phase/dist setup", time.time() - stload)
 
         del y_temp_fft
+        return data
+
+    def get_whitened_signal(self, data):
+
+        ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
+        # set the psd once using a random factor (if specified in config) to generate strain data
+        data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
+        
+        # get initial psd to whiten with
+        self.get_psd_for_ifo(ifos, random_psd_factor = False)
+
+        all_signals = np.zeros((len(data["x_data"]), len(self.config["data"]["detectors"]), int(self.config["data"]["sampling_frequency"]*self.config["data"]["duration"])))
+
+        for inj in range(len(data["x_data"])):
+
+            ifos.set_strain_data_from_power_spectral_densities(
+                sampling_frequency=self.config["data"]["sampling_frequency"], duration=self.config["data"]["duration"],
+                start_time=self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2)
+
+            data["x_data"] = self.randomise_extrinsic_parameters(data["x_data"])
+
+            injection_parameters = {key: data["x_data"][inj][ind] for ind, key in enumerate(self.injection_parameters)}
+                    
+            ifos.inject_signal(waveform_generator=self.waveform_generator,
+                           parameters=injection_parameters)
+            #injection_parameters["geocent_time"] += self.config["data"]["ref_geocent_time"]
+
+            Nt = self.config["data"]["sampling_frequency"]*self.config["data"]["duration"]
+            whitened_signals_td = []
+            psds = []
+            for dt in range(len(self.config["data"]['detectors'])):
+                whitened_signal_fd = ifos[dt].frequency_domain_strain/ifos[dt].amplitude_spectral_density_array
+                all_signals[inj,dt] = np.sqrt(2.0*Nt)*np.fft.irfft(whitened_signal_fd)
+                    
+
+        data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
+
         return data
 
     def get_whitened_signal_noise(self, data):
@@ -476,60 +533,78 @@ class DataSet(torch.utils.data.Dataset):
 
         #idx = np.sort(np.random.choice(self.params["tset_split"],self.params["batch_size"],replace=False))
         injpar_order = []
-        for i,filename in enumerate(filenames):
-            try:
-                stload = time.time()
-                h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
-                # dont like the below code, will rewrite at some point
-                if self.test_set:
-                    t_noisefree = h5py_file['y_data_noisefree']
-                    t_noisy = h5py_file['y_data_noisy'][:,:int(self.config["data"]["duration"]*self.config["data"]["sampling_frequency"])]
-                    data['y_data_noisefree'].append([t_noisefree])
-                    data['y_data_noisy'].append([t_noisy])
-                    data['snrs'].append(h5py_file['snrs'])
-                    injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
-                    injection_parameters_values = np.array(h5py_file['injection_parameters_values'])
+        if not self.config['training']['make_sig'] or self.test_set:
+            for i,filename in enumerate(filenames):
+                try:
+                    stload = time.time()
+                    h5py_file = h5py.File(os.path.join(self.input_dir,filename), 'r')
+                    # dont like the below code, will rewrite at some point
+                    if self.test_set:
+                        t_noisefree = h5py_file['y_data_noisefree']
+                        t_noisy = h5py_file['y_data_noisy'][:,:int(self.config["data"]["duration"]*self.config["data"]["sampling_frequency"])]
+                        data['y_data_noisefree'].append(t_noisefree)
+                        data['y_data_noisy'].append(t_noisy)
+                        data['snrs'].append(h5py_file['snrs'])
+                        injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                        injection_parameters_values = np.array(h5py_file['injection_parameters_values'])
 
-                    self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
-                    self.injection_parameters = injection_parameters_keys
-                    # reorder injection parameters into inference parameters order
-                    data["x_data"].append([injection_parameters_values])#[self.par_idx]])
-                    #data["x_data"].append([injection_parameters_values[self.par_idx]])
+                        self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                        self.injection_parameters = injection_parameters_keys
+                        # reorder injection parameters into inference parameters order
+                        data["x_data"].append([injection_parameters_values])#[self.par_idx]])
+                        #data["x_data"].append([injection_parameters_values[self.par_idx]])
 
-                else:
-                    if self.config["data"]["save_polarisations"]:
-                        data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
                     else:
-                        data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
-                    injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
-                    injection_parameters_values = np.array(h5py_file['injection_parameters_values'])[:, indices[i]]
+                        if self.config["data"]["save_polarisations"]:
+                            data["y_hplus_hcross"].append(h5py_file["y_hplus_hcross"][indices[i]])
+                        else:
+                            data['y_data_noisefree'].append(h5py_file['y_data_noisefree'][indices[i]])
+                        injection_parameters_keys = [st.decode() for st in h5py_file['injection_parameters_keys']]
+                        injection_parameters_values = np.array(h5py_file['injection_parameters_values'])[:, indices[i]]
 
-                    self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
-                    self.injection_parameters = injection_parameters_keys
-                    # reorder injection parameters into inference parameters order
-                    data["x_data"].append(np.array(injection_parameters_values.T))#[self.par_idx].T))
-                    #data["x_data"].append(np.array(injection_parameters_values[self.par_idx].T))
+                        self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], injection_parameters_keys)
+                        self.injection_parameters = injection_parameters_keys
+                        # reorder injection parameters into inference parameters order
+                        data["x_data"].append(np.array(injection_parameters_values.T))#[self.par_idx].T))
+                        #data["x_data"].append(np.array(injection_parameters_values[self.par_idx].T))
 
 
-                if not self.silent:
-                    print('...... Loaded file ' + os.path.join(self.input_dir,filename))
-            except OSError:
-                print('Could not load requested file: {}'.format(filename))
-                continue
-        if self.verbose:
-            print("File load: ", time.time() - stload)
-        # concatentation all the x data (parameters) from each of the files
+                    if not self.silent:
+                        print('...... Loaded file ' + os.path.join(self.input_dir,filename))
+                except OSError:
+                    print('Could not load requested file: {}'.format(filename))
+                    continue
+            if self.verbose:
+                print("File load: ", time.time() - stload)
+            # concatentation all the x data (parameters) from each of the files
+
+            if self.test_set:
+                data['y_data_noisy'] = np.transpose(np.array(data['y_data_noisy']),[0,2,1])
+            else:
+                if self.config["data"]["save_polarisations"] == True:
+                    data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
+                else:
+                    data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+        else:
+            data["x_data"] = []
+            injection_parameters = self.config["priors"].sample(len(filenames)*1000)
+            save_injection_parameters, added_keys = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(injection_parameters)
+            if "chirp_mass" not in save_injection_parameters:
+                save_injection_parameters["chirp_mass"] = bilby.gw.conversion.component_masses_to_chirp_mass(save_injection_parameters["mass_1"], save_injection_parameters["mass_2"])
+            if "mass_ratio" not in save_injection_parameters:
+                save_injection_parameters["mass_ratio"] = bilby.gw.conversion.component_masses_to_mass_ratio(save_injection_parameters["mass_1"], save_injection_parameters["mass_2"])
+            self.injection_parameters = []
+            injvals = []
+            for key, val in save_injection_parameters.items():
+                injvals.append(val)
+                self.injection_parameters.append(key)
+            data["x_data"].append(np.array(injvals).T)
+            self.par_idx = self.get_infer_pars(self.config["model"]["inf_pars_list"], self.injection_parameters)
 
         stload = time.time()
         data['x_data'] = np.concatenate(np.array(data['x_data']), axis=0).squeeze()
 
-        if self.test_set:
-            data['y_data_noisy'] = np.transpose(np.concatenate(np.array(data['y_data_noisy']), axis=0),[0,2,1])
-        else:
-            if self.config["data"]["save_polarisations"] == True:
-                data['y_hplus_hcross'] = np.transpose(np.concatenate(np.array(data['y_hplus_hcross']), axis=0),[0,2,1])
-            else:
-                data['y_data_noisefree'] = np.transpose(np.concatenate(np.array(data['y_data_noisefree']), axis=0),[0,2,1])
+        
 
         
         if self.test_set:
@@ -547,6 +622,8 @@ class DataSet(torch.utils.data.Dataset):
             if self.config["data"]["save_polarisations"]:
                 if float(self.config["data"]["randomise_psd_factor"]) != 0:
                     data = self.get_whitened_signal_noise(data)
+                elif self.config['training']['make_sig']:
+                    data = self.get_whitened_signal(data)
                 else:
                     data = self.get_whitened_signal_response(data)
                 if self.verbose:
@@ -562,7 +639,14 @@ class DataSet(torch.utils.data.Dataset):
 
                 pass
                 #del y_temp_fft
-        
+            if self.verbose:
+                print("beforeswap:", np.shape(data["y_data_noisefree"]))
+                
+            data["y_data_noisefree"]= np.swapaxes(data["y_data_noisefree"], 1,2)
+
+            if self.verbose:
+                print("afterswap:", np.shape(data["y_data_noisefree"]))
+                
         else:
             if self.config["model"]["include_psd"]:
                 ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
@@ -583,14 +667,22 @@ class DataSet(torch.utils.data.Dataset):
                 data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
 
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
-            np.swapaxes(data["y_data_noisy"], 1,2)
+
+            if len(np.shape(data["y_data_noisy"])) != 3:
+                raise Exception(f"data array should have three dimensions, current shape: {np.shape(data['y_data_noisy'])}")
+
+            data['y_data_noisy'] = np.transpose(np.array(data['y_data_noisy']),[0,2,1])
+            #np.swapaxes(data["y_data_noisy"], 1,2)
 
         stload = time.time()
         data["x_data"] = data["x_data"][:,self.par_idx]
         data["x_data"] = convert_parameters(self.config, data["x_data"])
 
+        if np.any(data["x_data"] > 1) or np.any(data["x_data"] < 0):
+            print("WARNING: data out of range [0,1]")
+
         # reorder parameters so can be grouped into different distributions
-        data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
+        #data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
 
         if self.verbose:
             print("Time covert pars: ", time.time() - stload)
@@ -602,10 +694,20 @@ class DataSet(torch.utils.data.Dataset):
             data["y_data_noisy"] = np.array(real_det_noise)
             np.swapaxes(data["y_data_noisy"], 1,2)
 
-        print("beforeswap:", np.shape(data["y_data_noisefree"]))
-        data["y_data_noisefree"]= np.swapaxes(data["y_data_noisefree"], 1,2)
-        print("afterswap:", np.shape(data["y_data_noisefree"]))
+        if len(np.shape(data["y_data_noisefree"])) != 3:
+            raise Exception(f"data array should have three dimensions, current shape: {np.shape(data['y_data_noisefree'])}")
+
+
+        if self.test_set:
+            for key in ["y_data_noisy"]:
+                if np.array(data[key]).shape[1:] != (self.num_dets, self.data_length):
+                    raise Exception(f"Incorrect data shape for {key}: {np.array(data[key]).shape} should be (N,{self.num_dets}, {self.data_length})")
         
+        else:
+            for key in ["y_data_noisefree"]:
+                if np.array(data[key]).shape[1:] != (self.num_dets, self.data_length):
+                    raise Exception(f"Incorrect data shape for {key}: {np.array(data[key]).shape} should be (N,{self.num_dets}, {self.data_length})")
+  
 
         if self.test_set:
             return data['x_data'], data['y_data_noisefree'], data['y_data_noisy'],data['snrs'], truths, data["y_psds"]

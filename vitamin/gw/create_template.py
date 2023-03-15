@@ -180,7 +180,7 @@ class GenerateTemplate():
 
         # inject signal
         ifos.inject_signal(waveform_generator=self.waveform_generator,
-                           parameters=self.injection_parameters,raise_error=False)
+                           parameters=self.injection_parameters)
         
         print('... Injected signal')
         whitened_signal_td_all = []
@@ -274,7 +274,7 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True,flow_class='gwflowproposal')
+                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True,flow_class='GWFlowProposal')
             run_endt = time.time()
 
             # save test sample waveform

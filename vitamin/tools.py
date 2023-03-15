@@ -84,11 +84,11 @@ def loss_plot(save_dir, loss, kl_loss, l_loss, val_loss, val_kl_loss, val_l_loss
     xs = np.linspace(stind,len(loss), len(loss) - stind)
     ax[0].plot(xs,loss[stind:],label="loss",color="C0",alpha=0.5)
     ax[1].plot(xs, np.array(kl_loss[stind:]),label="KL loss",color="C1",alpha=0.5)
-    ax[0].plot(xs,-np.array(l_loss[stind:]),label="L loss",color="C2",alpha=0.5)
+    ax[0].plot(xs,np.array(l_loss[stind:]),label="L loss",color="C2",alpha=0.5)
     
     ax[0].plot(xs,val_loss[stind:],label="val loss", color="C0", ls="--", lw=3, alpha=0.5)
     ax[1].plot(xs,np.array(val_kl_loss[stind:]), label="val KL loss", color="C1", ls="--", lw=3, alpha=0.5)
-    ax[0].plot(xs,-np.array(val_l_loss[stind:]), label="val L loss", color="C2", ls="--", lw=3, alpha=0.5)
+    ax[0].plot(xs,np.array(val_l_loss[stind:]), label="val L loss", color="C2", ls="--", lw=3, alpha=0.5)
 
     ax[1].set_xlabel("Epoch")
     ax[0].legend(fontsize=20)
@@ -97,6 +97,8 @@ def loss_plot(save_dir, loss, kl_loss, l_loss, val_loss, val_kl_loss, val_l_loss
     ax[1].grid()
     ax[1].set_yscale("log")
     ax[0].set_yscale("symlog")
+    ax[0].set_ylim([np.median(l_loss[stind:]) - 2, np.median(loss[stind:]) + 2])
+    ax[1].set_ylim([np.median(kl_loss[stind:]) - 2, np.median(kl_loss[stind:]) + 2])
     #ax.set_yscale("symlog")
     fig.savefig(os.path.join(save_dir, "loss.png"))
 

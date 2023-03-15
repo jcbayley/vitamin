@@ -1,4 +1,4 @@
-import tensorflow as tf
+#import tensorflow as tf
 from ..vitamin_model import CVAE
 from . import load_data
 import os

@@ -21,8 +21,9 @@ def test_model(
 
     model.eval()
     with torch.no_grad():
-        n_test_data = len(test_dataset)
+        n_test_data = len(test_dataset.Y_noisy)
 
+        start_time_test = time.time()
         samples, samples_r, samples_q = model.test(
                 torch.Tensor(test_dataset.Y_noisy).to(device), 
                 num_samples=n_samples, 
@@ -31,11 +32,13 @@ def test_model(
                 par = torch.Tensor(test_dataset.X).to(device)
                 )
 
+        end_time_test = time.time()
         for step in range(n_test_data):
-            if step not in test_dataset.samples_available["dynesty"]:
-                continue
+            for key in test_dataset.samples_available.keys():
+                if step not in test_dataset.samples_available[key]:
+                    continue
             
-            if step > len(test_dataset):
+            if step > len(test_dataset) - 1:
                 break
             if plot_latent:
                 if not os.path.isdir(os.path.join(save_dir, "latent_dir")):
@@ -51,14 +54,12 @@ def test_model(
                 print("No available samples: {}".format(step))
                 continue
 
-            start_time_test = time.time()
-
-            end_time_test = time.time()
+            
             if np.any(np.isnan(samples[step])):
                 print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
                 KL_est = [-1,-1,-1]
             else:
-                print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,n_samples,end_time_test - start_time_test))
+                print('Epoch: {}, Testing time elapsed for all {} samples: {}'.format(epoch,n_samples,end_time_test - start_time_test))
                 if len(np.shape(bilby_samples)) == 4:
                     JS_est, JS_labels = plot_posterior(
                         save_dir,
