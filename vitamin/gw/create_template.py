@@ -248,7 +248,11 @@ class GenerateTemplate():
         # initialise likelihood
         phase_marginalization=self.config["testing"]["phase_marginalisation"]
         likelihood = bilby.gw.GravitationalWaveTransient(
-            interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,priors=self.config["priors"])
+            interferometers=self.ifos, 
+            waveform_generator=self.waveform_generator, 
+            phase_marginalization=phase_marginalization,
+            distance_marginalization=self.config["testing"]["distance_marginalisation"],
+            priors=self.config["priors"])
 
         # look for dynesty sampler option
         if sampler == "dynesty":
@@ -257,7 +261,20 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1, walks=100, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
+                likelihood=likelihood, 
+                priors=self.config["priors"], 
+                sampler='dynesty', 
+                npoints=1000,
+                nact=50, 
+                npool=8, 
+                dlogz=0.1, 
+                walks=100, 
+                injection_parameters=self.injection_parameters, 
+                conversion_function=bilby.gw.conversion.generate_all_bbh_parameters,
+                outdir=os.path.join(self.save_dir,sampler), 
+                label=label, 
+                save='hdf5', 
+                plot=True)
             run_endt = time.time()
 
             # save test sample waveform
@@ -274,7 +291,20 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True,flow_class='GWFlowProposal')
+                likelihood=likelihood, 
+                priors=self.config["priors"], 
+                sampler='nessai', 
+                npoints=1000, 
+                dlogz=0.1, 
+                conversion_function=bilby.gw.conversion.generate_all_bbh_parameters,
+                injection_parameters=self.injection_parameters, 
+                outdir=os.path.join(self.save_dir,sampler), 
+                label=label, 
+                save='hdf5', 
+                plot=True,
+                flow_class='GWFlowProposal',
+                flow_config=dict(model_config=dict(n_blocks=6, n_neurons=64))
+                )
             run_endt = time.time()
 
             # save test sample waveform

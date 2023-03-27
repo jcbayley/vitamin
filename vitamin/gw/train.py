@@ -84,11 +84,16 @@ def setup_and_train(config):
     
     model = CVAE(config, device=device).to(device)
 
+    model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
+    with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
+        summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
+
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
         checkpoint = torch.load(config["training"]["transfer_model_checkpoint"])
         #std = checkpoint["model_state_dict"]
-        #std_new = OrderedDict((key.replace("Normal_", "TruncatedNormal_") if "Normal_" in key else key, v) for key, v in std.items())
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
         model.load_state_dict(checkpoint["model_state_dict"])
         print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
 
@@ -98,6 +103,9 @@ def setup_and_train(config):
         # Load the previously saved weights
         #model = torch.load(os.path.join(checkpoint_dir,"model.pt"))
         checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"))
+        #std = checkpoint["model_state_dict"]
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
         model.load_state_dict(checkpoint["model_state_dict"])
         start_epoch = checkpoint["epoch"]
         print('... loading in previous model %s' % os.path.join(checkpoint_dir,"model.pt"))
@@ -388,13 +396,13 @@ def train_loop(
                         ) 
                         
                     # save the model
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "model_state_dict": model.state_dict(),
-                            "loss": temp_train_loss,
-                        }, 
-                        os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))
+                    #torch.save(
+                    #    {
+                    #        "epoch": epoch,
+                    #        "loss": temp_train_loss,
+                    ##        "model_state_dict": model.state_dict(),
+                    #    }, 
+                    #    os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))
 
                     print("done_test")
                 else:

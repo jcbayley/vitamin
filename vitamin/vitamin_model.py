@@ -8,7 +8,7 @@ from .group_inference_parameters import group_outputs
 
 class CVAE(nn.Module):
 
-    def __init__(self, config = None, device="cpu", **kwargs):
+    def __init__(self, config = None, device="cpu",verbose=False, **kwargs):
         """
         args
         ----------
@@ -37,9 +37,13 @@ class CVAE(nn.Module):
             y_dim = None,
             n_channels = 1,
             split_channels = False,
-            shared_network = ['Conv1D(96,64,2)','Conv1D(64,64,2)','Conv1D(64,64,2)','Conv1D(32,32,2)'],
+            shared_conv = ['Conv1D(96,64,2)','Conv1D(64,64,2)','Conv1D(64,64,2)','Conv1D(32,32,2)'],
+            shared_network = [],
+            r1_conv = [],
             r1_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
+            q_conv = [],
             q_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
+            r2_conv = [],
             r2_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
             dropout = 0.0,
             initial_learning_rate = 1e-4,
@@ -63,17 +67,24 @@ class CVAE(nn.Module):
             self.n_channels = len(self.config["data"]["detectors"])
             self.split_channels = self.config["model"]["split_channels"]
             self.logvarmin = self.config["training"]["logvarmin"]
-            self.shared_network = []
 
-            for ln in self.config["model"]["shared_network"]:
-                new_ln = ln.split("(")[1].strip(")").split(",")
-                print(new_ln)
-                if not new_ln[0] == "":
-                    self.shared_network.append((int(new_ln[0]), int(new_ln[1]), int(new_ln[2]), int(new_ln[3])))
+            for key in ["shared_conv", "r1_conv", "q_conv", "r2_conv"]:
+                setattr(self, key, [])
+                if len(self.config["model"][key]) != 0:
+                    for ln in self.config["model"][key]:
+                        if ln == "":
+                            continue
+                        new_ln = ln.split("(")[1].strip(")").split(",")
+                        if not new_ln[0] == "":
+                            getattr(self, key).append((int(new_ln[0]), int(new_ln[1]), int(new_ln[2]), int(new_ln[3])))
 
-            self.r1_network = [int(ln[7:].strip(")")) for ln in self.config["model"]["r1_network"]]
-            self.r2_network = [int(ln[7:].strip(")")) for ln in self.config["model"]["r2_network"]]
-            self.q_network = [int(ln[7:].strip(")")) for ln in self.config["model"]["q_network"]]
+            for key in ["shared_network", "r1_network", "r2_network", "q_network"]:
+                setattr(self, key, [])
+                if len(self.config["model"][key]) != 0:
+                    for ln in self.config["model"][key]:
+                        if ln != "":
+                            getattr(self, key).append(int(ln[7:].strip(")")))
+
             self.dropout = int(self.config["model"]["dropout"])
             self.bounds = self.config["bounds"]
             self.inf_pars = self.config["inf_pars"]
@@ -106,14 +117,15 @@ class CVAE(nn.Module):
 
         # define useful variables of network
         self.device = device
+        self.verbose=verbose
         self.output_dim =self.x_dim
 
         # convolutional parts
         #self.fc_layers = fc_layers
         #self.fc_layers_decoder = np.array(0.5*np.array(fc_layers[:3])).astype(int)
         #self.conv_layers = conv_layers
-        self.num_conv = len(self.shared_network)
-        print("numconv: ", self.num_conv)
+        #self.num_conv = len(self.shared_network)
+        #print("numconv: ", self.num_conv)
 
         self.trunc_mins = torch.zeros(len(self.inf_pars)).to(self.device)
         self.trunc_maxs = torch.ones(len(self.inf_pars)).to(self.device)
@@ -137,40 +149,63 @@ class CVAE(nn.Module):
             t_channels = 1
         else:
             t_channels = self.n_channels
-        self.shared_conv, self.rencoder_lin, shared_out_sizes = self.create_network(
+
+        self.net_shared_conv, self.net_shared_lin, shared_out_sizes, shlinout = self.create_network(
+            "sh",
+            self.y_dim, 
+            self.z_dim, 
+            append_dim=0, 
+            fc_layers = self.shared_network, 
+            conv_layers = self.shared_conv,
+            weight = False,
+            mean = False,
+            variance = False,
+            n_modes = self.n_modes,
+            n_channels=t_channels)
+        if self.verbose:
+            print(self.net_shared_conv, self.net_shared_lin)   
+
+        self.rencoder_conv, self.rencoder_lin, rconvout, rlinout = self.create_network(
             "r",
             self.y_dim, 
             self.z_dim, 
             append_dim=0, 
             fc_layers = self.r1_network, 
-            conv_layers = self.shared_network,
+            conv_layers = self.r1_conv,
             weight = True,
             n_modes = self.n_modes,
-            n_channels=t_channels)
+            n_channels=t_channels,
+            layer_out_sizes = shared_out_sizes)
+        if self.verbose:
+            print(self.rencoder_conv, self.rencoder_lin)
 
         # conv layers not used for next two networks, they both use the same rencoder
         # encoder q(z|x, y) 
-        self.qencoder_lin, qlinout = self.create_network(
+        self.qencoder_conv, self.qencoder_lin, qconvout, qlinout = self.create_network(
             "q", 
             self.y_dim, 
             self.z_dim, 
             append_dim=self.x_dim, 
             fc_layers = self.q_network, 
-            conv_layers = None,
+            conv_layers = self.q_conv,
             weight=False,
             layer_out_sizes = shared_out_sizes)
+        if self.verbose:
+            print(self.qencoder_conv, self.qencoder_lin)
 
         # decoder r2(x|z, y) 
-        self.decoder_lin, dlinout = self.create_network(
+        self.decoder_conv, self.decoder_lin, dconvout, dlinout = self.create_network(
             "d", 
             self.y_dim, 
             self.x_dim, 
             append_dim=self.z_dim, 
             fc_layers = self.r2_network, 
-            conv_layers = None, 
+            conv_layers = self.r2_conv, 
             mean = False,
             variance = False,
             layer_out_sizes = shared_out_sizes)
+        if self.verbose:
+            print(self.decoder_conv, self.decoder_lin)
 
         if self.include_parameter_network:
             print("including parameter network")
@@ -244,14 +279,16 @@ class CVAE(nn.Module):
             list of convolutional layers, format:[(8,8,2,1), (8,8,2,1)] = [(num_filt1, conv_size1, max_pool_size1, dilation1), (num_filt2, conv_size2, max_pool_size2, dilation2)] 
         """
          # initialise networks
-        lin_network = nn.Sequential()
         num_fc = len(fc_layers)
         insize = self.y_dim
         num_conv = 0
-        if conv_layers is not None:
-            layer_out_sizes = []
+        lin_out_size = 0
+        conv_network = None
+        lin_network = None
+        if conv_layers is not None and len(conv_layers) != 0 :
             conv_network = nn.Sequential()
             num_conv = len(conv_layers)
+            layer_out_sizes = []
             # add convolutional layers
             for i in range(num_conv):
                 padding = int(int(conv_layers[i][1])/2.) # padding half width
@@ -267,52 +304,53 @@ class CVAE(nn.Module):
                 insize = outsize
                 n_channels = conv_layers[i][0]
 
-        # define the input size to fully connected layer
-        lin_input_size = np.prod(layer_out_sizes[-1]) if len(layer_out_sizes) > 0 else self.y_dim
-        if append_dim:
-            lin_input_size += append_dim
-    
+        if fc_layers is not None and len(fc_layers) != 0:
+            # define the input size to fully connected layer
+
+            lin_network = nn.Sequential()
+
+            lin_input_size = np.prod(layer_out_sizes[-1]) if len(layer_out_sizes) > 0 else self.y_dim
+            if append_dim:
+                lin_input_size += append_dim
         
-        layer_size = int(lin_input_size)
-        # hidden layers
-        for i in range(num_fc):
-            lin_network.add_module("r_lin{}".format(i),module=nn.Linear(layer_size, fc_layers[i]))
-            #lin_network.add_module("batch_norm_lin{}".format(i), module = nn.BatchNorm1d(fc_layers[i]))
-            lin_network.add_module("r_drop{}".format(i),module=self.drop)
-            lin_network.add_module("act_r_lin{}".format(i),module=nn.ReLU())
-            layer_size = fc_layers[i]
-        # output mean and variance of gaussian with size of latent space
+            
+            layer_size = int(lin_input_size)
+            # hidden layers
+            for i in range(num_fc):
+                lin_network.add_module("r_lin{}".format(i),module=nn.Linear(layer_size, fc_layers[i]))
+                #lin_network.add_module("batch_norm_lin{}".format(i), module = nn.BatchNorm1d(fc_layers[i]))
+                lin_network.add_module("r_drop{}".format(i),module=self.drop)
+                lin_network.add_module("act_r_lin{}".format(i),module=nn.ReLU())
+                layer_size = fc_layers[i]
+            # output mean and variance of gaussian with size of latent space
 
-        lin_out_size = layer_size
+            lin_out_size = layer_size
 
-        if mean:
-            if meansize is None:
-                meansize = output_dim
+            if mean:
+                if meansize is None:
+                    meansize = output_dim
+                if weight:
+                    setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize*n_modes))
+                    #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                    getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+                else:
+                    setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
+                    #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                    getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+            if variance:
+                if weight:
+                    setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+                    #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                    getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+                else:
+                    setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+                    #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                    getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+
             if weight:
-                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize*n_modes))
-                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
-                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
-            else:
-                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
-                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
-                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
-        if variance:
-            if weight:
-                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
-                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
-                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
-            else:
-                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
-                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
-                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+                setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
 
-        if weight:
-            setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
-
-        if conv_layers is not None:
-            return conv_network, lin_network, layer_out_sizes
-        else:
-            return lin_network, lin_out_size
+        return conv_network, lin_network, layer_out_sizes, lin_out_size
 
     def conv_out_size(self, in_dim, padding, dilation, kernel, stride):
         """ Get output size of a convolutional layer (or one filter from that layer)"""
@@ -325,22 +363,33 @@ class CVAE(nn.Module):
         return (self.latent_maxlogvar - self.latent_minlogvar)*torch.sigmoid(x) + self.latent_minlogvar
         
     def shared_encode(self, y):
-        #conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
-        if self.separate_channels:
-            for i in range(self.n_channels):
-                ch_out = self.shared_conv(torch.reshape(y[:,i:i+1], (y.size(0), 1, self.y_dim))) if self.num_conv > 0 else y[:,i:i+1]
-                if i==0:
-                    outputs = ch_out
-                else:
-                    torch.cat([outputs, ch_out], dim = 1)
-        else:
-            outputs = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
-        
-        return torch.flatten(outputs,start_dim=1)
+            #conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        outputs = y
+        if self.net_shared_conv is not None:
+            if self.separate_channels:
+                for i in range(self.n_channels):
+                    #print(outputs.shape)
+                    ch_out = self.net_shared_conv(torch.reshape(y[:,i:i+1], (y.size(0), 1, self.y_dim))) #if self.num_conv > 0 else outputs[:,i:i+1]
+                    #print(ch_out.shape)
+                    if i==0:
+                        outputs = ch_out
+                    else:
+                        torch.cat([outputs, ch_out], dim = 1)
+            else:
+                outputs = self.net_shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) #if self.num_conv > 0 else y
+            outputs = torch.flatten(outputs, start_dim = 1)
+
+        if self.net_shared_lin is not None:
+            if self.net_shared_conv is None:
+                outputs = torch.flatten(outputs, start_dim = 1)
+            outputs = self.net_shared_lin(outputs)
+
+        return outputs
     
     def encode_r(self,y):
         """ encoder r1(z|y) , takes in observation y"""
-        lin = self.rencoder_lin(y)
+        conv = torch.flatten(self.rencoder_conv(y) if self.rencoder_conv is not None else y, start_dim=1)
+        lin = self.rencoder_lin(conv)
         z_mu = self.mu_r(lin) # latent means
         z_log_var = self.latent_logvar_act(self.log_var_r(lin)) + (1-self.ramp)*4 # latent variances
         z_cat_weight = self.softmax(self.cat_weight_r(lin))
@@ -348,7 +397,8 @@ class CVAE(nn.Module):
     
     def encode_q(self,y,par):
         """ encoder q(z|x, y) , takes in observation y and paramters par (x)"""
-        lin_in = torch.cat([y, par],1)
+        conv = torch.flatten(self.qencoder_conv(y) if self.qencoder_conv is not None else y, start_dim=1)
+        lin_in = torch.cat([conv, par],1)
         #lin_in = par
         lin = self.qencoder_lin(lin_in)
         z_mu = self.mu_q(lin)  # latent means
@@ -360,7 +410,8 @@ class CVAE(nn.Module):
     
     def decode(self, z, y):
         """ decoder r2(x|z, y) , takes in observation y and latent paramters z"""
-        lin_in = torch.cat([y*self.r2_ramp,z],1) 
+        conv = torch.flatten(self.decoder_conv(y) if self.decoder_conv is not None else y, start_dim=1)
+        lin_in = torch.cat([conv,z],1) 
         lin = self.decoder_lin(lin_in)
         outputs = []
         for name, group in self.grouped_params.items():
@@ -569,7 +620,10 @@ class CVAE(nn.Module):
 
         # input the latent space samples into decoder r2(x|z, y)  
         #ys = y.repeat(1,num_samples).view(-1, y.size(0)) # repeat data so same size as the z samples
-        ys = shared_y.repeat(num_samples,1).view(-1, shared_y.size(0)) # repeat data so same size as the z samples
+        if len(shared_y.shape) == 3:
+            ys = shared_y.repeat(num_samples,1, 1).view(-1, shared_y.size(1), shared_y.size(2))
+        elif len(shared_y.shape) == 2:
+            ys = shared_y.repeat(num_samples,1).view(-1, shared_y.size(1)) # repeat data so same size as the z samples
 
         # sample parameter space from returned mean and variance 
         #mu_par, log_var_par = self.decode(z_sample,ys) # decode r2(x|z, y) from z     
@@ -679,10 +733,10 @@ class CVAE(nn.Module):
             #print(f"index: {i}")
             # generate initial samples
             t_net_samples, t_znet_samples = self.draw_samples(
-                shared_y[i], 
-                mu_r[i], 
-                log_var_r[i], 
-                cat_weight_r[i],
+                shared_y[i:i+1], 
+                mu_r[i:i+1], 
+                log_var_r[i:i+1], 
+                cat_weight_r[i:i+1],
                 num_samples, 
                 self.z_dim, 
                 self.x_dim, 
