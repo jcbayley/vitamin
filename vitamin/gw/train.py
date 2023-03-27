@@ -1,6 +1,7 @@
 import torch
 from ..tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
 from .test import test_model
+from collections import OrderedDict
 
 def adjust_learning_rate(lr, optimiser, epoch, factor = 1.0, epoch_num = 5, low_cut = 1e-12):
     """Sets the learning rate to the initial LR decayed by a factor 0.999 (factor) every 5 (epoch_num) epochs"""
@@ -83,26 +84,43 @@ def setup_and_train(config):
     
     model = CVAE(config, device=device).to(device)
 
-    if config["training"]["optimiser"] == "adam":
-        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"], weight_decay = 1e-8)
+    model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
+    with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
+        summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
+
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
-        model = torch.load(config["training"]["transfer_model_checkpoint"]).to(device)
+        checkpoint = torch.load(config["training"]["transfer_model_checkpoint"])
+        #std = checkpoint["model_state_dict"]
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
+        model.load_state_dict(checkpoint["model_state_dict"])
         print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
 
     elif config["training"]['resume_training']:
         if config["training"]["transfer_model_checkpoint"]:
             print(f"Warning: Continuing training from trained weights, not from pretrained model from {config['training']['transfer_model_checkpoint']}")
         # Load the previously saved weights
-        model = torch.load(checkpoint_path).to(device)
+        #model = torch.load(os.path.join(checkpoint_dir,"model.pt"))
+        checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"))
+        #std = checkpoint["model_state_dict"]
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        start_epoch = checkpoint["epoch"]
+        print('... loading in previous model %s' % os.path.join(checkpoint_dir,"model.pt"))
 
-        print('... loading in previous model %s' % checkpoint_path)
-        with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"r") as f:
-            start_epoch = len(np.loadtxt(f))
     
+    model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
     with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
-        summary = torchsummary.summary(model, [(1, model.y_dim, model.n_channels), (model.x_dim, )], depth = 3)
+        summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
         f.write(str(summary))
+
+    if config["training"]["optimiser"] == "adam":
+        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"])
+        if config["training"]["resume_training"]:
+            optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
+
 
     train_loop(
         model=model, 
@@ -115,19 +133,20 @@ def setup_and_train(config):
         ramp_start = config["training"]["ramp_start"],
         ramp_end = config["training"]["ramp_start"] + config["training"]["ramp_length"],
         save_dir = config["output"]["output_directory"], 
-        dec_rate = 0.999, 
+        dec_rate = 0.9999, 
         dec_start = config["training"]["decay_lr_start"], 
         do_test=True, 
         low_cut = 1e-10, 
         test_data = test_dataset, 
-        ramp = True,
+        do_ramp = True,
         continue_train = config["training"]['resume_training'],
         start_epoch = start_epoch,
         test_interval=config["training"]["test_interval"],
         checkpoint_dir=checkpoint_dir,
         samplers = config["testing"]["samplers"],
         plot_interval=config["training"]["plot_interval"],
-        config=config)
+        config=config
+        )
 
 
 def train_batch(
@@ -144,18 +163,20 @@ def train_batch(
     model.train(train)
     if train:
         optimiser.zero_grad()
+        
     length = float(batch.size(0))
     # calculate r2, q and r1 means and variances
 
-    recon_loss, kl_loss = model.compute_loss(batch, labels, ramp)
+    recon_loss, kl_loss, par_loss, recon_losses = model.compute_loss(batch, labels, ramp)
+
     # calcualte total loss
-    loss = recon_loss + ramp*kl_loss
+    loss = recon_loss + ramp*kl_loss + (2 - ramp)*50*par_loss
     if train:
         loss.backward()
         # update the weights                                                                                                                              
         optimiser.step()
 
-    return loss.item(), kl_loss.item(), -recon_loss.item() 
+    return loss.item(), kl_loss.item(), recon_loss.item() 
 
 
 def train_loop(
@@ -174,7 +195,7 @@ def train_loop(
     do_test=True, 
     low_cut = 1e-12, 
     test_data = None, 
-    ramp = True,
+    do_ramp = True,
     continue_train = True,
     start_epoch = 0,
     num_epoch_load = 1,
@@ -210,27 +231,33 @@ def train_loop(
             val_lik_losses = list(val_lik_losses)
             
     start_train_time = time.time()
-    print("RAMP: ", ramp, kl_start, kl_end)
+
+
     for epoch in range(epochs):
         if continue_train:
             epoch = epoch + old_epochs[-1]
 
         model.train()
+        model.device = device
+        model.to(device)
 
         if epoch > dec_start:
             adjust_learning_rate(learning_rate, optimiser, epoch - dec_start, factor=dec_rate, low_cut = low_cut)
             
-        if ramp:
+        if do_ramp:
             ramp = 0.0
             if epoch>kl_start and epoch<=kl_end:
                 #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
                 ramp = (epoch - kl_start)/(kl_end - kl_start)
             elif epoch>kl_end:
                 ramp = 1.0 
+            else:
+                ramp = 0.0
         else:
             ramp = 1.0
         
-
+        model.ramp = ramp
+        print("Model ramp: ", model.ramp, ramp)
         # Training    
 
         temp_train_loss = 0
@@ -257,9 +284,9 @@ def train_loop(
         temp_val_loss = 0
         temp_val_kl_loss = 0
         temp_val_lik_loss = 0
-        
+        val_time = 0
         # validation
-        print("VAL_LEN:", len(validation_iterator))
+        #print("VAL_LEN:", len(validation_iterator))
         #for val_batch, val_labels in validation_iterator:
         for ind in range(len(validation_iterator)):
             # Transfer to GPU            
@@ -290,7 +317,8 @@ def train_loop(
         train_times.append(post_train_time - start_train_time)
 
         diff_ep = epoch - prev_save_ep
-        if epochs % 2 == 0:
+
+        if epochs % 1 == 0:
             print(f"Train:      Epoch: {epoch}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
             print(f"Validation: Epoch: {epoch}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}, Epoch time: {total_time}, batch time: {batch_time}")
 
@@ -301,7 +329,14 @@ def train_loop(
                     epoch = len(train_losses) - 1
                 savearr =  np.array([np.arange(epoch+1), train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses]).astype(float)
                 np.savetxt(f,savearr)
-            torch.save(model, os.path.join(checkpoint_dir,"model.pt"))  # save the model
+            torch.save(
+                        {
+                            "epoch": epoch,
+                            "model_state_dict": model.state_dict(),
+                            "optimiser_state_dict": optimiser.state_dict(),
+                            "loss": temp_train_loss,
+                        }, 
+                        os.path.join(checkpoint_dir,"model.pt"))
             min_val_loss = temp_val_loss#np.inf
             prev_save_ep = 0
             """
@@ -314,23 +349,40 @@ def train_loop(
                 np.savetxt(f,savearr)
             """
                 
-        
-        if epoch % test_interval == 0:
+
+
+        print("TEST:", epoch, test_interval, int(int(epoch) % int(test_interval)), do_test)
+        if int(int(epoch) % int(test_interval)) == 0:
             if do_test or epoch == epochs - 1:
                 # test plots
                 if not os.path.isdir(os.path.join(save_dir, f"epochs_{int(epoch)}")):
                     os.makedirs(os.path.join(save_dir, f"epochs_{int(epoch)}"))
-                samples,tr,zr_sample,zq_sample = run_latent(model,validation_iterator,num_samples=1000,device=device)                                                   
-                lat2_fig = latent_samp_fig(zr_sample,zq_sample,tr)
-                lat2_fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"zsample_epoch{int(epoch)}.png"))
-                del samples, tr, zr_sample
-                plt.close(lat2_fig)
+                #samples,tr,zr_sample,zq_sample = run_latent(model,validation_iterator,num_samples=1000,device=device)                                                   
+                #lat2_fig = latent_samp_fig(zr_sample,zq_sample,tr)
+                #lat2_fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"zsample_epoch{int(epoch)}.png"))
+                #del samples, tr, zr_sample
+                #plt.close(lat2_fig)
                 if test_data is not None:
+
+                    test_data_plot = True
+                    if test_data_plot:
+                        fig, ax = plt.subplots()
+                        ax.plot(test_data.Y_noisy[0])
+                        ax.set_title(test_data.X[0])
+                        fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"test_data_plot.png"))
+
+                        fig, ax = plt.subplots()
+                        ax.plot(train_iterator.Y_noisefree[0].T)
+                        ax.set_title(train_iterator.X[0])
+                        fig.savefig(os.path.join(save_dir, f"epochs_{int(epoch)}", f"train_data_plot.png"))
+
                     # load precomputed samples
                     bilby_samples = []
                     for sampler in samplers[1:]:
                         bilby_samples.append(test_data.sampler_outputs[sampler])
                     bilby_samples = np.array(bilby_samples)
+                    #model.device = "cpu"
+                    #model.to("cpu")
                     test_model(
                         os.path.join(save_dir,f"epochs_{int(epoch)}"), 
                         model=model,
@@ -339,10 +391,24 @@ def train_loop(
                         epoch=epoch,
                         n_samples=5000,
                         config=config,
-                        device=device
+                        device=device,
+                        plot_latent = True
                         ) 
-                    torch.save(model, os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))  # save the model
+                        
+                    # save the model
+                    #torch.save(
+                    #    {
+                    #        "epoch": epoch,
+                    #        "loss": temp_train_loss,
+                    ##        "model_state_dict": model.state_dict(),
+                    #    }, 
+                    #    os.path.join(save_dir,f"epochs_{int(epoch)}","model.pt"))
+
                     print("done_test")
+                else:
+                    print("No test data")
+            else:
+                print("Not doing test")
 
         
         if epoch % num_epoch_load == 0:
@@ -399,6 +465,9 @@ if __name__ == "__main__":
     import argparse
     import matplotlib.pyplot as plt
     import numpy as np
+    import bilby
+
+    bilby.core.utils.log.setup_logger(outdir='./', label=None, log_level='warning', print_version=False)
     
     parser = argparse.ArgumentParser(description='Input files and options')
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
