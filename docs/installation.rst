@@ -23,8 +23,8 @@ Clone vitamin repository
 
 .. code-block:: console
 
-   $ git clone https://git.ligo.org/joseph.bayley/vitamin_c
-   $ cd vitamin_c
+   $ git clone https://git.ligo.org/joseph.bayley/vitamin
+   $ cd vitamin
 
 Make a virtual environment using the environment.yml file supplied in the repository - this install the specific cuDNN cuda and tensorflow versions that work with this version of vitamin
 
@@ -75,4 +75,4 @@ Install vitamin_b and other required pacakges
 
 .. code-block:: console
 
-   $ pip install vitamin_b
+   $ pip install vitamin

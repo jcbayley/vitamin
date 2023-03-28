@@ -10,7 +10,7 @@ This [repository](https://git.ligo.org/joseph.bayley/vitamin_c/) is the official
 
 Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonlini, Roderick Murray-Smith
 
-Official Documentation can be found at [https://joseph.bayley.docs.ligo.org/vitamin_c](https://joseph.bayley.docs.ligo.org/vitamin_c).
+Official Documentation can be found at [https://joseph.bayley.docs.ligo.org/vitamin](https://joseph.bayley.docs.ligo.org/vitamin).
 
 Note: This repository is a work in progress. No official release of code just yet.
 
