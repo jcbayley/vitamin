@@ -9,11 +9,11 @@ and install the optional basemap/geos packages.
 ----------------------
 Notes on Compatibility
 ----------------------
-VItamin requires Python3.7 More versions of python will be compatible in the future.
+VItamin requires at least Python3.8 . More versions of python will be compatible in the future.
 
 A GPU is required in order to train a model from scratch, however it is not necessary 
 to have a GPU in order to test a pre-trained model (VItamin will default to the CPU 
-in this case, unlesss otherwise specified by the user).
+in this case, unless otherwise specified by the user).
 
 -----------
 From Source
@@ -23,8 +23,8 @@ Clone vitamin repository
 
 .. code-block:: console
 
-   $ git clone https://git.ligo.org/joseph.bayley/vitamin_c
-   $ cd vitamin_c
+   $ git clone https://git.ligo.org/joseph.bayley/vitamin
+   $ cd vitamin
 
 Make a virtual environment using the environment.yml file supplied in the repository - this install the specific cuDNN cuda and tensorflow versions that work with this version of vitamin
 
@@ -71,8 +71,8 @@ Make a virtual environment !!!!!!!!(Not available just yet)!!!!!!!!!!!!
    $ source myenv/bin/activate
    $ pip install --upgrade pip
 
-Install vitamin_b and other required pacakges
+Install vitamin and other required pacakges
 
 .. code-block:: console
 
-   $ pip install vitamin_b
+   $ pip install vitamin

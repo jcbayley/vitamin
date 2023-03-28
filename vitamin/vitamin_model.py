@@ -115,6 +115,7 @@ class CVAE(nn.Module):
             self.minlogvar = self.logvarmin_start
             self.maxlogvar = 4
 
+
         # define useful variables of network
         self.device = device
         self.verbose=verbose
@@ -357,7 +358,10 @@ class CVAE(nn.Module):
         return int((in_dim + 2*padding - dilation*(kernel-1)-1)/stride + 1)
 
     def logvar_act(self, x):
-        return (self.maxlogvar - self.minlogvar)*torch.sigmoid(x) + self.minlogvar
+        if self.logvarmin:
+            return (self.maxlogvar - self.minlogvar)*torch.sigmoid(x) + self.minlogvar
+        else:
+            return x
 
     def latent_logvar_act(self, x):
         return (self.latent_maxlogvar - self.latent_minlogvar)*torch.sigmoid(x) + self.latent_minlogvar
@@ -387,7 +391,7 @@ class CVAE(nn.Module):
         return outputs
     
     def encode_r(self,y):
-        """ encoder r1(z|y) , takes in observation y"""
+        """ encoder r1(z|y) , takes in outputs from shared_convolution"""
         conv = torch.flatten(self.rencoder_conv(y) if self.rencoder_conv is not None else y, start_dim=1)
         lin = self.rencoder_lin(conv)
         z_mu = self.mu_r(lin) # latent means
@@ -396,7 +400,7 @@ class CVAE(nn.Module):
         return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
     
     def encode_q(self,y,par):
-        """ encoder q(z|x, y) , takes in observation y and paramters par (x)"""
+        """ encoder q(z|x, y) , takes in outputs from shared_convolution and parameters x"""
         conv = torch.flatten(self.qencoder_conv(y) if self.qencoder_conv is not None else y, start_dim=1)
         lin_in = torch.cat([conv, par],1)
         #lin_in = par
@@ -409,7 +413,7 @@ class CVAE(nn.Module):
 
     
     def decode(self, z, y):
-        """ decoder r2(x|z, y) , takes in observation y and latent paramters z"""
+        """ decoder r2(x|z, y) , takes in outputs from shared_convolution and latent space z"""
         conv = torch.flatten(self.decoder_conv(y) if self.decoder_conv is not None else y, start_dim=1)
         lin_in = torch.cat([conv,z],1) 
         lin = self.decoder_lin(lin_in)
