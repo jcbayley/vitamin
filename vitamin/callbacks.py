@@ -7,62 +7,67 @@ import sys
 import pickle
 from . import plotting 
 from .train_plots import plot_losses, plot_losses_zoom, plot_latent, plot_posterior, plot_JS_div
+from .tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
 
+class LossPlotCallback():
 
-class PlotCallback():
+    def __init__(self, save_dir, checkpoint_dir, save_interval = 50):
 
-    def __init__(self, plot_dir, epoch_plot = 2, start_epoch = 0, save_data = True):
-
-        self.plot_dir = plot_dir
-        self.epoch_plot = epoch_plot
-        self.save_data = save_data
-        self.all_losses = None
-
-        if start_epoch != 0:
-            with open(os.path.join(plot_dir, "loss.txt")) as f:
-                losses = np.loadtxt(f)
-            self.all_losses = np.array(losses)
+        self.save_dir = save_dir
+        self.checkpoint_dir = checkpoint_dir
+        self.save_interval = save_interval
 
     def on_epoch_end(self, epoch, logs = None):
 
-        if self.all_losses is None:
-            self.all_losses = np.array([[time.time(), logs["recon_loss"], logs["kl_loss"], logs["total_loss"], logs["val_recon_loss"], logs["val_kl_loss"], logs["val_total_loss"]]])
-        else:
-            self.all_losses = np.append(self.all_losses, [[time.time(), logs["recon_loss"], logs["kl_loss"], logs["total_loss"], logs["val_recon_loss"], logs["val_kl_loss"], logs["val_total_loss"]]], axis = 0)
-        #print("train_loss_shape", np.shape(self.all_losses))
-        
-        if epoch % self.epoch_plot == 0 and epoch != 0 or epoch == 2:
-            if self.save_data:
-                ind_start = epoch - 1000 if epoch > 1000 else 0
-                with open(os.path.join(self.plot_dir, "loss.txt"), "w") as f:
-                    np.savetxt(f,np.array(self.all_losses))
+        if epoch % self.save_interval == 0:
+            loss_plot(self.save_dir, logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"])
 
-                plot_losses(np.array(self.all_losses), epoch, run = self.plot_dir)
-            
-                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="TOTAL")
-                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="RECON")
-                plot_losses_zoom(np.array(self.all_losses), epoch, run = self.plot_dir, ind_start=ind_start, label="KL")
-
+            with open(os.path.join(self.checkpoint_dir, "checkpoint_loss.txt"),"w+") as f:
+                if len(logs["train_losses"]) > epoch+1:
+                    epoch = len(logs["train_losses"]) - 1
+                savearr =  np.array([np.arange(epoch+1), logs["train_times"], logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"]]).astype(float)
+                np.savetxt(f,savearr)
 
 class AnnealCallback():
 
     def __init__(self, model, ramp_start, ramp_length, ramp_n_cycles=1):
         self.ramp_start = ramp_start
         self.ramp_length = ramp_length
+        self.ramp_end = ramp_start + ramp_length
         self.ramp_n_cycles = ramp_n_cycles
         self.model = model
 
+        self.ramp_array = self.frange_cycle_linear(self.ramp_start, self.ramp_end, self.ramp_length, self.ramp_n_cycles)
+
+    
+
+    def frange_cycle_linear(self, start, stop, n_epoch, n_cycle=4, ratio=0.5):
+        L = np.ones(n_epoch)
+        period = n_epoch/n_cycle
+        step = (stop-start)/(period*ratio) # linear schedule
+
+        for c in range(n_cycle):
+
+            v , i = start , 0
+            while v <= stop and (int(i+c*period) < n_epoch):
+                L[int(i+c*period)] = v
+                v += step
+                i += 1
+        return L    
+
     def ramp_func(self,epoch):
-        ramp = (epoch-self.ramp_start)/(2.0*self.ramp_length)
-        #print(epoch,ramp)
-        if ramp<0:
+
+        ramp = 0.0
+        if epoch>self.ramp_start and epoch<=self.ramp_end:
+            #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
+            #ramp = (epoch - self.ramp_start)/(self.ramp_end - self.ramp_start)
+            ramp = self.ramp_array[epoch - self.ramp_start]
+        elif epoch>self.ramp_end:
+            ramp = 1.0 
+        else:
             ramp = 0.0
-        elif ramp>=self.ramp_n_cycles:
-            ramp = 1.0
-        ramp = min(1.0,2.0*np.remainder(ramp,1.0))
-        if epoch > self.ramp_start + self.ramp_length:
-            ramp = 1.0
         return ramp
+
 
     def on_epoch_end(self,epoch,logs=None):
         self.model.ramp = self.ramp_func(epoch)
@@ -91,7 +96,7 @@ class LogminRampCallback():
 
 class LearningRateCallback():
 
-    def __init__(self, initial_learning_rate, cycle_lr = False, cycle_lr_start = 1000, cycle_lr_length=100, cycle_lr_amp=5, decay_lr=False, decay_lr_start=1000, decay_lr_length=5000, decay_lr_logend = -3, optimizer = None):
+    def __init__(self, optimiser, initial_learning_rate, cycle_lr = False, cycle_lr_start = 1000, cycle_lr_length=100, cycle_lr_amp=5, decay_lr=False, decay_lr_start=1000, decay_lr_length=5000, decay_lr_logend = -3, optimizer = None):
         self.cycle_lr_start = cycle_lr_start
         self.cycle_lr = cycle_lr
         self.cycle_lr_amp = cycle_lr_amp
@@ -101,9 +106,10 @@ class LearningRateCallback():
         self.decay_lr_logend = decay_lr_logend
         self.decay_lr_length = decay_lr_length
         self.initial_learning_rate = initial_learning_rate
-        self.optimizer = optimizer
+        self.optimiser = optimiser
 
     def learning_rate_modify(self, epoch):
+        """Modify the learning rate by cyclic factor or a decay """
         dec_factor = 1
         cycle_factor = 1
         if epoch > self.cycle_lr_start and self.cycle_lr:
@@ -121,8 +127,10 @@ class LearningRateCallback():
 
         new_lr = cycle_factor*dec_factor*self.initial_learning_rate
         
-        self.optimizer.learning_rate = new_lr
-        print("learning_rate:, {}".format(self.optimizer.learning_rate))
+        for param_group in self.optimiser.param_groups:
+            param_group['lr'] = new_lr
+        #self.optimiser.learning_rate = new_lr
+        #print("learning_rate:, {}".format(self.optimiser.learning_rate))
 
     def on_epoch_begin(self, epoch, logs = None):
         self.learning_rate_modify(epoch)
@@ -246,70 +254,6 @@ class TrainCallback():
         #    self.model.save_weights(self.checkpoint_path)
         #    print('... Saved model %s ' % self.checkpoint_path)
 
-class TestCallback():
-
-
-    def __init__(self, config, test_dataset, bilby_samples):
-        self.config = config
-        self.test_dataset = test_dataset
-        self.comp_post_dir = os.path.join(config["output"]["output_directory"],"comparison_posteriors")
-        self.full_post_dir = os.path.join(config["output"]["output_directory"],"full_posteriors")
-        self.latent_dir = os.path.join(config["output"]["output_directory"],"latent_plots")
-        self.bilby_samples = bilby_samples
-        self.paper_plots = config["testing"]["make_paper_plots"]
-        self.paper_plot_dir = os.path.join(self.config["output"]["output_directory"],"paper_plots")
-        for direc in [self.comp_post_dir, self.full_post_dir, self.latent_dir, self.paper_plot_dir]:
-            if not os.path.isdir(direc):
-                os.makedirs(direc)
-
-
-    def on_epoch_end(self, epoch, logs = None):
-        
-        if epoch % self.config["training"]["test_interval"] == 0 and epoch not in [0,1]:
-            for step in range(self.config["data"]["n_test_data"]):
-                if step > len(self.test_dataset):
-                    break
-                if self.config["training"]["plot_latent"]:
-                    mu_r1, z_r1, mu_q, z_q, scale_r1, scale_q, logvar_q = self.model.gen_z_samples(torch.expand_dims(self.test_dataset.X[step],0), torch.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=1000)
-
-                    plot_latent(mu_r1,z_r1,mu_q,z_q,epoch,step,run=self.latent_dir)
-
-                allinds = []
-                for samp, sampind in self.test_dataset.samples_available.items():
-                    if step not in sampind:
-                        allinds.append(step)
-                if len(allinds) == len(self.test_dataset.samples_available):
-                    print("No available samples: {}".format(step))
-                    continue
-
-                start_time_test = time.time()
-                samples = self.model.gen_samples(torch.expand_dims(self.test_dataset.Y_noisy[step],0), nsamples=self.config["testing"]['n_samples'], max_samples = 100)
-
-                end_time_test = time.time()
-                if np.any(np.isnan(samples)):
-                    print('Epoch: {}, found nans in samples. Not making plots'.format(epoch))
-                    KL_est = [-1,-1,-1]
-                else:
-                    print('Epoch: {}, Testing time elapsed for {} samples: {}'.format(epoch,self.config["testing"]['n_samples'],end_time_test - start_time_test))
-                    if len(np.shape(self.bilby_samples)) == 4:
-                        JS_est, JS_labels = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=self.bilby_samples[:,step,:], config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
-                        #plot_JS_div(JS_est[:10], JS_labels)
-                    else:
-                        print("not plotting posterior, bilby samples wrong shape")
-                        #KL_est = plot_posterior(samples,self.test_dataset.truths[step],epoch,step,all_other_samples=None, config=self.config, unconvert_parameters = self.test_dataset.unconvert_parameters)
-
-            if self.paper_plots:
-                # This needs to be checked and rewritten
-                epoch = 'pub_plot'; ramp = 1
-                plotter = plotting.make_plots(config, None, None, self.test_dataset.X) 
-                # Make p-p plots
-                plotter.plot_pp(self.model, self.test_dataset.Y_noisy, self.test_dataset.X, config, config["masks"]["inf_ol_idx"], config["masks"]["bilby_ol_idx"], self.bilby_samples)
-                print('... Finished making p-p plots!')
-
-                # Make KL plots
-                #plotter.gen_kl_plots(self.model,self.test_dataset.Y_noisy, self.test_dataset.X, self.model.params, self.model.bounds, self.model.masks["inf_ol_idx"], self.model.masks["bilby_ol_idx"], self.bilby_samples)
-                #print('... Finished making KL plots!')
-
 
 
 class TimeCallback():
@@ -337,20 +281,29 @@ class TimeCallback():
             with open(self.fname, "w") as f:
                 np.savetxt(f, self.times)
 
-class OptimizerSave():
+class SaveModelCallback():
 
-    def __init__(self, config, checkpoint_path, save_interval = 250):
+    def __init__(self, model, optimiser, checkpoint_path, save_interval = 250):
         self.save_interval = save_interval
         self.checkpoint_path = checkpoint_path
+        self.model = model
+        self.optimiser = optimiser
+        self.model_filename = "model.pt"
+        if not os.path.isdir(self.checkpoint_path):
+            os.makedirs(checkpoint_path)
 
     def on_epoch_end(self,epoch, logs = None):
-        
-        if epoch % self.save_interval == 0:
-            sym_weights = getattr(self.model.optimizer, 'weights')
-            weight_values = K.batch_get_value(sym_weights)
 
-            with open(os.path.join(self.checkpoint_path, "optimizer.pkl"),"wb") as f:
-                pickle.dump(weight_values, f)
+        if epoch % self.save_interval == 0:
+            self.model_filename = "model.pt" if self.model_filename == "model_2.pt" else "model_2.pt"
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": self.model.state_dict(),
+                    "optimiser_state_dict": self.optimiser.state_dict()
+                }, 
+                os.path.join(self.checkpoint_path, self.model_filename))
+        
 
 
 
