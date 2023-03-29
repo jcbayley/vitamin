@@ -2,6 +2,8 @@ import torch
 import time
 from .tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
 from collections import OrderedDict
+import os
+import numpy as np
 
 
 def adjust_learning_rate(lr, optimiser, epoch, factor = 1.0, epoch_num = 5, low_cut = 1e-12):
@@ -156,7 +158,7 @@ def train_loop(
         diff_ep = epoch - prev_save_ep
 
         if epochs % 1 == 0:
-            print(f"Epoch time: {total_time}, batch time: {batch_time}")
+            print(f"Epoch time: {total_time}, batch time: {batch_time}, ramp: {model.ramp}")
             print(f"Train:      Epoch: {epoch}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}")
             print(f"Validation: Epoch: {epoch}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}")
 
@@ -168,10 +170,6 @@ def train_loop(
             #    print(e)
 
     return train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses
-
-
-
-
 
 
 

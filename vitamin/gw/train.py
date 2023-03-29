@@ -33,7 +33,7 @@ def setup_and_train(config):
     import torchsummary
     from ..vitamin_model import CVAE
     #pip infrom ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, optimiserSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
-    from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+    from .load_data_custom import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
         
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -107,6 +107,7 @@ def setup_and_train(config):
 
     
     model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
+
     with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
         summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
         f.write(str(summary))
@@ -115,12 +116,25 @@ def setup_and_train(config):
         optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"])
         if config["training"]["resume_training"]:
             optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
+    else:
+        raise Exception(f'Optimiser not implemented: {config["training"]["optimiser"]}')
 
 
     callbacks = []
-    callbacks.append(SaveModelCallback(model, optimiser, checkpoint_dir, save_interval = config["training"]["plot_interval"]))
-    callbacks.append(LossPlotCallback(config["output"]["output_directory"], checkpoint_dir, save_interval = config["training"]["plot_interval"]))
-    callbacks.append(LoadDataCallback(train_dataset, config["training"]["num_epoch_load"]))
+    callbacks.append(SaveModelCallback(
+        model, 
+        optimiser, 
+        checkpoint_dir, 
+        save_interval = config["training"]["plot_interval"]))
+
+    callbacks.append(LossPlotCallback(
+        config["output"]["output_directory"], 
+        checkpoint_dir, 
+        save_interval = config["training"]["plot_interval"]))
+
+    callbacks.append(LoadDataCallback(
+        train_dataset, 
+        config["training"]["num_epoch_load"]))
 
     if config["training"]["decay_lr"] or config["training"]["cycle_lr"]:
         callbacks.append(LearningRateCallback(
@@ -136,13 +150,18 @@ def setup_and_train(config):
             config["training"]["decay_lr_logend"]))
 
     if config["training"]["ramp"]:
-        callbacks.append(AnnealCallback(model, config["training"]["ramp_start"], config["training"]["ramp_start"] + config["training"]["ramp_length"]))
+        callbacks.append(AnnealCallback(
+            model, 
+            config["training"]["ramp_start"], 
+            config["training"]["ramp_start"] + config["training"]["ramp_length"],
+            config["training"]["ramp_n_cycles"]))
 
     if config["training"]["test_interval"]:
         bilby_samples = []
         for sampler in config["testing"]["samplers"][1:]:
             bilby_samples.append(test_dataset.sampler_outputs[sampler])
         bilby_samples = np.array(bilby_samples)
+        
         callbacks.append(PosteriorComparisonCallback(
             config["output"]["output_directory"], 
             model, 

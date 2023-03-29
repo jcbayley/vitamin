@@ -37,23 +37,25 @@ class AnnealCallback():
         self.ramp_n_cycles = ramp_n_cycles
         self.model = model
 
-        self.ramp_array = self.frange_cycle_linear(self.ramp_start, self.ramp_end, self.ramp_length, self.ramp_n_cycles)
+        self.ramp_array = self.frange_cycle_linear(self.ramp_start, self.ramp_end, self.ramp_n_cycles)
 
     
 
-    def frange_cycle_linear(self, start, stop, n_epoch, n_cycle=4, ratio=0.5):
-        L = np.ones(n_epoch)
-        period = n_epoch/n_cycle
-        step = (stop-start)/(period*ratio) # linear schedule
+    def frange_cycle_linear(self, start, stop, n_cycle=4):
+        n_epochs = stop - start + 1
+        ann = np.ones(n_epochs)
+        
+        period = int(n_epochs/n_cycle)
+        step = (stop-start)/(period) # linear schedule
 
         for c in range(n_cycle):
 
             v , i = start , 0
-            while v <= stop and (int(i+c*period) < n_epoch):
-                L[int(i+c*period)] = v
+            while v <= stop and (int(i+c*period) < n_epochs):
+                ann[int(i+c*period)] = i/(period)
                 v += step
                 i += 1
-        return L    
+        return ann
 
     def ramp_func(self,epoch):
 
@@ -61,7 +63,8 @@ class AnnealCallback():
         if epoch>self.ramp_start and epoch<=self.ramp_end:
             #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
             #ramp = (epoch - self.ramp_start)/(self.ramp_end - self.ramp_start)
-            ramp = self.ramp_array[epoch - self.ramp_start]
+            print(epoch, self.ramp_start, int(epoch - self.ramp_start))
+            ramp = self.ramp_array[int(epoch - self.ramp_start)]
         elif epoch>self.ramp_end:
             ramp = 1.0 
         else:
