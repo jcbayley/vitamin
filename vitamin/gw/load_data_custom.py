@@ -619,7 +619,7 @@ class DataSet(torch.utils.data.Dataset):
         data["x_data"] = convert_parameters(self.config, data["x_data"])
 
         # reorder parameters so can be grouped into different distributions
-        data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
+        #data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
 
         if self.verbose:
             print("Time covert pars: ", time.time() - stload)

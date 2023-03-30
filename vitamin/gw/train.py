@@ -33,7 +33,7 @@ def setup_and_train(config):
     import torchsummary
     from ..vitamin_model import CVAE
     #pip infrom ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, optimiserSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
-    from .load_data_custom import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+    from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
         
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -177,7 +177,7 @@ def setup_and_train(config):
         model=model, 
         device=device, 
         optimiser=optimiser, 
-        epochs=config["training"]['num_iterations'], 
+        n_epochs=config["training"]['num_iterations'], 
         train_iterator=train_dataset, 
         validation_iterator=validation_dataset, 
         save_dir = config["output"]["output_directory"],  

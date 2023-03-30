@@ -48,9 +48,9 @@ def train_loop(
     model, 
     device, 
     optimiser, 
-    epochs, 
+    n_epochs, 
     train_iterator, 
-    validation_iterator, 
+    validation_iterator = None, 
     save_dir = "./", 
     continue_train = True,
     start_epoch = 0,
@@ -73,6 +73,16 @@ def train_loop(
     
     prev_save_ep = 0
 
+
+    # set number of epochs from number of iterations
+    try:
+        n_batches = len(train_iterator)
+    except:
+        print('Error: could not find number of batches per epoch, setting n_batches=1 (n_iterations == n_epochs)')
+        n_batches = 1
+    #n_epochs = n_iterations/n_batches
+
+
     if continue_train:
         with open(os.path.join(checkpoint_dir, "checkpoint_loss.txt"),"r") as f:
             old_epochs, train_times, train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses = np.loadtxt(f)
@@ -89,7 +99,9 @@ def train_loop(
 
     model_filename = "model.pt"
 
-    for epoch in range(epochs):
+    for epoch in range(n_epochs):
+        iteration = epoch*n_batches
+
         if continue_train:
             epoch = epoch + old_epochs[-1]
 
@@ -118,28 +130,33 @@ def train_loop(
             total_time += time.time() - start_time
         
 
-        val_it = 0
-        temp_val_loss = 0
-        temp_val_kl_loss = 0
-        temp_val_lik_loss = 0
-        val_time = time.time()
-        # validation
-        #print("VAL_LEN:", len(validation_iterator))
-        #for val_batch, val_labels in validation_iterator:
-        for ind in range(len(validation_iterator)):
-            # Transfer to GPU            
-            val_batch, val_labels = validation_iterator[ind]
-            val_batch, val_labels = torch.Tensor(val_batch).to(device), torch.Tensor(val_labels).to(device)
-            val_loss,val_kl_loss,val_lik_loss, par_loss, recon_losses = train_batch(epoch, model, optimiser, device, val_batch, val_labels, train=False)
-            temp_val_loss += val_loss
-            temp_val_kl_loss += val_kl_loss
-            temp_val_lik_loss += val_lik_loss
-            val_it += 1
-        val_time = time.time() - val_time
+        if validation_iterator is not None:
+            val_it = 0
+            temp_val_loss = 0
+            temp_val_kl_loss = 0
+            temp_val_lik_loss = 0
+            val_time = time.time()
+            # validation
+            #print("VAL_LEN:", len(validation_iterator))
+            #for val_batch, val_labels in validation_iterator:
+            for ind in range(len(validation_iterator)):
+                # Transfer to GPU            
+                val_batch, val_labels = validation_iterator[ind]
+                val_batch, val_labels = torch.Tensor(val_batch).to(device), torch.Tensor(val_labels).to(device)
+                val_loss,val_kl_loss,val_lik_loss, par_loss, recon_losses = train_batch(epoch, model, optimiser, device, val_batch, val_labels, train=False)
+                temp_val_loss += val_loss
+                temp_val_kl_loss += val_kl_loss
+                temp_val_lik_loss += val_lik_loss
+                val_it += 1
+            val_time = time.time() - val_time
 
-        temp_val_loss /= val_it
-        temp_val_kl_loss /= val_it
-        temp_val_lik_loss /= val_it
+            temp_val_loss /= val_it
+            temp_val_kl_loss /= val_it
+            temp_val_lik_loss /= val_it
+
+            logs["val_losses"].append(temp_val_loss)
+            logs["val_kl_losses"].append(temp_val_kl_loss)
+            logs["val_lik_losses"].append(temp_val_lik_loss)
 
         temp_train_loss /= it
         temp_kl_loss /= it
@@ -147,9 +164,6 @@ def train_loop(
         batch_time = total_time/it
         post_train_time = time.time()
         
-        logs["val_losses"].append(temp_val_loss)
-        logs["val_kl_losses"].append(temp_val_kl_loss)
-        logs["val_lik_losses"].append(temp_val_lik_loss)
         logs["train_losses"].append(temp_train_loss)
         logs["kl_losses"].append(temp_kl_loss)
         logs["lik_losses"].append(temp_lik_loss)
@@ -157,10 +171,11 @@ def train_loop(
 
         diff_ep = epoch - prev_save_ep
 
-        if epochs % 1 == 0:
-            print(f"Epoch time: {total_time}, batch time: {batch_time}, ramp: {model.ramp}")
-            print(f"Train:      Epoch: {epoch}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}")
-            print(f"Validation: Epoch: {epoch}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}")
+        if epoch % 1 == 0:
+            print(f" ------- Epoch: {epoch}, Epoch time: {total_time}, batch time: {batch_time}, ramp: {model.ramp}")
+            print(f" ------- Train:      Iteration: {iteration}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}")
+            if validation_iterator is not None:
+                print(f" ------- Validation: Iteration: {iteration}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}")
 
         for callback in callbacks:
             #try:

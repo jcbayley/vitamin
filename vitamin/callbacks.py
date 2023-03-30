@@ -23,9 +23,9 @@ class LossPlotCallback():
             loss_plot(self.save_dir, logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"])
 
             with open(os.path.join(self.checkpoint_dir, "checkpoint_loss.txt"),"w+") as f:
-                if len(logs["train_losses"]) > epoch+1:
-                    epoch = len(logs["train_losses"]) - 1
-                savearr =  np.array([np.arange(epoch+1), logs["train_times"], logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"]]).astype(float)
+                #if len(logs["train_losses"]) > epoch+1:
+                #    epoch = len(logs["train_losses"]) - 1
+                savearr =  np.array([np.arange(len(logs["train_losses"])), logs["train_times"], logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"]]).astype(float)
                 np.savetxt(f,savearr)
 
 class AnnealCallback():
