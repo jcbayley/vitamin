@@ -226,6 +226,7 @@ class GenerateTemplate():
         #self.waveform_generator = waveform_generator
         self.snrs = [self.ifos[j].meta_data['optimal_SNR'] for j in range(len(self.config["data"]['detectors']))]
 
+    
 
     def run_pe(self, sampler = "dynesty", start_ind = 0):
         """
@@ -265,10 +266,10 @@ class GenerateTemplate():
                 priors=self.config["priors"], 
                 sampler='dynesty', 
                 npoints=1000,
-                nact=50, 
-                npool=8, 
+                #nact=50, 
+                #npool=8, 
                 dlogz=0.1, 
-                walks=100, 
+                #walks=100, 
                 injection_parameters=self.injection_parameters, 
                 conversion_function=bilby.gw.conversion.generate_all_bbh_parameters,
                 outdir=os.path.join(self.save_dir,sampler), 
