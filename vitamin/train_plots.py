@@ -20,6 +20,7 @@ import pandas
 import seaborn
 
 
+
 def plot_losses(all_loss, epoch, run='testing'):
     """
     plots the losses
@@ -292,7 +293,8 @@ def plot_posterior(
     all_other_samples=None, 
     config=None, 
     scale_other_samples = True, 
-    unconvert_parameters = None):
+    unconvert_parameters = None,
+    compute_JS=True):
     """
     plots the posteriors
     """
@@ -323,7 +325,7 @@ def plot_posterior(
 
     if samples.shape[0]<100:
         print('... Bad run, not doing posterior plotting.')
-        return [-1.0] * len(config["testing"]['samplers'][1:]), None
+        return None, None
     # make numpy arrays
     samples = samples.numpy()
     #print(np.min(samples, axis=0), np.max(samples, axis = 0))

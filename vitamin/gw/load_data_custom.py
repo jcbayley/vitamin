@@ -12,7 +12,7 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
-from ..group_inference_parameters import group_outputs
+#from ..group_inference_parameters import group_outputs
 from .make_signal import get_detector_response, get_detectors
 
 class DataSet(torch.utils.data.Dataset):
@@ -579,6 +579,13 @@ class DataSet(torch.utils.data.Dataset):
 
                 pass
                 #del y_temp_fft
+            if self.verbose:
+                print("beforeswap:", np.shape(data["y_data_noisefree"]))
+                
+            data["y_data_noisefree"]= np.swapaxes(data["y_data_noisefree"], 1,2)
+
+            if self.verbose:
+                print("afterswap:", np.shape(data["y_data_noisefree"]))
         
         else:
             if self.config["model"]["include_psd"]:
@@ -600,14 +607,19 @@ class DataSet(torch.utils.data.Dataset):
                 data["y_data_noisy"] = np.concat([data["y_data_noisy"],data["y_psds"]], axis = 2)
 
             data["y_data_noisy"] = data["y_data_noisy"]/y_normscale
-            np.swapaxes(data["y_data_noisy"], 1,2)
+            #np.swapaxes(data["y_data_noisy"], 1,2)
+
+            if len(np.shape(data["y_data_noisy"])) != 3:
+                raise Exception(f"data array should have three dimensions, current shape: {np.shape(data['y_data_noisy'])}")
+
+            data['y_data_noisy'] = np.transpose(np.array(data['y_data_noisy']),[0,2,1])
 
         stload = time.time()
         data["x_data"] = data["x_data"][:,self.par_idx]
         data["x_data"] = convert_parameters(self.config, data["x_data"])
 
         # reorder parameters so can be grouped into different distributions
-        data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
+        #data["x_data"] = data["x_data"][:, self.config["masks"]["group_order_idx"]]
 
         if self.verbose:
             print("Time covert pars: ", time.time() - stload)
@@ -621,6 +633,17 @@ class DataSet(torch.utils.data.Dataset):
 
         #print(np.shape(data["y_data_noisefree"]))
         #np.transpose(data["y_data_noisefree"], 1,2)
+
+        if self.test_set:
+            for key in ["y_data_noisy"]:
+                if np.array(data[key]).shape[1:] != (self.num_dets, self.data_length):
+                    raise Exception(f"Incorrect data shape for {key}: {np.array(data[key]).shape} should be (N,{self.num_dets}, {self.data_length})")
+        
+        else:
+            for key in ["y_data_noisefree"]:
+                if np.array(data[key]).shape[1:] != (self.num_dets, self.data_length):
+                    raise Exception(f"Incorrect data shape for {key}: {np.array(data[key]).shape} should be (N,{self.num_dets}, {self.data_length})")
+  
         
 
         if self.test_set:

@@ -2,6 +2,7 @@ import torch
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn
 import time
 from ..tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
 from ..train_plots import plot_posterior, plot_JS_div
@@ -23,11 +24,24 @@ class PosteriorComparisonCallback():
         #if len(self.test_dataset) != len(comparison_posteriors):
         #    raise Exception(f"test dataset muse have same length as comparison posteriors, datalen: {len(self.test_dataset)}, post_len: {len(comparison_posteriors)}")
 
+    def plot_JS_grid(self, par_vals, labels, output_file):
+        seaborn.set(font_scale=1.5)
+        fig, ax = plt.subplots(figsize = (14,8))
+        hm = seaborn.heatmap(np.array(par_vals)*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
+        ax.set_xticks(np.arange(len(labels)) + 0.5,labels=labels, rotation=50)
+        ax.set_ylabel("Injection", fontsize=20)
+        ax.collections[0].colorbar.set_label('JS divergence ($10^{-3}$)', fontsize=20)
+        plt.show()
+        fig.savefig(output_file)
+
+    def make_js_divergence_grid(self, JS_est):
+        pass
+
     def on_epoch_end(self, epoch, logs = None):
         
         if epoch % self.save_interval == 0:
 
-            savedir = os.path.join(self.save_directory, f"epoch_{epoch}")
+            savedir = os.path.join(self.save_directory, f"epoch_{int(epoch)}")
             if not os.path.isdir(savedir):
                 os.makedirs(savedir)
 
@@ -45,6 +59,8 @@ class PosteriorComparisonCallback():
                         )
 
                 end_time_test = time.time()
+                JS_all = []
+                JS_labels = []
                 for step in range(n_test_data):
                     for key in self.test_dataset.samples_available.keys():
                         if step not in self.test_dataset.samples_available[key]:
@@ -82,9 +98,17 @@ class PosteriorComparisonCallback():
                                 all_other_samples=self.comparison_posteriors[:,step,:], 
                                 config=self.config, 
                                 unconvert_parameters = self.test_dataset.unconvert_parameters)
-                            #plot_JS_div(JS_est[:10], JS_labels)
+                            JS_all.append(JS_est)
+
                         else:
                             print("not plotting posterior, bilby samples wrong shape")
+                try:
+                    if JS_est is not None:
+                        self.plot_JS_div(np.squeeze(JS_all), JS_labels, os.path.join(savedir, "JS_plot.png"))
+                except Exception as e:
+                    print(str(e))
+
+
 
 
 

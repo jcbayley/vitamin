@@ -278,7 +278,7 @@ class DataSet(torch.utils.data.Dataset):
         if self.verbose:
             print("Rand phase/dist setup", time.time() - stload)
 
-        del y_temp_fft
+        #del y_temp_fft
         return data
 
     def get_whitened_signal(self, data):
@@ -741,13 +741,20 @@ class DataSet(torch.utils.data.Dataset):
 
 
     def randomise_extrinsic_parameters(self, x):
-        "randomise the extrinsic parameters"
+        "randomise the extrinsic parameters, this is non normalised parameters"
 
-        new_ra = np.random.uniform(size = len(x), low = self.config["bounds"]["ra_min"], high = self.config["bounds"]["ra_max"])
+        #new_ra = np.random.uniform(size = len(x), low = self.config["bounds"]["ra_min"], high = self.config["bounds"]["ra_max"])
         # uniform in the sin of the declination (doesnt yet change if input prior is changed)
-        new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.config["bounds"]["dec_min"]), high = np.sin(self.config["bounds"]["dec_max"])))
-        new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
-        new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
+        #new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.config["bounds"]["dec_min"]), high = np.sin(self.config["bounds"]["dec_max"])))
+        #new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
+        #new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
+
+        new_pars = self.config["priors"].sample(np.shape(x)[0])
+
+        new_geocent_time = new_pars["geocent_time"]
+        new_dec = new_pars["dec"]
+        new_ra = new_pars["ra"]
+        new_psi = new_pars["psi"]
 
         x[:, np.where(np.array(self.injection_parameters)=="geocent_time")[0][0]] = new_geocent_time
         x[:, np.where(np.array(self.injection_parameters)=="ra")[0][0]] = new_ra
@@ -757,12 +764,12 @@ class DataSet(torch.utils.data.Dataset):
         return x
         
     def randomise_phase(self, x, y):
-        """ randomises phase of input parameter x"""
+        """ randomises phase of input parameters x, these are not yet normalised"""
         # get old phase and define new phase
         old_phase = x[:,np.where(np.array(self.injection_parameters)=="phase")[0]]
         new_x = np.random.uniform(size=np.shape(old_phase), low=0.0, high=1.0)
-        new_phase = self.config["bounds"]['phase_min'] + new_x*(self.config["bounds"]['phase_max'] - self.config["bounds"]['phase_min'])
-
+        #new_phase = self.config["bounds"]['phase_min'] + new_x*(self.config["bounds"]['phase_max'] - self.config["bounds"]['phase_min'])
+        new_phase = self.config["priors"].sample(np.shape(old_phase))["phase"]
         # defice 
         x[:, np.where(np.array(self.injection_parameters) == "phase")[0]] = new_phase
 
@@ -772,14 +779,16 @@ class DataSet(torch.utils.data.Dataset):
         return x, phase_correction
 
     def randomise_time(self, x):
-
+        """randomises the geocentric time, these are not yet normalised"""
         #old_geocent = x[:,np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)]
         #print(np.shape(old_geocent))
         old_geocent = x[:,np.where(np.array(self.injection_parameters) == "geocent_time")[0]]
         #print(np.shape(old_geocent))
         #sys.exit()
-        new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
-        new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
+        #new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
+        #new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
+        new_geocent = self.config["priors"].sample(np.shape(old_geocent))["geocent_time"]
+        #new_x = (new_geocent - self.config["bounds"]['geocent_time_min']) / (self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
 
         x[:, np.where(np.array(self.injection_parameters) == "geocent_time")[0]] = new_geocent
         fvec = np.arange(self.data_length/2 + 1)/self.config["data"]['duration']
@@ -791,6 +800,7 @@ class DataSet(torch.utils.data.Dataset):
         return x, time_correction
         
     def randomise_distance(self,x, y):
+        """randomised the distance to the source, the inputs are not yet normalised"""
         #old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
         old_d = x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]]
 

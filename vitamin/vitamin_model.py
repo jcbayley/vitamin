@@ -419,7 +419,7 @@ class CVAE(nn.Module):
         lin = self.decoder_lin(lin_in)
         outputs = []
         for name, group in self.grouped_params.items():
-            outputs.append(getattr(self, f"{name}_mean")(lin))
+            outputs.append(self.sigmoid(getattr(self, f"{name}_mean")(lin)))
             outputs.append(self.logvar_act(getattr(self, f"{name}_logvars")(lin)) + (1-self.ramp)*4)
         return torch.split(torch.cat(outputs, dim = 1), split_size_or_sections=self.group_output_sizes, dim=1)
     
