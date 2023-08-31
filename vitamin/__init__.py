@@ -18,9 +18,12 @@ from __future__ import absolute_import
 import sys
 
 from . import vitamin_model
+from . import train
 #from . import gw
 from . import callbacks
 from . import plotting
+from . import train_plots
+from . import tools
 #from . import templates
 
 # Check for optional basemap installation
@@ -33,7 +36,7 @@ except (ModuleNotFoundError, ImportError):
 else:
     from .skyplotting import plot_sky
 
-from .vitamin_model import CVAE
+#from .vitamin_model import CVAE
 
 #from . import run_vitamin
 

@@ -53,7 +53,7 @@ class InputParser():
             else:
                 self.config.setdefault(key,{})
             for key2 in ini_file[key].keys():
-                if key2 in ["shared_network", "output_network", "r1_network","r2_network","q_network"]:
+                if key2 in ["shared_conv","shared_network", "output_network", "r1_conv","r2_conv","q_conv", "r1_network","r2_network","q_network"]:
                     self.config[key][key2] = [mod.strip("\n") for mod in regex.split(r"\s*,\s*(?![^(]*\))", ini_file[key][key2].strip("[").strip("]"))]
                 elif key2 in ["waveform_approximant", "run_tag"]:
                     self.config[key][key2] = str(ini_file[key][key2]).strip('"')

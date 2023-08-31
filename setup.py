@@ -7,9 +7,9 @@ import os
 
 # check that python version is 3.5 or above
 python_version = sys.version_info
-if python_version < (3, 6):
-    sys.exit("Python < 3.6 is not supported, aborting setup")
-print("Confirmed Python version {}.{}.{} >= 3.6.0".format(*python_version[:3]))
+if python_version < (3, 8):
+    sys.exit("Python < 3.8 is not supported, aborting setup")
+print("Confirmed Python version {}.{}.{} >= 3.8.0".format(*python_version[:3]))
 
 
 def write_version_file(version):
@@ -75,7 +75,7 @@ setup(
     description='A user-friendly machine learning Bayesian inference library',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://git.ligo.org/joseph.bayley/vitamin_c',
+    url='https://git.ligo.org/joseph.bayley/vitamin',
     author='Joseph Bayley, Hunter Gabbard, Chris Messenger, Ik Siong Heng, Francesco Tonolini, Roderick Murray-Smith',
     author_email='joseph.bayley@glasgow.ac.uk',
     license='GNU General Public License v3 (GPLv3)',
@@ -85,7 +85,7 @@ setup(
     package_data={'vitamin': ['default_files/bbh.prior',"default_files/config.ini", "default_files/init_config.ini"],
                   'vitamin': [version_file]},
 
-    python_requires='>=3.6', 
+    python_requires='>=3.8', 
     install_requires=['numpy',
                       'universal-divergence',
                       'absl-py',
@@ -131,7 +131,6 @@ setup(
                       'lalsuite',
                       'ligo-gracedb',
                       'ligo-segments',
-                      'ligo.skymap',
                       'ligotimegps',
                       'lscsoft-glue',
                       'Markdown',
@@ -169,10 +168,8 @@ setup(
                       'six',
                       'soupsieve',
                       'tables',
-                      'tensorflow==2.6.0',
-                      'keras==2.6.0',
-                      'tensorflow-addons==0.13.0',
-                      'tensorflow-probability==0.14.1',
+                      'torch',
+                      'torch-summary',
                       'termcolor',
                       'tqdm',
                       'urllib3',
@@ -188,7 +185,7 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',  
         'Operating System :: POSIX :: Linux',        
-        'Programming Language :: Python :: >=3.6',
+        'Programming Language :: Python :: >=3.8',
     ],
 )
 

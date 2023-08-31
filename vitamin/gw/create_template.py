@@ -180,7 +180,7 @@ class GenerateTemplate():
 
         # inject signal
         ifos.inject_signal(waveform_generator=self.waveform_generator,
-                           parameters=self.injection_parameters,raise_error=False)
+                           parameters=self.injection_parameters)
         
         print('... Injected signal')
         whitened_signal_td_all = []
@@ -226,6 +226,7 @@ class GenerateTemplate():
         #self.waveform_generator = waveform_generator
         self.snrs = [self.ifos[j].meta_data['optimal_SNR'] for j in range(len(self.config["data"]['detectors']))]
 
+    
 
     def run_pe(self, sampler = "dynesty", start_ind = 0):
         """
@@ -248,7 +249,11 @@ class GenerateTemplate():
         # initialise likelihood
         phase_marginalization=self.config["testing"]["phase_marginalisation"]
         likelihood = bilby.gw.GravitationalWaveTransient(
-            interferometers=self.ifos, waveform_generator=self.waveform_generator, phase_marginalization=phase_marginalization,priors=self.config["priors"])
+            interferometers=self.ifos, 
+            waveform_generator=self.waveform_generator, 
+            phase_marginalization=phase_marginalization,
+            distance_marginalization=self.config["testing"]["distance_marginalisation"],
+            priors=self.config["priors"])
 
         # look for dynesty sampler option
         if sampler == "dynesty":
@@ -257,7 +262,20 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='dynesty', npoints=1000, nact=50, npool=8, dlogz=0.1, walks=100, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True)
+                likelihood=likelihood, 
+                priors=self.config["priors"], 
+                sampler='dynesty', 
+                npoints=1000,
+                #nact=50, 
+                #npool=8, 
+                dlogz=0.1, 
+                #walks=100, 
+                injection_parameters=self.injection_parameters, 
+                conversion_function=bilby.gw.conversion.generate_all_bbh_parameters,
+                outdir=os.path.join(self.save_dir,sampler), 
+                label=label, 
+                save='hdf5', 
+                plot=True)
             run_endt = time.time()
 
             # save test sample waveform
@@ -274,7 +292,20 @@ class GenerateTemplate():
             # Run sampler dynesty 1 sampler
 
             result = bilby.run_sampler(
-                likelihood=likelihood, priors=self.config["priors"], sampler='nessai', npoints=1000, dlogz=0.1, injection_parameters=self.injection_parameters, outdir=os.path.join(self.save_dir,sampler), label=label, save='hdf5', plot=True,flow_class='gwflowproposal')
+                likelihood=likelihood, 
+                priors=self.config["priors"], 
+                sampler='nessai', 
+                npoints=1000, 
+                dlogz=0.1, 
+                conversion_function=bilby.gw.conversion.generate_all_bbh_parameters,
+                injection_parameters=self.injection_parameters, 
+                outdir=os.path.join(self.save_dir,sampler), 
+                label=label, 
+                save='hdf5', 
+                plot=True,
+                flow_class='GWFlowProposal',
+                flow_config=dict(model_config=dict(n_blocks=6, n_neurons=64))
+                )
             run_endt = time.time()
 
             # save test sample waveform
@@ -286,6 +317,60 @@ class GenerateTemplate():
 
         else:
             print("Currently only comparing to dynesty or nessai please choose one of these")
+
+    def compute_posterior_grid(self, sampler = "grid", start_ind = 0, infpar1_range=None, infpar2_range=None):
+        """
+        Run traditional PE on the saved waveform
+        Current options are dynesty and nessai
+        args
+        -------------
+        sampler: str
+            which sampler to use (dynesty, nessai)
+        start_ind: int
+            index of injection
+        """
+        label = "bilby_out_{}".format(start_ind)
+        try:
+            bilby.core.utils.setup_logger(outdir=self.save_dir, label=label)
+        except Exception as e:
+            print(e)
+            pass
+
+        # initialise likelihood
+        phase_marginalization=self.config["testing"]["phase_marginalisation"]
+        likelihood = bilby.gw.GravitationalWaveTransient(
+            interferometers=self.ifos, 
+            waveform_generator=self.waveform_generator, 
+            phase_marginalization=phase_marginalization,
+            distance_marginalization=self.config["testing"]["distance_marginalisation"],
+            priors=self.config["priors"])
+
+
+        inf_pars = list(self.config["inf_pars"].keys())
+        if len(inf_pars) > 2:
+            raise Exception("Posterior grid only implemented for 2 parameters")
+        
+        nvals = self.config["testing"]["n_grid_points"]
+        if infpar1_range is None:
+            infpar1_range = np.linspace(self.config["bounds"][f"{inf_pars[0]}_min"], self.config["bounds"][f"{inf_pars[0]}_max"], nvals)
+        if infpar2_range is None:
+            infpar2_range = np.linspace(self.config["bounds"][f"{inf_pars[1]}_min"], self.config["bounds"][f"{inf_pars[1]}_max"], nvals)
+
+        self.posterior_grid = np.zeros((infpar1_range.shape[0], infpar2_range.shape[0]))
+        #self.prior_grid = np.zeros((infpar1_range.shape[0], infpar2_range.shape[0]))
+        #self.likelihood_grid = np.zeros((infpar1_range.shape[0], infpar2_range.shape[0]))
+        self.posterior_grid_pars = np.array([infpar1_range, infpar2_range])
+        likelihood.parameters = self.config["priors"].sample()
+        for i in range(nvals):
+            for j in range(nvals):
+                likelihood.parameters[inf_pars[0]] = infpar1_range[i]
+                likelihood.parameters[inf_pars[1]] = infpar2_range[j]
+                #prpars = {inf_pars[0]: infpar1_range[i], inf_pars[1]:infpar2_range[j]}
+                log_post = likelihood.log_likelihood()  + self.config["priors"].ln_prob(likelihood.parameters)
+                #self.prior_grid[i,j] = np.exp(log_prior)
+                #self.likelihood_grid[i,j] = np.exp(log_lik)
+                self.posterior_grid[i,j] = np.exp(log_post)
+
 
     def generate_real_noise(self,):
         """

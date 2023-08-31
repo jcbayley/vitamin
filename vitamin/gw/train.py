@@ -1,5 +1,13 @@
+import torch
+from ..tools import make_ppplot, loss_plot, latent_corner_plot, latent_samp_fig
+from .test import test_model
+from collections import OrderedDict
+from ..train import train_loop
+from .callbacks import PosteriorComparisonCallback, LoadDataCallback
+from ..callbacks import SaveModelCallback, LossPlotCallback, AnnealCallback, LearningRateCallback
+import time
 
-def train(config):
+def setup_and_train(config):
 
     #params, bounds, masks, fixed_vals = get_params(params_dir = params_dir)
     run = time.strftime('%y-%m-%d-%X-%Z')
@@ -22,22 +30,15 @@ def train(config):
     from scipy.spatial.distance import jensenshannon
     import scipy.stats as st
     import pickle
-    #from keras_adamw import AdamW
-    import tensorflow as tf
-    import tensorflow_addons as tfa
-    import tensorflow_probability as tfp
-    tfd = tfp.distributions
-    from tensorflow.keras import regularizers
+    import torchsummary
     from ..vitamin_model import CVAE
-    from ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, OptimizerSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
-    from .load_data import DataLoader, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
-    from keras_adabound import AdaBound
-        
-    # Let GPU consumption grow as needed
-    config_gpu = tf.compat.v1.ConfigProto()
-    config_gpu.gpu_options.allow_growth = True
-    session = tf.compat.v1.Session(config=config_gpu)
-    print('... letting GPU consumption grow as needed')
+    #pip infrom ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, optimiserSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
+    if config["data"]["custom_loader"]:
+        from .load_data_custom import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+    else:
+        from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     train_log_dir = os.path.join(config["output"]['output_directory'],'logs')
 
@@ -47,8 +48,7 @@ def train(config):
 
     epochs = config["training"]['num_iterations']
     plot_cadence = int(0.5*config["training"]["plot_interval"])
-    # Include the epoch in the file name (uses `str.format`)
-    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model")
+    checkpoint_path = os.path.join(config["output"]["output_directory"],"checkpoint","model.pt")
     checkpoint_dir = os.path.dirname(checkpoint_path)
     dirs = [checkpoint_dir]
     for direc in dirs:
@@ -56,147 +56,146 @@ def train(config):
             os.makedirs(direc)
 
     make_paper_plots = config["testing"]['make_paper_plots']
-    hyper_par_tune = False
 
     # load the training data
     if not make_paper_plots:
-        train_dataset = DataLoader(training_directory,config = config) 
-        validation_dataset = DataLoader(validation_directory,config=config,val_set = True)
+        train_dataset = DataSet(training_directory,config = config)
+        validation_dataset = DataSet(validation_directory,config=config,val_set = True)
         train_dataset.load_next_chunk()
         validation_dataset.load_next_chunk()
 
-        #enq = tf.keras.utils.OrderedEnqueuer(train_dataset)
-        #enq.start(workers = 4)
+        print("VAL_SIZE: ", len(validation_dataset))
+        print("TRAIN_SIZE: ", len(train_dataset))
         
     if config["training"]["test_interval"] != False:
-        test_dataset = DataLoader(test_directory,config=config, test_set = True)
+        test_dataset = DataSet(test_directory,config=config, test_set = True)
         test_dataset.load_next_chunk()
         test_dataset.load_bilby_samples()
 
         # load precomputed samples
-        bilby_samples = []
-        for sampler in config["testing"]["samplers"][1:]:
-            bilby_samples.append(test_dataset.sampler_outputs[sampler])
-        bilby_samples = np.array(bilby_samples)
+        #bilby_samples = []
+        #for sampler in config["testing"]["samplers"][1:]:
+        #    bilby_samples.append(test_dataset.sampler_outputs[sampler])
+        #bilby_samples = np.array(bilby_samples)
 
     start_epoch = 0
     
-    model = CVAE(config)
+    model = CVAE(config, device=device).to(device)
 
-    if config["training"]["optimiser"] == "adam":
-        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 0.005)
-    elif config["training"]["optimiser"] == "sgd":
-        optimizer = tf.keras.optimizers.SGD(config["training"]["initial_learning_rate"], clipvalue = 5)
-    elif config["training"]["optimiser"] == "adabound":
-        optimizer = AdaBound(lr=config["training"]["initial_learning_rate"], final_lr=config["training"]["final_learning_rate"], clipvalue = 5)
-    elif config["training"]["optimiser"] == "lookahead":
-        optimizer = tfa.optimizers.AdamW(learning_rate=config["training"]["initial_learning_rate"], weight_decay = 1e-8, clipvalue = 5)
-        optimizer = tfa.optimizers.Lookahead(optimizer)
+    model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
+    with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
+        summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
 
-    #optimizer = tf.keras.optimizers.Adam(config["training"]["initial_learning_rate"])
-
-    # Keras hyperparameter optimization
-    if hyper_par_tune:
-        import keras_hyper_optim
-        del model
-        keras_hyper_optim.main(train_dataset, val_dataset)
-        exit()
-
-    # compile and build the model (hardcoded values will change soon)
-    model.compile(run_eagerly = False, optimizer = optimizer, loss = model.compute_loss)
 
     if config["training"]["transfer_model_checkpoint"] and not config["training"]["resume_training"]:
-        model.load_weights(config["training"]["transfer_model_checkpoint"])
-        #model = tf.keras.models.load_model(config["training"]["transfer_model_checkpoint"])
-        """
-        with open(os.path.join(checkpoint_dir, "optimizer.pkl"),"rb") as f:
-            weight_values = pickle.load(f)
-        model.optimizer.set_weights(weight_values)
-        """
+        checkpoint = torch.load(config["training"]["transfer_model_checkpoint"])
+        #std = checkpoint["model_state_dict"]
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
+        model.load_state_dict(checkpoint["model_state_dict"])
         print('... loading in previous model %s' % config["training"]["transfer_model_checkpoint"])
 
     elif config["training"]['resume_training']:
         if config["training"]["transfer_model_checkpoint"]:
             print(f"Warning: Continuing training from trained weights, not from pretrained model from {config['training']['transfer_model_checkpoint']}")
         # Load the previously saved weights
-        #latest = tf.train.latest_checkpoint(checkpoint_dir)
-        model.load_weights(checkpoint_path)
-        #model = tf.keras.models.load_model(checkpoint_path)
-        """
-        with open(os.path.join(checkpoint_dir, "optimizer.pkl"),"rb") as f:
-            weight_values = pickle.load(f)
-        for i,w in enumerate(model.optimizer.weights):
-            print(i, np.shape(w))
-            if i > 10:break
-            #if np.shape(w) == (64,2,96):
-            #    print(i,np.shape(w))
-        for i,w in enumerate(weight_values):
-            print(i, np.shape(w))
-            if i > 10:break
-            #if np.shape(w) == (64,2,96):
-            #    print(i,np.shape(w))
-                
-        model.optimizer.set_weights(np.roll(weight_values[1:], -1))
-        """
-        print('... loading in previous model %s' % checkpoint_path)
-        with open(os.path.join(config["output"]['output_directory'], "loss.txt"),"r") as f:
-            start_epoch = len(np.loadtxt(f))
+        #model = torch.load(os.path.join(checkpoint_dir,"model.pt"))
+        checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"), map_location=device)
+        #std = checkpoint["model_state_dict"]
+        #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
+        #model.load_state_dict(std_new)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        start_epoch = checkpoint["epoch"]
+        print('... loading in previous model %s' % os.path.join(checkpoint_dir,"model.pt"))
 
-
-    #model([test_data, test_pars])
-    #model.build([(None, 1024,2), (None, 15)])
+    
+    model.forward(torch.ones((2, model.n_channels, model.y_dim)).to(device), torch.ones((2, model.x_dim)).to(device))
 
     with open(os.path.join(config["output"]["output_directory"], "model_summary.txt"),"w") as f:
-        model.encoder_r1.summary(print_fn=lambda x: f.write(x + '\n'))
-        model.encoder_q.summary(print_fn=lambda x: f.write(x + '\n'))
-        model.decoder_r2.summary(print_fn=lambda x: f.write(x + '\n'))
-    
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path,
-        monitor="val_loss",
-        verbose=0,
-        save_best_only=False,
-        save_weights_only=True,
-        mode="auto",
-        save_freq=10*config["training"]["chunk_batch"],
-        options=None,
-        initial_value_threshold=None,
-    )
+        summary = torchsummary.summary(model, [(model.n_channels, model.y_dim), (model.x_dim, )], depth = 3)
+        f.write(str(summary))
+
+    if config["training"]["optimiser"] == "adam":
+        optimiser = torch.optim.AdamW(model.parameters(), lr=config["training"]["initial_learning_rate"])
+        if config["training"]["resume_training"]:
+            optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
+    else:
+        raise Exception(f'Optimiser not implemented: {config["training"]["optimiser"]}')
 
 
-    callbacks = [checkpoint]
-    callbacks.append(PlotCallback(config["output"]["output_directory"], epoch_plot=config["training"]["plot_interval"],start_epoch=start_epoch))
-    callbacks.append(TrainCallback(config, optimizer, train_dataset, model))
-    callbacks.append(TimeCallback(config))#, OptimizerSave(config, checkpoint_dir, 10)]
+    callbacks = []
+    callbacks.append(SaveModelCallback(
+        model, 
+        optimiser, 
+        checkpoint_dir, 
+        save_interval = config["training"]["plot_interval"]))
 
-    if config["training"]["cycle_lr"] or config["training"]["decay_lr"]:
-        lr_call = LearningRateCallback(config["training"]["initial_learning_rate"], cycle_lr = config["training"]["cycle_lr"], cycle_lr_start = config["training"]["cycle_lr_start"], cycle_lr_length=config["training"]["cycle_lr_length"], cycle_lr_amp=config["training"]["cycle_lr_amp"], decay_lr=config["training"]["decay_lr"], decay_lr_start=config["training"]["decay_lr_start"], decay_lr_length=config["training"]["decay_lr_length"], decay_lr_logend = config["training"]["decay_lr_logend"], optimizer = optimizer)
-        callbacks.append(lr_call)
+    callbacks.append(LossPlotCallback(
+        config["output"]["output_directory"], 
+        checkpoint_dir, 
+        save_interval = config["training"]["plot_interval"]))
 
-    if config["training"]["logvarmin_ramp"]:
-        lmr_call = LogminRampCallback(logvarmin_ramp_start=config["training"]["logvarmin_ramp_start"], logvarmin_ramp_length=config["training"]["logvarmin_ramp_length"], logvarmin_start=config["training"]["logvarmin_start"], logvarmin_end=config["training"]["logvarmin_end"], model=model)
-        callbacks.append(lmr_call)
+    callbacks.append(LoadDataCallback(
+        train_dataset, 
+        config["training"]["num_epoch_load"]))
 
-    if config["training"]["ramp_length"] != 0:
-        ann_call = AnnealCallback(ramp_start=config["training"]["ramp_start"], ramp_length=config["training"]["ramp_length"])
-        callbacks.append(ann_call)
+    if config["training"]["decay_lr"] or config["training"]["cycle_lr"]:
+        callbacks.append(LearningRateCallback(
+            optimiser, 
+            config["training"]["initial_learning_rate"], 
+            config["training"]["cycle_lr"], 
+            config["training"]["cycle_lr_start"], 
+            config["training"]["cycle_lr_length"], 
+            config["training"]["cycle_lr_amp"],
+            config["training"]["decay_lr"], 
+            config["training"]["decay_lr_start"], 
+            config["training"]["decay_lr_length"], 
+            config["training"]["decay_lr_logend"]))
 
-    if config["training"]["batch_ramp"]:
-        batch_call = BatchRampCallback(batch_ramp_start=config["training"]["batch_ramp_start"], batch_ramp_length=config["training"]["batch_ramp_length"], batch_size=config["training"]["batch_size"], batch_size_end=config["training"]["batch_size_end"])
-        callbacks.append(batch_call)
+    if config["training"]["ramp"]:
+        callbacks.append(AnnealCallback(
+            model, 
+            config["training"]["ramp_start"], 
+            config["training"]["ramp_start"] + config["training"]["ramp_length"],
+            config["training"]["ramp_n_cycles"]))
 
-    if config["training"]["test_interval"] != False:
-        pass
-        callbacks.append(TestCallback(config, test_dataset, bilby_samples))
+    if config["training"]["test_interval"]:
+        bilby_samples = []
+        grid_points = None
+        for sampler in config["testing"]["samplers"][1:]:
+            if sampler == "grid":
+                grid_points = test_dataset.sampler_outputs[sampler]
+            else:
+                bilby_samples.append(test_dataset.sampler_outputs[sampler])
+        bilby_samples = np.array(bilby_samples)
         
-    if config["training"]["tensorboard_log"]:
-        logdir = os.path.join(config["output"]["output_directory"], "profile")
-        if not os.path.isdir(logdir):
-            os.makedirs(logdir)
-        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir = logdir,histogram_freq = 50,profile_batch = 200,update_freq = 500))
-    
-    model.fit(train_dataset, use_multiprocessing = False, workers = 1, epochs = config["training"]["num_iterations"], callbacks = callbacks, shuffle = False, validation_data = validation_dataset, max_queue_size = 1, initial_epoch = start_epoch)
-        
+        callbacks.append(PosteriorComparisonCallback(
+            config["output"]["output_directory"], 
+            model, 
+            bilby_samples, 
+            test_dataset, 
+            device = device, 
+            n_samples = config["testing"]["n_samples"], 
+            config=config,
+            save_interval = config["training"]["test_interval"],
+            grid_points = grid_points))
+
+
+
+    train_loop(
+        model=model, 
+        device=device, 
+        optimiser=optimiser, 
+        n_epochs=config["training"]['num_iterations'], 
+        train_iterator=train_dataset, 
+        validation_iterator=validation_dataset, 
+        save_dir = config["output"]["output_directory"],  
+        continue_train = config["training"]['resume_training'],
+        start_epoch = start_epoch,
+        checkpoint_dir=checkpoint_dir,
+        callbacks = callbacks
+        )
+
 
 
 if __name__ == "__main__":
@@ -211,6 +210,9 @@ if __name__ == "__main__":
     import argparse
     import matplotlib.pyplot as plt
     import numpy as np
+    import bilby
+
+    bilby.core.utils.log.setup_logger(outdir='./', label=None, log_level='warning', print_version=False)
     
     parser = argparse.ArgumentParser(description='Input files and options')
     parser.add_argument('--ini-file', metavar='i', type=str, help='path to ini file')
@@ -231,5 +233,5 @@ if __name__ == "__main__":
 
     vitamin_config = GWInputParser(args.ini_file)
 
-    train(vitamin_config)
+    setup_and_train(vitamin_config)
 

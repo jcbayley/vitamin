@@ -44,10 +44,13 @@ Used to flatten the outputs of convolutional layers to put into linear layer
 Reshape
 
 One can then define the shared, r1, q and r2 network:
+The Conv1D layers are defined by Conv1D(num_filter, filter_size, stride, maxpool)
+Each network can have a conv layer to a set of linear layers defined by shared_conv and shared_network, 
+where shared is replaced by r1, r2, q where necessary
 
 .. code-block:: python 
 
-    shared_network = ['Conv1D(16,16,2)','Conv1D(16,8,2)','Flatten()']
+    shared_conv = ['Conv1D(16,16,2,2)','Conv1D(16,8,2,2)']
     r1_network = ['Linear(128)','Linear(32)']
     r2_network = ['Linear(128)','Linear(32)']
     q_network = ['Linear(128)','Linear(32)']
@@ -57,15 +60,14 @@ The second method to define each of the networks is to define them as custom mod
 
 .. code-block:: python 
 
-    shared_network = tf.keras.Sequential([tf.keras.layers.Conv1D(8,3, name="conv1", activation="relu"), 
-                                        tf.keras.layers.Conv1D(8,3, name="conv2", activation="relu"),
-                                        tf.keras.layers.Flatten()])
+    shared_network = torch.nn.Sequential([torch.nn.conv1d(8,3), 
+                                        torch.nn.conv1d(8,3)])
 
-    r1_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="r1lin1",activation="relu"),
-                                    tf.keras.layers.Dense(16, name="r1lin2",activation="relu")])
+    r1_network = tf.keras.Sequential([torch.nn.Linear(64, 32),
+                                    torch.nn.Linear(64, 32)])
 
-    q_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="qlin1",activation="relu"),
-                                    tf.keras.layers.Dense(16, name="qlin2",activation="relu")])
-
-    r2_network = tf.keras.Sequential([tf.keras.layers.Dense(32, name="r2lin1",activation="relu"),
-                                    tf.keras.layers.Dense(16, name="r2lin2",activation="relu")])
+    q_network = tf.keras.Sequential([torch.nn.Linear(64, 32),
+                                    torch.nn.Linear(64, 32)])
+    
+    r2_network = tf.keras.Sequential([torch.nn.Linear(64, 32),
+                                    torch.nn.Linear(64, 32)])

@@ -1,75 +1,60 @@
-import tensorflow as tf
-import tensorflow_probability as tfp
-tfd = tfp.distributions
+import torch
+import torch.nn as nn
 import numpy as np
-import time 
-import matplotlib.pyplot as plt
-import os
-import sys
+import time
+from .new_distributions.truncated_gauss import TruncatedNormalDist as TruncatedNormal
+from .new_distributions.mixture_same_family import ReparametrizedMixtureSameFamily
 from .group_inference_parameters import group_outputs
 
-class CVAE(tf.keras.Model):
-    """Convolutional variational autoencoder."""
+class CVAE(nn.Module):
 
-    def __init__(self, config = None, verbose = False,**kwargs):
+    def __init__(self, config = None, device="cpu",verbose=False, **kwargs):
         """
-        Input to the convolutional variational autoencoder
-        kwargs
-        --------------
-        z_dim: int (default 4)
-            size of the latent space
-        n_modes: int (default 2)
-            number of modes to allow in latent space
-        x_dim: int 
-            size of the x space (parameters to be inferred)
-        inf_pars: dict
-            the parameters to be inferred and the output distributions associated with them {"p0":"TruncatedNormal", "p1":"TruncatedNormal"}
-        bounds: dict
-            the upper and lower bounds to be used for normalisation for each of the parameters {"p0_min":0,"p0_max":1, "p1_min":0,"p1_max":1} 
-        y_dim: int 
-            the size of the input data
-        n_channels: int
-            the number of channels to use for the input data
-        shared_network: list
-            the structure of the shared network
-        r1_network: list
-            the structure of the shared network
-        q_network: list
-            the structure of the shared network
-        r2_network: list
-            the structure of the shared network
-
+        args
+        ----------
+        y_dim: int
+           zq_sample = self.multi_gauss_dist(mu_q, log_var_q, cat_weight_r).sample( length of input time series
+        hidden_dim: int
+            size of hidden layers in all encoders
+        z_dim: int
+            number of variables in latent space
+        x_dim: int
+            number of parameter to estimat
+        fc_layers: list
+            [num_neurons_layer_1, num_neurons_layer_2,....]
+        conv_layers: list
+            [(num_filters, conv_size, dilation, maxpool size), (...), (...)]
         """
-        super(CVAE, self).__init__()
+        super().__init__()
         default_kwargs = dict(
             z_dim = 4,
             n_modes = 2,
             x_modes = 1,
             hidden_activation = "leakyrelu",
-            include_psd = False,
             x_dim = None,
             inf_pars = None,
             bounds = None,
             y_dim = None,
             n_channels = 1,
             split_channels = False,
-            shared_network = ['Conv1D(96,64,2)','Conv1D(64,64,2)','Conv1D(64,64,2)','Conv1D(32,32,2)'],
-            r1_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
-            q_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
-            r2_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
+            shared_conv = None,
+            shared_network = None,
+            r1_conv = None,
+            r1_network = None,
+            q_conv = None,
+            q_network = None,
+            r2_conv = None,
+            r2_network = None,
+            dropout = 0.0,
             initial_learning_rate = 1e-4,
             logvarmin = False,
+            include_parameter_network = False,
+            separate_channels = False,
             logvarmin_start = -10,
             logvarmin_end = -20)
-        
+
         for key, val in default_kwargs.items():
             setattr(self, key, val)
-
-        for key, val in kwargs.items():
-            if key in default_kwargs.keys():
-                setattr(self, key, val)
-            else:
-                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
 
         if config is not None:
             self.config = config
@@ -82,519 +67,951 @@ class CVAE(tf.keras.Model):
             self.n_channels = len(self.config["data"]["detectors"])
             self.split_channels = self.config["model"]["split_channels"]
             self.logvarmin = self.config["training"]["logvarmin"]
-            self.shared_network = self.config["model"]["shared_network"]
-            self.r1_network = self.config["model"]["r1_network"]
-            self.q_network = self.config["model"]["q_network"]
-            self.r2_network = self.config["model"]["r2_network"]
+
+            for key in ["shared_conv", "r1_conv", "q_conv", "r2_conv"]:
+                setattr(self, key, [])
+                if len(self.config["model"][key]) != 0:
+                    for ln in self.config["model"][key]:
+                        if ln == "":
+                            continue
+                        new_ln = ln.split("(")[1].strip(")").split(",")
+                        if not new_ln[0] == "":
+                            getattr(self, key).append((int(new_ln[0]), int(new_ln[1]), int(new_ln[2]), int(new_ln[3])))
+
+            for key in ["shared_network", "r1_network", "r2_network", "q_network"]:
+                setattr(self, key, [])
+                if len(self.config["model"][key]) != 0:
+                    for ln in self.config["model"][key]:
+                        if ln != "":
+                            getattr(self, key).append(int(ln[7:].strip(")")))
+
+            self.dropout = int(self.config["model"]["dropout"])
             self.bounds = self.config["bounds"]
             self.inf_pars = self.config["inf_pars"]
+            self.include_parameter_network = self.config["model"]["include_parameter_network"]
+            self.separate_channels = self.config["model"]["separate_channels"]
             self.hidden_activation = self.config["model"]["hidden_activation"]
             if self.logvarmin:
                 self.logvarmin_start = self.config["training"]["logvarmin_start"]
 
-        #self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
-        if self.hidden_activation == "leakyrelu":
-            self.activation = tf.keras.layers.LeakyReLU(alpha=0.3)
-        elif self.hidden_activation == "tanh":
-            self.activation = tf.keras.activations.tanh
-        elif self.hidden_activation == "swish":
-            self.activation = tf.keras.activations.swish
-        elif self.hidden_activation == "relu":
-            self.activation = tf.keras.activations.relu
-        elif self.hidden_activation == "gelu":
-            self.activation = tf.keras.activations.gelu
-        else:
-            raise NotImplementedError(f"{self.hidden_activation} is not implemented, use: [leakyrelu, relu, tanh, swish]")
 
-        self.activation_relu = tf.keras.activations.relu
-        self.kernel_initializer = "glorot_uniform"#tf.keras.initializers.HeNormal() 
-        self.bias_initializer = "zeros"#tf.keras.initializers.HeNormal() 
-        self.bias_initializer_2 = tf.keras.initializers.HeNormal() 
+        for key, val in kwargs.items():
+            if key in default_kwargs.keys():
+                if key == "shared_network" and type(key) == list:
+                    new_val = []
+                    for ln in val:
+                        new_ln = ln[7:].strip(")").split(",")
+                        if not new_ln[0] == "":
+                            new_val.append((int(new_ln[0]), int(new_ln[1]), 1, int(new_ln[2])))
+                    val = new_val
+                if key in ["r1_network", "r2_network", "q_network"] and type(key) == list:
+                    val = [int(ln[7:].strip(")")) for ln in val]
 
-        self.verbose = verbose
-        # consts
-        self.EPS = 1e-3
-        self.fourpisq = 4.0*np.pi*np.pi
-        self.lntwopi = tf.math.log(2.0*np.pi)
-        self.lnfourpi = tf.math.log(4.0*np.pi)
-        #self.maxlogvar = np.log(np.nan_to_num(np.float32(np.inf))) - 1
-        #self.inv_maxlogvar = 1./self.maxlogvar
+                setattr(self, key, val)
+            else:
+                raise Exception("Key {} not valid, please choose from {}".format(key, list(default_kwargs.keys())))
+
         if self.logvarmin:
-            self.minlogvar = tf.Variable(self.logvarmin_start, trainable=False, dtype=tf.float32)
+            self.minlogvar = self.logvarmin_start
             self.maxlogvar = 4
 
-        self.logvar_act = self.setup_logvaract()
 
-        # variables
-        self.ramp = tf.Variable(1.0, trainable=False)
-        self.initial_learning_rate = self.initial_learning_rate
+        # define useful variables of network
+        self.device = device
+        self.verbose=verbose
+        self.output_dim =self.x_dim
+
+        # convolutional parts
+        #self.fc_layers = fc_layers
+        #self.fc_layers_decoder = np.array(0.5*np.array(fc_layers[:3])).astype(int)
+        #self.conv_layers = conv_layers
+        #self.num_conv = len(self.shared_network)
+        #print("numconv: ", self.num_conv)
+
+        self.trunc_mins = torch.zeros(len(self.inf_pars)).to(self.device)
+        self.trunc_maxs = torch.ones(len(self.inf_pars)).to(self.device)
+        self.activation = nn.ReLU()
+        self.tanh = nn.Tanh()
+        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax()
+        self.drop = nn.Dropout(p=self.dropout)
+
+        self.small_const = 1e-13
+        self.ramp = 1.0
+        self.r2_ramp = 1.0
+        self.logvarfactor = 1
+        self.latent_minlogvar = -7
+        self.latent_maxlogvar = 1
 
         self.grouped_params, self.new_params_order, self.reverse_params_order = group_outputs(self.inf_pars, self.bounds)
 
-        self.total_loss_metric = tf.keras.metrics.Mean('total_loss', dtype=tf.float32)
-        self.recon_loss_metric = tf.keras.metrics.Mean('recon_loss', dtype=tf.float32)
-        self.kl_loss_metric = tf.keras.metrics.Mean('KL_loss', dtype=tf.float32)
-
-        self.val_total_loss_metric = tf.keras.metrics.Mean('val_total_loss', dtype=tf.float32)
-        self.val_recon_loss_metric = tf.keras.metrics.Mean('val_recon_loss', dtype=tf.float32)
-        self.val_kl_loss_metric = tf.keras.metrics.Mean('val_KL_loss', dtype=tf.float32)
-        
-        self.init_network()
-
-    def setup_logvaract(self):
-        if self.logvarmin == False:
-            def logvar_act(x):
-                return x
+        # encoder r1(z|y) 
+        if self.separate_channels:
+            t_channels = 1
         else:
-            def logvar_act(x):
-                return (self.maxlogvar - self.minlogvar)*tf.keras.activations.sigmoid(x) + self.minlogvar
-        return logvar_act
+            t_channels = self.n_channels
 
-    def init_network(self):
-
-        # the shared convolutional network
-        if self.include_psd:
-            all_input_y = tf.keras.Input(shape=(self.y_dim, 2*self.n_channels))
+        print(type(self.shared_network))
+        if type(self.shared_network) == list and type(self.shared_conv) == list:
+            self.net_shared_conv, self.net_shared_lin, shared_out_sizes, shlinout = self.create_network(
+                "sh",
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=0, 
+                fc_layers = self.shared_network, 
+                conv_layers = self.shared_conv,
+                weight = False,
+                mean = False,
+                variance = False,
+                n_modes = self.n_modes,
+                n_channels=t_channels)
+            if self.verbose:
+                print(self.net_shared_conv, self.net_shared_lin)   
         else:
-            all_input_y = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        #if self.include_psd:
-        #    all_input_psd = tf.keras.Input(shape=(self.y_dim, self.n_channels))
-        if "keras" not in str(type(self.shared_network)):
-            # if network a list then create the network
-            if self.split_channels:
-                conv = []
-                for i in range(self.n_channels):
-                    inch = tf.keras.layers.Lambda(lambda x: x[:, :, i:i+1])(all_input_y)
-                    conv.append(self.get_network(inch, self.shared_network, label=f"shared_{i}"))
+            self.net_shared_conv = self.shared_conv
+            self.net_shared_lin = self.shared_network
 
-                conv = tf.keras.layers.Concatenate()(conv)
-            else:
-                conv = self.get_network(all_input_y, self.shared_network, label="shared")
-            #if self.include_psd:
-            #    convpsd = self.get_network(all_input_psd, self.shared_network, label="sharedpsd")
+        if type(self.r1_network) == list and type(self.r1_conv) == list:
+            self.rencoder_conv, self.rencoder_lin, rconvout, rlinout = self.create_network(
+                "r",
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=0, 
+                fc_layers = self.r1_network, 
+                conv_layers = self.r1_conv,
+                weight = True,
+                n_modes = self.n_modes,
+                n_channels=t_channels,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.rencoder_conv, self.rencoder_lin)
+
         else:
-            #otherwise use the input network
-            conv = self.shared_network(all_input_y)
-            #if self.include_psd:
-            #    convpsd = self.shared_network(all_input_psd)
+            self.rencoder_conv = self.r1_conv
+            self.rencoder_lin = self.r1_network
+            for layer in self.r1_network.children():
+                if hasattr(layer, "out_features"):
+                    rlinout = layer.out_features
+            self.make_means("r", rlinout, self.z_dim, self.n_modes, weight=True, mean=True, variance=True)
 
-        #if self.include_psd:
-        #    conv = tf.keras.layers.concatenate([conv,convpsd])
-
-        # r1 encoder network
-        if "keras" not in str(type(self.shared_network)):
-            r1 = self.get_network(conv, self.r1_network, label = "r1")
+        # encoder q(z|x, y) 
+        if type(self.q_network) == list and type(self.q_conv) == list:
+            self.qencoder_conv, self.qencoder_lin, qconvout, qlinout = self.create_network(
+                "q", 
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=self.x_dim, 
+                fc_layers = self.q_network, 
+                conv_layers = self.q_conv,
+                weight=False,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.qencoder_conv, self.qencoder_lin)
         else:
-            r1 = self.r1_network(conv)
-        r1mu = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name = "r1_mean_dense")(r1)
-        r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation="relu")(r1)
-        #r1logvar = tf.keras.layers.Dense(self.z_dim*self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_logvar_dense",activation = self.logvar_act)(r1)
-        r1modes = tf.keras.layers.Dense(self.n_modes, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="r1_modes_dense")(r1)
-        r1 = tf.keras.layers.concatenate([r1mu,r1logvar,r1modes])
-        #if self.include_psd:
-        #    self.encoder_r1 = tf.keras.Model(inputs=[all_input_y,all_input_psd], outputs=r1,name="encoder_r1")
-        #else:
-        self.encoder_r1 = tf.keras.Model(inputs=all_input_y, outputs=r1,name="encoder_r1")
+            self.qencoder_conv = self.q_conv
+            self.qencoder_lin = self.q_network
+            for layer in self.q_network.children():
+                if hasattr(layer, "out_features"):
+                    qlinout = layer.out_features
+            self.make_means("q", qlinout, self.z_dim, 0, weight=False, mean=True, variance=True)
 
-        # the q encoder network
-        q_input_x = tf.keras.Input(shape=(self.x_dim))
-        q_inx = tf.keras.layers.Flatten()(q_input_x)
-        q = tf.keras.layers.concatenate([conv,q_inx])
-        if "keras" not in str(type(self.shared_network)):
-            q = self.get_network(q, self.q_network, label = "q")
+        # decoder r2(x|z, y) 
+        if type(self.r2_network) == list and type(self.r2_conv) == list:
+            self.decoder_conv, self.decoder_lin, dconvout, dlinout = self.create_network(
+                "d", 
+                self.y_dim, 
+                self.x_dim, 
+                append_dim=self.z_dim, 
+                fc_layers = self.r2_network, 
+                conv_layers = self.r2_conv, 
+                mean = False,
+                variance = False,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.decoder_conv, self.decoder_lin)
         else:
-            q = self.q_network(conv)
-        qmu = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer_2, name="q_mean_dense")(q)
-        qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation="relu")(q)
-        #qlogvar = tf.keras.layers.Dense(self.z_dim, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name="q_logvar_dense",activation=self.logvar_act)(q)
-        q = tf.keras.layers.concatenate([qmu,qlogvar])
-        #if self.include_psd:
-        #    self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x, all_input_psd], outputs=q,name = "encoder_q")
-        #else:
-        self.encoder_q = tf.keras.Model(inputs=[all_input_y, q_input_x], outputs=q,name = "encoder_q")
 
-        # the r2 decoder network
-        r2_input_z = tf.keras.Input(shape=(self.z_dim))
-        r2_inz = tf.keras.layers.Flatten()(r2_input_z)
-        r2 = tf.keras.layers.concatenate([conv,r2_inz])
-        if "keras" not in str(type(self.shared_network)):
-            r2 = self.get_network(r2, self.r2_network, label = "r2")
-        else:
-            r2 = self.r2_network(conv)
-        
-        
+            self.decoder_conv = self.r2_conv
+            self.decoder_lin = self.r2_network
+
+            for layer in self.r2_network.children():
+                if hasattr(layer, "out_features"):
+                    dlinout = layer.out_features
+
+            self.make_means("d", dlinout, self.x_dim, 0, weight=False, mean=False, variance=False)
+
+
+        # extra optional network (intent was to learn a reparameterisation)
+        # this does not work in its current form
+        if self.include_parameter_network:
+            print("including parameter network")
+            self.par_encode_network = nn.Sequential(
+                nn.Linear(self.x_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128,64),
+                nn.ReLU(),
+                nn.Linear(64, self.x_dim),
+                nn.Sigmoid(),
+            )
+
+            self.par_decode_network = nn.Sequential(
+                nn.Linear(self.x_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128,64),
+                nn.ReLU(),
+                nn.Linear(64, self.x_dim),
+                nn.Sigmoid(),
+            )
+
+
+        # setup the output distributions for the predictive parameters
         outputs = []
         self.group_par_sizes = []
         self.group_output_sizes = []
         for name, group in self.grouped_params.items():
-            means, logvars = group.get_networks(logvar_activation = self.logvar_act)
-            outputs.append(means(r2))
-            outputs.append(logvars(r2))
+            means, logvars = group.get_networks(dlinout)
+            setattr(self, f"{name}_mean", means)
+            setattr(self, f"{name}_logvars", logvars)
             self.group_par_sizes.append(group.num_pars)
             self.group_output_sizes.extend(group.num_outputs)
-            setattr(self, "{}_loss_metric".format(name), tf.keras.metrics.Mean('{}_loss'.format(name), dtype=tf.float32))
+            #setattr(self, "{}_loss_metric".format(name), torch.mean('{}_loss'.format(name), dtype=tf.float32))
+ 
+    def par_network_scale(self, par):
+        scale_pars = self.par_encode_network(par)#*0.9 + 0.1
+        #return torch.mul(par,scale_pars)
+        return scale_pars
 
-        # all outputs
-        r2 = tf.keras.layers.concatenate(outputs)
+    def par_network_unscale(self, par):
+        scale_pars = self.par_decode_network(par)#*0.9 + 0.1
+        #return torch.divide(par,scale_pars)
+        return scale_pars
 
-        #if self.include_psd:
-        #    self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z, all_input_psd], outputs=r2,name = "decoder_r2")
-        #else:
-        self.decoder_r2 = tf.keras.Model(inputs=[all_input_y, r2_input_z], outputs=r2,name = "decoder_r2")
-        self.compute_loss = self.create_loss_func()
-
-        self.gen_samples = self.create_sample_func()
-
-
-    def encode_r1(self, y=None):
-        if self.include_psd:
-            mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
-        else:
-            mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.n_modes,self.n_modes], axis=1)
-        #mean, logvar, weight = tf.split(self.encoder_r1(y), num_or_size_splits=[self.z_dim*self.n_modes, self.z_dim*self.z_dim*self.n_modes,self.n_modes], axis=1)
-        return tf.reshape(mean,[-1,self.n_modes,self.z_dim]), tf.reshape(logvar,[-1,self.n_modes,self.z_dim]), tf.reshape(weight,[-1,self.n_modes])
-
-    def encode_q(self, x=None, y=None):
-        return tf.split(self.encoder_q([y,x]), num_or_size_splits=[self.z_dim,self.z_dim], axis=1)
-        #mean, logvar =  tf.split(self.encoder_q([y,x]), num_or_size_splits=[self.z_dim,self.z_dim*self.z_dim], axis=1)
-        #return mean, tf.reshape(logvar, [-1, self.z_dim, self.z_dim])
-
-    def decode_r2(self, y=None, z=None, apply_sigmoid=False):
-        return tf.split(self.decoder_r2([y,z]), num_or_size_splits=self.group_output_sizes, axis=1)
-
-    @property
-    def metrics(self):
-        base_metrics = [self.total_loss_metric,
-                        self.val_total_loss_metric,
-                        self.recon_loss_metric,
-                        self.val_recon_loss_metric,
-                        self.kl_loss_metric,
-                        self.val_kl_loss_metric]
-
-        for name, group in self.grouped_params.items():
-            base_metrics.append(getattr(self, "{}_loss_metric".format(name)))
-
-        return base_metrics
-
-    @tf.function
-    def train_step(self, data):
-        """Executes one training step and returns the loss.
-        This function computes the loss and gradients, and uses the latter to
-        update the model's parameters.
+        
+    def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None, n_modes = 1, layer_out_sizes=[], n_channels=3):
+        """ Generate arbritrary network, with convolutional layers or not
+        args
+        ------
+        name: str
+            name of network
+        y_dim: int
+            size of input to network
+        output_dim: int
+            size of output of network
+        append_dim: int (optional)
+            number of neurons to append to fully connected layers after convolutional layers
+        mean: bool (optional) 
+            if True adds extra output layer for means 
+        variance : bool (optional)
+            if True adds extra layer of outputs for variances
+        fc_layers: list
+            list of fully connected layers, format: [64,64,...] = [num_neurons_layer1, num_neurons_layer2, .....]
+        conv_layers: list
+            list of convolutional layers, format:[(8,8,2,1), (8,8,2,1)] = [(num_filt1, conv_size1, max_pool_size1, dilation1), (num_filt2, conv_size2, max_pool_size2, dilation2)] 
         """
-        
-        with tf.GradientTape() as tape:
-            r_loss, kl_loss, reconlosses = self.compute_loss(data[1], data[0], ramp=self.ramp)
-            loss = r_loss + self.ramp*kl_loss
-        gradients = tape.gradient(loss, self.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+         # initialise networks
+        num_fc = len(fc_layers)
+        insize = self.y_dim
+        num_conv = 0
+        lin_out_size = 0
+        conv_network = None
+        lin_network = None
+        if conv_layers is not None and len(conv_layers) != 0 :
+            conv_network = nn.Sequential()
+            num_conv = len(conv_layers)
+            layer_out_sizes = []
+            # add convolutional layers
+            for i in range(num_conv):
+                padding = int(int(conv_layers[i][1])/2.) # padding half width
+                maxpool = nn.MaxPool1d(conv_layers[i][3]) #define max pooling for this layer
+                # add convolutional/activation/maxpooling layers
+                conv_network.add_module("r_conv{}".format(i), module = nn.Conv1d(n_channels, conv_layers[i][0], conv_layers[i][1], stride = 1,padding=padding, dilation = conv_layers[i][2]))    
+                conv_network.add_module("batch_norm_conv{}".format(i), module = nn.BatchNorm1d(conv_layers[i][0]))
+                conv_network.add_module("act_r_conv{}".format(i), module = nn.ReLU())
+                conv_network.add_module("pool_r_conv{}".format(i), module = maxpool)
+                # define the output size of the layer
+                outsize = int(self.conv_out_size(insize, padding, conv_layers[i][2], conv_layers[i][1], 1)/conv_layers[i][3]) # output of one filter
+                layer_out_sizes.append((conv_layers[i][0],outsize))
+                insize = outsize
+                n_channels = conv_layers[i][0]
 
-        outputs = {}
-        self.total_loss_metric.update_state(loss)
-        outputs["total_loss"] = self.total_loss_metric.result()
-        self.recon_loss_metric.update_state(r_loss)
-        outputs["recon_loss"] = self.recon_loss_metric.result()
-        self.kl_loss_metric.update_state(kl_loss)
-        outputs["kl_loss"] = self.kl_loss_metric.result()
+        if fc_layers is not None and len(fc_layers) != 0:
+            # define the input size to fully connected layer
+
+            lin_network = nn.Sequential()
+
+            lin_input_size = np.prod(layer_out_sizes[-1]) if len(layer_out_sizes) > 0 else self.y_dim
+            if append_dim:
+                lin_input_size += append_dim
         
-        for name, group in self.grouped_params.items():
-            getattr(self, "{}_loss_metric".format(name)).update_state(reconlosses[name])
-            outputs["{}_loss".format(name)] = getattr(self, "{}_loss_metric".format(name)).result()
+            
+            layer_size = int(lin_input_size)
+            # hidden layers
+            for i in range(num_fc):
+                lin_network.add_module("r_lin{}".format(i),module=nn.Linear(layer_size, fc_layers[i]))
+                lin_network.add_module("batch_norm_lin{}".format(i), module = nn.BatchNorm1d(fc_layers[i]))
+                lin_network.add_module("r_drop{}".format(i),module=self.drop)
+                lin_network.add_module("act_r_lin{}".format(i),module=nn.ReLU())
+                layer_size = fc_layers[i]
+            # output mean and variance of gaussian with size of latent space
+
+            lin_out_size = layer_size
+
+            self.make_means(name, layer_size, output_dim, n_modes, weight, mean, variance, meansize=meansize)
+
+        return conv_network, lin_network, layer_out_sizes, lin_out_size
+
+    def make_means(self, name, layer_size, output_dim, n_modes, weight, mean, variance, meansize=None):
+        if mean:
+            if meansize is None:
+                meansize = output_dim
+            if weight:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize*n_modes))
+                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+            else:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
+                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+        if variance:
+            if weight:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+            else:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+
+        if weight:
+            setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
+
+    def conv_out_size(self, in_dim, padding, dilation, kernel, stride):
+        """ Get output size of a convolutional layer (or one filter from that layer)"""
+        return int((in_dim + 2*padding - dilation*(kernel-1)-1)/stride + 1)
+
+    def logvar_act(self, x):
+        if self.logvarmin:
+            return (self.maxlogvar - self.minlogvar)*torch.sigmoid(x) + self.minlogvar
+        else:
+            return x
+
+    def latent_logvar_act(self, x):
+        return (self.latent_maxlogvar - self.latent_minlogvar)*torch.sigmoid(x) + self.latent_minlogvar
+        
+    def shared_encode(self, y):
+            #conv = self.shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) if self.num_conv > 0 else y
+        outputs = y
+        if self.net_shared_conv is not None:
+            if self.separate_channels:
+                for i in range(self.n_channels):
+                    #print(outputs.shape)
+                    ch_out = self.net_shared_conv(y[:,i:i+1]) #if self.num_conv > 0 else outputs[:,i:i+1]
+                    #ch_out = self.net_shared_conv(torch.reshape(y[:,i:i+1], (y.size(0), 1, self.y_dim))) #if self.num_conv > 0 else outputs[:,i:i+1]
+                    #print(ch_out.shape)
+                    if i==0:
+                        outputs = ch_out
+                    else:
+                        torch.cat([outputs, ch_out], dim = 1)
+            else:
+                outputs = self.net_shared_conv(y) #if self.num_conv > 0 else y
+                #outputs = self.net_shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) #if self.num_conv > 0 else y
+            outputs = torch.flatten(outputs, start_dim = 1)
+
+        if self.net_shared_lin is not None:
+            if self.net_shared_conv is None:
+                outputs = torch.flatten(outputs, start_dim = 1)
+            outputs = self.net_shared_lin(outputs)
 
         return outputs
+    
+    def encode_r(self,y):
+        """ encoder r1(z|y) , takes in outputs from shared_convolution"""
+        conv = torch.flatten(self.rencoder_conv(y) if self.rencoder_conv is not None else y, start_dim=1)
+        lin = self.rencoder_lin(conv)
+        z_mu = self.mu_r(lin) # latent means
+        z_log_var = self.latent_logvar_act(self.log_var_r(lin)) + (1-self.ramp)*4 # latent variances
+        z_cat_weight = self.softmax(self.cat_weight_r(lin))
+        return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
+    
+    def encode_q(self,y,par):
+        """ encoder q(z|x, y) , takes in outputs from shared_convolution and parameters x"""
+        conv = torch.flatten(self.qencoder_conv(y) if self.qencoder_conv is not None else y, start_dim=1)
+        lin_in = torch.cat([conv, par],1)
+        #lin_in = par
+        lin = self.qencoder_lin(lin_in)
+        z_mu = self.mu_q(lin)  # latent means
+        z_log_var = self.latent_logvar_act(self.log_var_q(lin)) + (1-self.ramp)*4 # latent vairances
+        #z_cat_weight = self.sigmoid(self.cat_weight_q(lin))
+        return z_mu, z_log_var
+        #return z_mu.reshape(-1, self.n_modes, self.z_dim), z_log_var.reshape(-1, self.n_modes, self.z_dim), z_cat_weight
 
-    @tf.function
-    def test_step(self, data):
-        """Executes one test step and returns the loss.                                                        
-        This function computes the loss and gradients (used for validation data)
+    
+    def decode(self, z, y):
+        """ decoder r2(x|z, y) , takes in outputs from shared_convolution and latent space z"""
+        conv = torch.flatten(self.decoder_conv(y) if self.decoder_conv is not None else y, start_dim=1)
+        lin_in = torch.cat([conv,z],1) 
+        lin = self.decoder_lin(lin_in)
+        outputs = []
+        for name, group in self.grouped_params.items():
+            outputs.append(self.sigmoid(getattr(self, f"{name}_mean")(lin)))
+            outputs.append(self.logvar_act(getattr(self, f"{name}_logvars")(lin)) + (1-self.ramp)*4)
+        return torch.split(torch.cat(outputs, dim = 1), split_size_or_sections=self.group_output_sizes, dim=1)
+    
+    def cat_gauss_dist(self, mean, log_var, cat_weight):
+        """ KL divergence for Multi dimension categorical gaussian"""
+        mix = torch.distributions.Categorical(probs=cat_weight)
+        #comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var + (1-self.ramp)*self.logvarfactor)), 1)
+        comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var)), 1)
+        gmm = ReparametrizedMixtureSameFamily(mix, comp)
+        return gmm
+
+    def multi_gauss_dist(self, mean, log_var):
+        """ KL divergence for Multi dimension categorical gaussian"""
+        #comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var+(1-self.ramp)*self.logvarfactor)))
+        comp = torch.distributions.MultivariateNormal(mean, scale_tril=torch.diag_embed(torch.exp(log_var)))
+        return comp
+
+    def gauss_dist(self, mu, log_var):
+        sigma = torch.sqrt(torch.exp(log_var))
+        dist = torch.distributions.Normal(mu, sigma)
+        return dist
+
+    def trunc_gauss_sample(self, mu, log_var):
+        """Gaussian log-likelihood """
+        sigma = torch.sqrt(torch.exp(log_var))
+        #dist = TruncatedNormal(mu, sigma, self.trunc_mins - 10 + self.ramp*10, self.trunc_maxs + 10 - self.ramp*10)
+        dist = TruncatedNormal(mu, sigma, 0, 1)
+        return dist.rsample()
+
+    def log_likelihood_trunc_gauss(self,par, mu, log_var):
+        """Gaussian log-likelihood """
+        sigma = torch.sqrt(torch.exp(log_var))
+        #dist = TruncatedNormal(mu, sigma, a=self.trunc_mins - 10 + self.ramp*10, b=self.trunc_maxs + 10 - self.ramp*10)
+        dist = TruncatedNormal(mu, sigma, a=0, b=1)
+        return dist.log_prob(par)
+
+    def log_likelihood_gauss(self, par, mu, log_var):
+        """ Gausisan log likelihood"""
+        sigma = torch.sqrt(torch.exp(log_var))
+        dist = torch.distributions.Normal(mu, sigma)
+        return dist.log_prob(par)
+
+    def gauss_sample(self, mu, log_var):
+        """ Gausisan log likelihood"""
+        sigma = torch.sqrt(torch.exp(log_var))
+        dist = torch.distributions.Normal(mu, sigma)
+        return dist.rsample()
+    
+    def KL_gauss(self,mu_r,log_var_r,mu_q,log_var_q):
+        """Gaussian KL divergence between two distributions"""
+        # user torch.distributions.kl_divergence(qdist, r1dist)
+        sigma_q = torch.exp(0.5 * (log_var_q))
+        sigma_r = torch.exp(0.5 * (log_var_r))
+        t2 = torch.log(sigma_r/sigma_q)
+        t3 = (torch.square(mu_q - mu_r) + torch.square(sigma_q))/(2*torch.square(sigma_r))
+        # take sum of KL divergences in the latent space
+        kl_loss = torch.sum(t2 + t3 - 0.5,dim=1)
+        return kl_loss
+
+    def KL_multigauss(self, q_dist, r1_dist, n_samp):
+        """ KL divergence for Multi dimension categorical gaussian
+        args
+        --------
+        r1_dist: torch.distribution
+        q_dist: torch.distribution
+        z_samp: torch.Tensor
+            Tensor of samples of shape [batch_size, z_dim]
+        returns
+        --------
+        mean KL over batch
         """
+        #selfent_q = -1.0*q_dist.entropy() # shape [batch_size]
+        #log_r1_q = r1_dist.log_prob(z_samp)   # evaluate the log prob of r1 at the q samples
+        #cost_KL = selfent_q - tf.reduce_mean(log_r1_q, 1)
+        selfent_q = -1.0*q_dist.entropy()
+        log_r1_q = r1_dist.log_prob(q_dist.rsample((n_samp, )))   # evaluate the log prob of r1 at the q samples
+        cost_KL = selfent_q - torch.mean(log_r1_q)
+        return cost_KL
+
+
+    def forward(self, y, par):
+        """forward pass for training"""
+        batch_size = y.size(0) # set the batch size
+        # encode data into latent space
+        if self.include_parameter_network:
+            par_scale = self.par_network_scale(par)
+            par_rescale = self.par_network_unscale(par_scale)
+        else:
+            par_scale = par
+            par_loss = 0
+
+        shared_y = self.shared_encode(y)
+        mu_r, log_var_r, cat_weight_r = self.encode_r(shared_y) # encode r1(z|y)
+        mu_q, log_var_q = self.encode_q(shared_y, par) # encode q(z|x, y)
         
-        #r_loss, kl_loss,g_loss, vm_loss, mean_r2, scale_r2, truths, gcost = self.compute_loss(data[1], data[0])
-        r_loss, kl_loss, reconloss  = self.compute_loss(data[1], data[0])
-        loss = r_loss + self.ramp*kl_loss
+        # sample z from gaussian with mean and variance from q(z|x, y)
+        z_sample = self.multi_gauss_dist(mu_q, log_var_q).rsample()
+        r1_sample = self.cat_gauss_dist(mu_r, log_var_r, cat_weight_r).rsample()
 
-        self.val_total_loss_metric.update_state(loss)
-        self.val_recon_loss_metric.update_state(r_loss)
-        self.val_kl_loss_metric.update_state(kl_loss)
+        #z_sample = self.gauss_sample(mu_q, log_var_q, batch_size, self.z_dim)
+        #z_sample = self.lorentz_sample(mu_q, log_var_q)[0]
+        # get the mean and variance in parameter space from decoder
+        xpars = self.decode(z_sample,shared_y) # decode r2(x|z, y)                                                                              
+        return xpars, mu_q, log_var_q, mu_r, log_var_r
 
-        #return r_loss, kl_loss
-        return {"total_loss":self.val_total_loss_metric.result(),
-                "recon_loss":self.val_recon_loss_metric.result(),
-                "kl_loss":self.val_kl_loss_metric.result()}
+    def compute_loss(self, y, par, ramp, r2_ramp=1.0):
+        """ 
+        Compute the cost over a batch of input data (y) and its associated parameters (par)
+        args
+        ---------
+        y: Tensor
+            Input data
+        par: Tensor
+            Parameters associated with y data
 
-    def create_loss_func(self):
-        @tf.function
-        def loss_func(x, y, noiseamp=1.0, ramp = 1.0):
+        Returns
+        ---------
+        recon_loss: Tensor
+            Reconstruction loss of the r2 distribution
+        kl_loss: Tensor
+            KL divergence between the q and r1 distributions
+        """
+        #if y[0].shape != (self.n_channels, self.y_dim):
+        #    raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")
+            
+        self.ramp = ramp
+        self.r2_ramp = r2_ramp
+
+        if self.include_parameter_network:
+            par_scale = self.par_network_scale(par)
+            par_rescale = self.par_network_unscale(par_scale)
+            par_loss = torch.mean((par_scale - par)**2)
+        else:
+            par_scale = par
+            par_loss = 0
+
+        # reorder for distribution grouping
+        par_scale = par_scale[:,self.new_params_order]
+
+        shared_y = self.shared_encode(y)
+
+        mu_r, log_var_r, cat_weight_r = self.encode_r(shared_y) # encode r1(z|y)     
+        mu_q, log_var_q = self.encode_q(shared_y, par_scale) # encode q(z|x, y)  
+
+        #z_sample = self.gauss_sample(mu_q, log_var_q, mu_q.size(0), mu_q.size(1))
+
+        #z_dist = self.multi_gauss_dist(mu_q, log_var_q)
+        #r1_dist = self.cat_gauss_dist(mu_r, log_var_r, cat_weight_r)
+
+        q_dist  = self.multi_gauss_dist(mu_q, log_var_q)
+        r1_dist = self.cat_gauss_dist(mu_r, log_var_r, cat_weight_r)
+
+        z_sample = q_dist.rsample()
+
+        #mu_par, log_var_par = self.decode(z_sample,y) # decode r2(x|z, y)
+
+        decoded_outputs = self.decode(z = z_sample, y=shared_y)
+        par_grouped = torch.split(par_scale, split_size_or_sections=self.group_par_sizes, dim=1)
+        cost_recon = 0 
+        ind = 0
+        indx = 0
+        outs = {}
+        for name, group in self.grouped_params.items():
+            dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], ramp = self.ramp)
+            cr = group.get_cost(dist, par_grouped[indx])
+            outs[name] = cr
+            cost_recon += cr
+            ind += 2
+            indx += 1
+
+        #kl_loss = torch.mean(self.KL_gauss(mu_r, log_var_r, mu_q, log_var_q))
+        kl_div = self.KL_multigauss(q_dist, r1_dist, n_samp = 100)
+        #kl_div = torch.distributions.kl.kl_divergence(q_dist, r1_dist)
+
+        """
+        if torch.any(torch.isnan(mu_par)) or torch.any(torch.isnan(log_var_par)):
+            nanind = torch.where(torch.isnan(mu_par))[0]
+            print(nanind)
+            print(z_sample[nanind])
+            print(mu_q[nanind], log_var_q[nanind])
+            print(mu_r[nanind], log_var_r[nanind])
+        """
+        #cost_recon = self.log_likelihood_gauss(par, mu_par, log_var_par)
+        #print(np.shape(gauss_loss))
+
+        recon_loss = torch.mean(cost_recon)
+        kl_loss = torch.mean(kl_div)
+
+        return recon_loss, kl_loss, par_loss, outs
+
         
-            # Recasting some things to float32
-            noiseamp = tf.cast(noiseamp, tf.float32)
-            
-            y = tf.cast(y, dtype=tf.float32)
-            y = tf.keras.activations.tanh(y)
-            x = tf.cast(x, dtype=tf.float32)
-            
-            mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-            scale_r1 = tf.sqrt(tf.exp(logvar_r1))
-            gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                          components_distribution=tfd.MultivariateNormalDiag(
-                                              loc=mean_r1,
-                                              scale_diag=scale_r1))
-            #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-            #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
-
-
-            mean_q, logvar_q = self.encode_q(x=x,y=y)
-            scale_q = tf.sqrt(tf.exp(logvar_q))
-            mvn_q = tfp.distributions.MultivariateNormalDiag(
-                loc=mean_q,
-                scale_diag=scale_q)
-            #mvn_q = tfd.Normal(loc=mean_q,scale=scale_q)
-            z_samp = mvn_q.sample()
-
-            decoded_outputs = self.decode_r2(z = z_samp, y=y)
-            x_grouped = tf.split(x, num_or_size_splits=self.group_par_sizes, axis=1)
-            cost_recon = 0 
-            ind = 0
-            indx = 0
-            outs = {}
-            for name, group in self.grouped_params.items():
-                dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1], ramp = self.ramp)
-                cr = group.get_cost(dist, x_grouped[indx])
-                outs[name] = cr
-                #(group.pars, cr)
-                cost_recon += cr
-                ind += 2
-                indx += 1
-
-
-            selfent_q = -1.0*tf.reduce_mean(mvn_q.entropy())
-            log_r1_q = gm_r1.log_prob(tf.cast(z_samp,dtype=tf.float32))   # evaluate the log prob of r1 at the q samples
-            cost_KL = tf.cast(selfent_q,dtype=tf.float32) - tf.reduce_mean(log_r1_q)
-            return cost_recon, cost_KL, outs 
-            
-        return loss_func
-
-    def create_sample_func(self):
-
-        def sample_func(y, nsamples = 1000, max_samples = 1000):
+    
+    def draw_samples(self, shared_y, mu_r, log_var_r, cat_weight_r, num_samples, z_dim, x_dim, return_latent = False):
+        """ Draw samples from network for testing"""
+        #z_sample = self.cat_gauss_dist(mu_r.repeat(num_samples, 1),  mu_r.repeat(num_samples, 1)).rsample()
         
-            # Recasting some things to float32
-            #noiseamp = tf.cast(noiseamp, dtype=tf.float32)
+        z_sample = self.cat_gauss_dist(
+            mu_r.repeat(num_samples, 1, 1), 
+            log_var_r.repeat(num_samples, 1, 1),
+            cat_weight_r.repeat(num_samples, 1)).sample()
+        
+
+        # input the latent space samples into decoder r2(x|z, y)  
+        #ys = y.repeat(1,num_samples).view(-1, y.size(0)) # repeat data so same size as the z samples
+        if len(shared_y.shape) == 3:
+            ys = shared_y.repeat(num_samples,1, 1).view(-1, shared_y.size(1), shared_y.size(2))
+        elif len(shared_y.shape) == 2:
+            ys = shared_y.repeat(num_samples,1).view(-1, shared_y.size(1)) # repeat data so same size as the z samples
+
+        # sample parameter space from returned mean and variance 
+        #mu_par, log_var_par = self.decode(z_sample,ys) # decode r2(x|z, y) from z     
+        #samp = self.gauss_sample(mu_par, log_var_par)
+        decoded_outputs = self.decode(z = z_sample, y=ys)
+        ind = 0
+        indx = 0
+        dist_samples = []
+        for group in self.grouped_params.values():
+            dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1],  ramp = self.ramp)
+            dist_samples.append(group.sample(dist, num_samples))
+            ind += 2
+            indx += 1   
+
+        samp = torch.cat(dist_samples, dim=1)
+        samp = samp[:,self.reverse_params_order]
+
+        if self.include_parameter_network:
+            samp = self.par_network_unscale(samp)
+
+        if return_latent:
+            return samp.detach().cpu().numpy(), z_sample.detach().cpu().numpy()
+        else:
+            return samp.detach().cpu().numpy(), None
+    
+    def test_latent(self, y, par, num_samples):
+        """generating samples when testing the network, returns latent samples as well (used during training to get latent samples)"""
+        num_data = y.size(0)                                                                                                                                                     
+        x_samples = []
+
+        if self.include_parameter_network:
+            par = self.par_network_unscale(par)
+
+        # reorder for distribution grouping
+        par = par[:,self.new_params_order]
+
+        shared_y = self.shared_encode(y)       
+        mu_r, log_var_r, cat_weight_r = self.encode_r(shared_y) # encode r1(z|y) 
+        mu_q, log_var_q = self.encode_q(shared_y,par) # encode q(z|y) 
+        # get the latent space samples
+        zr_samples = []
+        zq_samples = []
+        for i in range(num_data):
+            # sample from both r and q networks
+            #zr_sample = self.gauss_sample(mu_r[i], log_var_r[i], num_samples, self.z_dim)
+            #zq_sample = self.gauss_sample(mu_q[i], log_var_q[i], num_samples, self.z_dim)
+            zr_sample = self.cat_gauss_dist(
+                mu_r[i].repeat(num_samples, 1, 1), 
+                log_var_r[i].repeat(num_samples, 1, 1), 
+                cat_weight_r[i].repeat(num_samples, 1)).rsample()
+            zq_sample = self.multi_gauss_dist(
+                mu_q[i].repeat(num_samples, 1), 
+                log_var_q[i].repeat(num_samples, 1)).rsample()
+            zr_samples.append(zr_sample.cpu().numpy())
+            zq_samples.append(zq_sample.cpu().numpy())
+            # input the latent space samples into decoder r2(x|z, y)  
+            ys = shared_y[i].repeat(num_samples,1).view(-1, shared_y.size(1)) # repeat data so same size as the z samples
+
+            mu_par, log_var_par = self.decode(zr_sample,ys) # decode r2(x|z, y) from z        
+            samp = self.gauss_sample(mu_par, log_var_par)
+
+
+            # add samples to list    
+            x_samples.append(samp.cpu().numpy())
+        return np.array(x_samples),np.array(zr_samples),np.array(zq_samples)
+    
+    def test(self, y, num_samples, transform_func=None, return_latent = False, par = None):
+        """generating samples when testing the network 
+        args
+        --------
+        model : pytorch model
+            the input model to test
+        y: Tensor
+            Tensor of all observation data to generate samples from 
+        num_samples: int
+            number of samples to draw
+        transform_func: function (optional)
+            function which transforms the parameters into real parameter space
+        return_latent: bool
+            if true returns the samples in the latent space as well as output
+        par: list (optional)
+            parameter for each injection, used if returning the latent space samples (return_latent=True)
+        """
+        num_data = y.size(0)    
+        #if y[0].shape != (self.n_channels, self.y_dim):
+        #    raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")                                                                                                                                                 
+        transformed_samples = []
+        net_samples = []
+        if return_latent:
+            z_samples = []
+            q_samples = []
+        
+        if par is not None:
+            if self.include_parameter_network:
+                par = self.par_network_scale(par)
+
+            # reorder for distribution grouping
+            par = par[:,self.new_params_order]   
+
+        shared_y = self.shared_encode(y)
+        # encode the data into latent space with r1(z,y)          
+        mu_r, log_var_r, cat_weight_r = self.encode_r(shared_y) # encode r1(z|y) 
+        if return_latent:
+            mu_q, log_var_q = self.encode_q(shared_y,par) # encode q(z|y) 
+        # get the latent space samples for each input
+        for i in range(num_data):
+            #print(f"index: {i}")
+            # generate initial samples
+            t_net_samples, t_znet_samples = self.draw_samples(
+                shared_y[i:i+1], 
+                mu_r[i:i+1], 
+                log_var_r[i:i+1], 
+                cat_weight_r[i:i+1],
+                num_samples, 
+                self.z_dim, 
+                self.x_dim, 
+                return_latent = return_latent
+                )
+
+            if return_latent:
+                q_samples.append(
+                    self.multi_gauss_dist(
+                        mu_q[i].repeat(num_samples, 1, 1), 
+                        log_var_q[i].repeat(num_samples, 1, 1)).rsample().detach().cpu().numpy()
+                )
+
+            net_samples.append(t_net_samples)
+            if return_latent:
+                z_samples.append(t_znet_samples)
+        
+        if return_latent:
+            return np.array(net_samples), np.array(z_samples), np.array(q_samples)
+        else:
+            return np.array(net_samples)
+    
+
+    def extra_test(self, y, num_samples, transform_func=None, return_latent = False, par = None):
+        """generating samples when testing the network 
+        args
+        --------
+        model : pytorch model
+            the input model to test
+        y: Tensor
+            Tensor of all observation data to generate samples from 
+        num_samples: int
+            number of samples to draw
+        transform_func: function (optional)
+            function which transforms the parameters into real parameter space
+        return_latent: bool
+            if true returns the samples in the latent space as well as output
+        par: list (optional)
+            parameter for each injection, used if returning the latent space samples (return_latent=True)
+        """
+        num_data = y.size(0)                                                                                                                                                     
+        net_samples = []
+        r_samples = []
+        q_samples = []
+        # encode the data into latent space with r1(z,y)          
+        mu_r, log_var_r, cat_weight_r = self.encode_r(y) # encode r1(z|y) 
+        if return_latent:
+            mu_q, log_var_q = self.encode_q(y,par) # encode q(z|y) 
+        # get the latent space samples for each input
+        for i in range(num_data):
+            #print(f"index: {i}")
+            # generate initial samples
+            t_net_samples, t_znet_samples = self.draw_samples(
+                y[i], 
+                mu_r[i], 
+                log_var_r[i], 
+                cat_weight_r[i],
+                num_samples, 
+                self.z_dim, 
+                self.x_dim, 
+                return_latent = True
+                )
+
+            new_mu_q, new_log_var_q = self.encode_q(y.repeat(num_samples, 1, 1), t_net_samples)
             
-            y = tf.cast(y, dtype=tf.float32)
-            y = tf.keras.activations.tanh(y)
-            y = tf.tile(y,(max_samples,1,1))
+            t_q_samples = self.multi_gauss_dist(
+                            new_mu_q, 
+                            new_log_var_q).rsample().detach().cpu().numpy()
 
-            samp_iterations = int(nsamples/max_samples)
-            for i in range(samp_iterations):
+            q_samples.append(t_q_samples)
+            r_samples.append(t_znet_sample)
+            net_samples.append(t_net_samples)
+        
+        return np.array(net_samples), np.array(r_samples), np.array(q_samples)
 
-                mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-                scale_r1 = tf.sqrt(tf.exp(logvar_r1))
-                gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                              components_distribution=tfd.MultivariateNormalDiag(
-                                                  loc=mean_r1,
-                                                  scale_diag=scale_r1))
-                #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
+    def test_old(self, y, num_samples, transform_func=None, return_latent = False, par = None):
+        """generating samples when testing the network 
+        args
+        --------
+        model : pytorch model
+            the input model to test
+        y: Tensor
+            Tensor of all observation data to generate samples from 
+        num_samples: int
+            number of samples to draw
+        transform_func: function (optional)
+            function which transforms the parameters into real parameter space
+        return_latent: bool
+            if true returns the samples in the latent space as well as output
+        par: list (optional)
+            parameter for each injection, used if returning the latent space samples (return_latent=True)
+        """
+        num_data = y.size(0)                                                                                                                                                     
+        transformed_samples = []
+        net_samples = []
+        if return_latent:
+            z_samples = []
+            q_samples = []
+        # encode the data into latent space with r1(z,y)          
+        mu_r, log_var_r = self.encode_r(y) # encode r1(z|y) 
+        if return_latent:
+            mu_q, log_var_q = self.encode_q(y,par) # encode q(z|y) 
+        # get the latent space samples for each input
+        for i in range(num_data):
+            #print("index: {}".format(i))
+            # generate initial samples
+            t_net_samples, t_znet_samples = self.draw_samples(y[i], mu_r[i], log_var_r[i], num_samples, self.z_dim, self.x_dim, return_latent = return_latent)
+            if return_latent:
+                q_samples.append(self.gauss_sample(mu_q[i], log_var_q[i], num_samples, self.z_dim).cpu().numpy())
+            if transform_func is None:
+                # if nans in samples then keep drawing samples until there are no Nans (for whan samples are outside prior)
+                if np.any(np.isnan(t_net_samples)):
+                    num_nans = np.inf
+                    stime = time.time()
+                    while num_nans > 0:
+                        nan_locations = np.where(np.any(np.isnan(t_net_samples), axis=1))
+                        num_nans = len(nan_locations[0])
+                        if num_nans == 0: break
+                        temp_new_net_samp, temp_new_z_sample = self.draw_samples(y[i], mu_r[i], log_var_r[i], num_nans, self.z_dim, self.x_dim, return_latent = return_latent)
+                        t_net_samples[nan_locations] = temp_new_net_samp
+                        if return_latent:
+                            t_znet_samples[nan_locations] = temp_new_z_sample
 
+                        etime = time.time()
+                        # if it still nans after 1 min cancel
+                        if etime - stime > 0.5*60:
+                            print("Failed to find samples within 3 mins")
+                            num_nans = 0
+                            break
 
-                z_samp = gm_r1.sample()
+                transformed_samples.append(t_net_samples)
+                net_samples.append(t_net_samples)
+                if return_latent:
+                    z_samples.append(t_znet_samples)
                 
-                decoded_outputs = self.decode_r2(z = z_samp, y=y)
-                ind = 0
-                indx = 0
-                dist_samples = []
-                for group in self.grouped_params.values():
-                    dist = group.get_distribution(decoded_outputs[ind], decoded_outputs[ind + 1],  ramp = self.ramp)
-                    dist_samples.append(group.sample(dist, max_samples))
-                    ind += 2
-                    indx += 1
-
-                if i==0:
-                    x_sample = tf.concat(dist_samples,axis=1)
-                else:
-                    x_sample = tf.concat([x_sample,tf.concat(dist_samples,axis=1)], axis = 0)
+            else:
+                # transform all samples to new parameter space
+                new_samples = transform_func(self.config, t_net_samples)
+                # if transformed samples are outside prior (nan) then redraw nans until all real values
+                if np.any(np.isnan(new_samples)):
+                    stime = time.time()
+                    num_nans = np.inf
+                    while num_nans > 0:
+                        nan_locations = np.where(np.any(np.isnan(new_samples), axis=1))
+                        num_nans = len(nan_locations[0])
+                        if num_nans == 0: break
+                        #redraw samples at nan locations
+                        temp_new_net_samples, temp_new_z_samples = self.draw_samples(y[i], mu_r[i], log_var_r[i], num_nans, self.z_dim, self.x_dim, return_latent = return_latent)
+                        transformed_newsamp = transform_func(temp_new_net_samples, i)
+                        new_samples[nan_locations] = transformed_newsamp
+                        t_net_samples[nan_locations] = temp_new_net_samples
+                        if return_latent:
+                            t_znet_samples[nan_locations] = temp_new_z_samples
+                        etime = time.time()
+                        # if it still nans after 1 min cancel
+                        if etime - stime > 0.5*60:
+                            print("Failed to find samples within 30s")
+                            num_nans = 0
+                            break
                     
-            return tf.gather(x_sample, self.reverse_params_order,axis=1)
+
+                transformed_samples.append(new_samples)
+                net_samples.append(t_net_samples)
+
+                if return_latent:
+                    z_samples.append(t_znet_samples)
         
+        if return_latent:
+            return np.array(transformed_samples), np.array(net_samples), np.array(z_samples), np.array(q_samples)
+        else:
+            return np.array(transformed_samples), np.array(net_samples)
 
-        return sample_func
 
-    def gen_z_samples(self, x, y, nsamples=1000):
-
-        #y = y/self.params['y_normscale']
-        y = tf.keras.activations.tanh(y)
-        y = tf.tile(y,(nsamples,1,1))
-        x = tf.tile(x,(nsamples,1))
-        mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=y)
-        scale_r1 = tf.sqrt(tf.exp(logvar_r1))
-        gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                      components_distribution=tfd.MultivariateNormalDiag(
-                                          loc=mean_r1,
-                                          scale_diag=scale_r1))
-        #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-        #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
-
-        z_samp_r1 = gm_r1.sample()
-
-        mean_q, logvar_q = self.encode_q(x=x,y=y)
-        scale_q = tf.sqrt(tf.exp(logvar_q))
-        mvn_q = tfp.distributions.MultivariateNormalDiag(
-            loc=mean_q,
-            scale_diag=scale_q)
-        z_samp_q = mvn_q.sample()
-
-        return mean_r1, z_samp_r1, mean_q, z_samp_q, scale_r1, scale_q, logvar_q
-
-    def call(self, inputs):
-        '''
-        call the function generates one sample of output (only here for the build section)
-        '''
-        
-        # encode through r1 network  
-        mean_r1, logvar_r1, logweight_r1 = self.encode_r1(y=inputs)
-        scale_r1 = tf.sqrt(tf.exp(logvar_r1))
-        #gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-        #                              components_distribution = tfp.distributions.MultivariateNormalFullCovariance(loc=mean_r1, covariance_matrix=scale_r1))
-
-        gm_r1 = tfd.MixtureSameFamily(mixture_distribution=tfd.Categorical(logits=logweight_r1),
-                                      components_distribution=tfd.MultivariateNormalDiag(
-                                          loc=mean_r1,
-                                          scale_diag=scale_r1))
-
-        z_samp = gm_r1.sample()
-
-        decoded_pars = self.decode_r2(z=z_samp,y=inputs)
-        
-        means = tf.concat(decoded_pars, axis = 1)
-        return means
-
-    def get_network(self, in_tensor, layers, label = "share"):
+    def get_network(self, layers, label = "share"):
         """ create the layers of the network from the list of layers in config file or list"""
         conv = in_tensor
+        channel_size = self.n_channels
+        data_length = self.y_dim
+        out_layers = []
         for i, layer in enumerate(layers):
             if layer.split("(")[0] == "Conv1D":
                 nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
-                conv = self.ConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
+                out_layers = self.ConvBlock(out_layers, channel_size, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
+                channel_size = int(nfilters)
+                data_length = data_length/int(stride)
             elif layer.split("(")[0] == "SepConv1D":
-                nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
-                conv = self.SepConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
+                raise Exception("Not implemented")
+                #nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
+                #conv = self.SepConvBlock(conv, int(nfilters), int(filter_size), int(stride), name = "{}_conv_{}".format(label,i))
             elif layer.split("(")[0] == "ResBlock":
-                nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
+                raise Exception("Not implemented")
+                #nfilters, filter_size, stride = layer.split("(")[1].strip(")").split(",")
                 # add a bottleneck block
-                conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride), name = "{}_res_{}".format(label, i))
+                #conv = self.ResBlock(conv, [int(nfilters), int(nfilters), int(nfilters)], [1, int(filter_size)], int(stride), name = "{}_res_{}".format(label, i))
             elif layer.split("(")[0] == "Linear":
                 num_neurons = layer.split("(")[1].strip(")")
-                conv = self.LinearBlock(conv, int(num_neurons), name = "{}_dense_{}".format(label, i))
+                out_layers = self.LinearBlock(out_layers, data_length, int(num_neurons), name = "{}_dense_{}".format(label, i))
+                data_length = int(num_neurons)
             elif layer.split("(")[0] == "Reshape":
                 s1,s2 = layer.split("(")[1].strip(")").split(",")
-                conv = tf.keras.layers.Reshape((int(s1),int(s2)))(conv)
+                out_layers.append(nn.Unflatten((int(s1),int(s2))))
+                data_length = int(s1)
+                channel_size = int(s2)
             elif layer.split("(")[0] == "Flatten":
-                conv = tf.keras.layers.Flatten()(conv)
+                out_layers.append(nn.Flatten())
+                data_length = channel_size * data_length
+                channel_size = 0
             elif layer.split("(")[0] == "Transformer":
-                head_size, num_heads, ff_dim = layer.split("(")[1].strip(")").split(",")
-                conv = self.TransformerEncoder(conv, int(head_size), int(num_heads), int(ff_dim), dropout=0)
+                raise Exception("Not implemented")
+                #head_size, num_heads, ff_dim = layer.split("(")[1].strip(")").split(",")
+                #conv = self.TransformerEncoder(conv, int(head_size), int(num_heads), int(ff_dim), dropout=0)
             elif layer.split("(")[0] == "MaxPool":
                 pool_size = layer.split("(")[1].strip(")")
-                conv = tf.keras.layers.MaxPooling1D(pool_size=int(pool_size), strides=None, padding="valid", data_format="channels_last")(conv)
+                out_layers.append(nn.MaxPool1d(kernel_size=int(pool_size)))
+                data_length = int(data_length/int(pool_size))
             else:
                 raise Exception(f"Error: No layer with name {layer.split('(')[0]}, please use one of Conv1D, SepConv1D, ResBlock, Linear, Reshape, Flatten, Transformer, MaxPool")
 
-        return conv
+        return torch.nn.Sequential(out_layers)
 
-    def Reshape(self, input_data, shape):
-        return 
-
-    def ConvBlock(self, input_data, filters, kernel_size, strides, name = ""):
+    def ConvBlock(self, layers, in_channels, filters, kernel_size, stride, name = ""):
         #, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer
-        conv = tf.keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
-        conv = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(conv)
-        conv = self.activation(conv)
+        layers.append(nn.Conv1d(in_channels=in_channels, out_channels=filters, kernel_size=kernel_size, stride=stride, padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name))
+        layers.append(nn.BatchNorm1d(filters, name = "{}_batchnorm".format(name)))
+        layers.append(self.activation)
+        return layers
+    def LinearBlock(self, layers, input_neurons, num_neurons, name = ""):
 
-        return conv
-
-    def SepConvBlock(self, input_data, filters, kernel_size, strides, name = ""):
-        #, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer
-        conv = tf.keras.layers.SeparableConv1D(filters=filters, kernel_size=kernel_size, strides=strides, depthwise_regularizer=tf.keras.regularizers.l2(0.001), padding="same", depthwise_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
-        conv = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(conv)
-        conv = self.activation(conv)
-
-        return conv
-
-    def LinearBlock(self,input_data, num_neurons, name = ""):
-
-        out = tf.keras.layers.Dense(num_neurons, kernel_regularizer=tf.keras.regularizers.l2(0.001), kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name)(input_data)
-        out = tf.keras.layers.BatchNormalization(name = "{}_batchnorm".format(name))(out)
-        out = self.activation_relu(out)
-        return out
-
-    def ResBlock(self,input_data, filters, kernel_size, strides, name = ""):
-        filters1, filters2, filters3 = filters
-        kernel_size1,kernel_size2 = kernel_size
-        
-        conv_short = input_data
-        
-        conv = tf.keras.layers.Conv1D(filters=filters1, kernel_size=kernel_size1, strides=strides, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_1st".format(name))(input_data)
-        conv = tf.keras.layers.BatchNormalization(name="{}_1st_batchnorm".format(name))(conv)
-        conv = self.activation(conv)
-        
-        conv = tf.keras.layers.Conv1D(filters=filters2, kernel_size=kernel_size2, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_2nd".format(name))(conv)
-        conv = tf.keras.layers.BatchNormalization(name="{}_2nd_batchnorm".format(name))(conv)
-        conv = self.activation(conv)
-        
-        conv = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = "{}_3rd".format(name))(conv)
-        conv = tf.keras.layers.BatchNormalization(name="{}_3rd_batchnorm".format(name))(conv)
-        #conv = self.act(conv)
-        
-        if strides > 1:
-            conv_short = tf.keras.layers.Conv1D(filters=filters3, kernel_size=kernel_size1, strides=strides, kernel_regularizer=tf.keras.regularizers.l2(0.001), padding="same", kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer,name = "{}_shortcut".format(name))(conv_short)
-            conv_short = tf.keras.layers.BatchNormalization(name="{}_shortcut_batchnorm".format(name))(conv_short)
-            #conv_short = self.act(conv_short)                                                                     
-
-        conv = tf.keras.layers.Add()([conv, conv_short])
-        conv = self.activation(conv)
-        return conv
-
-
-    def ResBlock2d(self,input_y, filters, kernel_size, stride=2, activation=None):
-        
-        F1, F2, F3 = filters
-        
-        y_shortcut = input_y
-        
-        y = tf.keras.layers.Conv2D(filters=F1, kernel_size=(1, 1), strides=(stride, stride), padding='valid')(input_y)
-        y =tf.keras.layers.BatchNormalization(axis=3)(y)
-        y = self.activation(y)
-        
-        y = tf.keras.layers.Conv2D(filters=F2, kernel_size=(kernel_size, kernel_size), strides=(1, 1), padding='same')(y)
-        y = tf.keras.layers.BatchNormalization(axis=3)(y)
-        y = self.activation(y)
-        
-        y = tf.keras.layers.Conv2D(filters=F3, kernel_size=(1, 1), strides=(1, 1), padding='valid')(y)
-        y = tf.keras.layers.BatchNormalization(axis=3)(y)
-        
-        if stride > 1:
-            y_shortcut = tf.keras.layers.Conv2D(filters=F3, kernel_size=(1, 1), strides=(stride, stride), padding='valid')(y_shortcut)
-            y_shortcut = tf.keras.layers.BatchNormalization(axis=3)(y_shortcut)
-
-        y = tf.keras.layers.Add()([y, y_shortcut])
-        y = self.activation(y)
-        
-        return y
-
-    def TransformerEncoder(self, inputs, head_size, num_heads, ff_dim, dropout=0):
-        # Normalization and Attention
-        x = tf.keras.layers.LayerNormalization(epsilon=1e-6)(inputs)
-        x = tf.keras.layers.MultiHeadAttention(
-            key_dim=head_size, num_heads=num_heads, dropout=dropout
-        )(x, x)
-        x = tf.keras.layers.Dropout(dropout)(x)
-        res = x + inputs
-
-        # Feed Forward Part
-        x = tf.keras.layers.LayerNormalization(epsilon=1e-6)(res)
-        x = tf.keras.layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(x)
-        x = tf.keras.layers.Dropout(dropout)(x)
-        x = tf.keras.layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
-        return x + res
-
+        layers.append(nn.Linear(input_neruons, num_neurons, kernel_initializer = self.kernel_initializer, bias_initializer = self.bias_initializer, name = name))
+        layers.append(nn.BatchNorm1d(num_neurons, name = "{}_batchnorm".format(name)))
+        layers.append(self.activation)
+        return layers

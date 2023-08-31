@@ -1,4 +1,4 @@
-from . import out_dist
+from . import output_distributions
 import inspect
 from collections import OrderedDict
 
@@ -14,7 +14,7 @@ def group_outputs(inf_pars, bounds):
             set_pars.append(cls)
 
     # get the available distributions from the out_dist file
-    file_dists = inspect.getmembers(out_dist, inspect.isclass)
+    file_dists = inspect.getmembers(output_distributions, inspect.isclass)
     available_dists = OrderedDict()
     for name,cls in file_dists:
         available_dists[name] = cls

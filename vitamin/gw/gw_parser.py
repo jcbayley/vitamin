@@ -9,7 +9,7 @@ from collections import OrderedDict
 import bilby
 import os 
 from pathlib import Path
-from ..group_inference_parameters import group_outputs
+#from ..group_inference_parameters import group_outputs
 import regex
 from ..vitamin_parser import InputParser
 
@@ -105,6 +105,12 @@ class GWInputParser(InputParser):
 
         priors['geocent_time'].minimum += self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
         priors['geocent_time'].maximum += self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
+
+        # if the geocent time is fixed, i.e. a delta function then shift its peak
+        if "DeltaFunction" in priors["geocent_time"].__class__.__name__:
+            #print(f'fixed geocent, adding {self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2}')
+            priors['geocent_time'].peak += self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
+
         #priors['geocent_time'] = bilby.core.prior.Uniform(
         #    minimum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.35,
         #    maximum=self.config["data"]["ref_geocent_time"] + self.config["data"]["duration"]/2 - 0.15,
