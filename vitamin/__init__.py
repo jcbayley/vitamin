@@ -18,8 +18,9 @@ from __future__ import absolute_import
 import sys
 
 from . import vitamin_model
+from . import train
 #from . import gw
-#from . import callbacks
+from . import callbacks
 from . import plotting
 from . import train_plots
 from . import tools

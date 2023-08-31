@@ -33,8 +33,11 @@ def setup_and_train(config):
     import torchsummary
     from ..vitamin_model import CVAE
     #pip infrom ..callbacks import  PlotCallback, TrainCallback, TestCallback, TimeCallback, optimiserSave, LearningRateCallback, LogminRampCallback, AnnealCallback, BatchRampCallback
-    from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
-        
+    if config["data"]["custom_loader"]:
+        from .load_data_custom import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+    else:
+        from .load_data import DataSet, convert_ra_to_hour_angle, convert_hour_angle_to_ra, psiphi_to_psiX, psiX_to_psiphi, m1m2_to_chirpmassq, chirpmassq_to_m1m2
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     train_log_dir = os.path.join(config["output"]['output_directory'],'logs')
@@ -70,10 +73,10 @@ def setup_and_train(config):
         test_dataset.load_bilby_samples()
 
         # load precomputed samples
-        bilby_samples = []
-        for sampler in config["testing"]["samplers"][1:]:
-            bilby_samples.append(test_dataset.sampler_outputs[sampler])
-        bilby_samples = np.array(bilby_samples)
+        #bilby_samples = []
+        #for sampler in config["testing"]["samplers"][1:]:
+        #    bilby_samples.append(test_dataset.sampler_outputs[sampler])
+        #bilby_samples = np.array(bilby_samples)
 
     start_epoch = 0
     
@@ -97,7 +100,7 @@ def setup_and_train(config):
             print(f"Warning: Continuing training from trained weights, not from pretrained model from {config['training']['transfer_model_checkpoint']}")
         # Load the previously saved weights
         #model = torch.load(os.path.join(checkpoint_dir,"model.pt"))
-        checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"))
+        checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"), map_location=device)
         #std = checkpoint["model_state_dict"]
         #std_new = OrderedDict((key.replace("shared_conv", "net_shared_conv") if "shared_conv" in key else key, v) for key, v in std.items())
         #model.load_state_dict(std_new)
@@ -158,8 +161,12 @@ def setup_and_train(config):
 
     if config["training"]["test_interval"]:
         bilby_samples = []
+        grid_points = None
         for sampler in config["testing"]["samplers"][1:]:
-            bilby_samples.append(test_dataset.sampler_outputs[sampler])
+            if sampler == "grid":
+                grid_points = test_dataset.sampler_outputs[sampler]
+            else:
+                bilby_samples.append(test_dataset.sampler_outputs[sampler])
         bilby_samples = np.array(bilby_samples)
         
         callbacks.append(PosteriorComparisonCallback(
@@ -170,7 +177,9 @@ def setup_and_train(config):
             device = device, 
             n_samples = config["testing"]["n_samples"], 
             config=config,
-            save_interval = config["training"]["test_interval"]))
+            save_interval = config["training"]["test_interval"],
+            grid_points = grid_points))
+
 
 
     train_loop(

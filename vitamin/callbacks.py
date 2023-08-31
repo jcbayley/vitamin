@@ -63,8 +63,8 @@ class AnnealCallback():
         if epoch>self.ramp_start and epoch<=self.ramp_end:
             #ramp = (np.log(epoch)-np.log(kl_start))/(np.log(kl_end)-np.log(kl_start)) 
             #ramp = (epoch - self.ramp_start)/(self.ramp_end - self.ramp_start)
-            print(epoch, self.ramp_start, int(epoch - self.ramp_start))
-            ramp = self.ramp_array[int(epoch - self.ramp_start)]
+            ramp = self.ramp_array[int(epoch - self.ramp_start)]#
+            #print(epoch, self.ramp_start, int(epoch - self.ramp_start), ramp)
         elif epoch>self.ramp_end:
             ramp = 1.0 
         else:
@@ -123,7 +123,7 @@ class LearningRateCallback():
 
         if epoch > self.decay_lr_start and self.decay_lr:
             dec_array = np.logspace(self.decay_lr_logend, 0, self.decay_lr_length)[::-1]
-            decay_pos = epoch - self.decay_lr_start
+            decay_pos = int(epoch - self.decay_lr_start)
             if decay_pos >= self.decay_lr_length:
                 decay_pos = -1
             dec_factor = dec_array[decay_pos]
@@ -135,7 +135,7 @@ class LearningRateCallback():
         #self.optimiser.learning_rate = new_lr
         #print("learning_rate:, {}".format(self.optimiser.learning_rate))
 
-    def on_epoch_begin(self, epoch, logs = None):
+    def on_epoch_end(self, epoch, logs = None):
         self.learning_rate_modify(epoch)
 
 class BatchRampCallback():
@@ -306,6 +306,7 @@ class SaveModelCallback():
                     "optimiser_state_dict": self.optimiser.state_dict()
                 }, 
                 os.path.join(self.checkpoint_path, self.model_filename))
+
         
 
 

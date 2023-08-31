@@ -43,6 +43,49 @@ class TruncatedNormal:
     def sample(self, dist, max_samples):
         return dist.sample()
 
+class TruncatedNormalCat:
+
+    def __init__(self, pars, config, index = None):
+        """
+        Truncated normal distribution within some bounds defined by configs
+        args
+        ---------------
+        pars: list
+            list of the parameters input into this distribution (in order)
+        config: dict
+            config file to be used with this setup (not used for this distribution)
+        index : str or int (default None)
+            index of the distribution, if multiple groups with same distribution index with this value
+
+        """
+        self.name = "TruncatedNormal"
+        if index is not None:
+            self.name += "_{}".format(index)
+
+        self.pars = pars
+        self.num_pars = len(self.pars)
+        self.num_outputs = [self.num_pars, self.num_pars]
+
+    def get_distribution(self, mean, logvar, ramp = 1.0):
+        # truncated normal for non-periodic params    
+        dist = TruncatedNormalDist(loc=mean, scale=torch.sqrt(torch.exp(logvar)), a=-10.0 + ramp*10.0, b=1.0 + 10.0 - ramp*10.0) 
+        mix = torch.distributions.Categorical(probs=cat_weight)
+        #comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var + (1-self.ramp)*self.logvarfactor)), 1)
+        comp = torch.distributions.Independent(torch.distributions.Normal(mean, torch.exp(log_var)), 1)
+        gmm = ReparametrizedMixtureSameFamily(mix, comp)                 
+        return dist
+
+    def get_networks(self,indim):
+        mean =  torch.nn.Linear(indim, self.num_pars)
+        logvar = torch.nn.Linear(indim, self.num_pars)
+        return mean, logvar
+
+    def get_cost(self, dist, x):
+        return -1.0*torch.mean(torch.sum(dist.log_prob(x),dim=1),dim=0)
+
+    def sample(self, dist, max_samples):
+        return dist.sample()
+
 class Normal:
 
     def __init__(self, pars, config, index = None):

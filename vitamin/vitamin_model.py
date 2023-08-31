@@ -37,14 +37,14 @@ class CVAE(nn.Module):
             y_dim = None,
             n_channels = 1,
             split_channels = False,
-            shared_conv = ['Conv1D(96,64,2)','Conv1D(64,64,2)','Conv1D(64,64,2)','Conv1D(32,32,2)'],
-            shared_network = [],
-            r1_conv = [],
-            r1_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
-            q_conv = [],
-            q_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
-            r2_conv = [],
-            r2_network = ['Linear(2048)','Linear(1024)','Linear(512)'],
+            shared_conv = None,
+            shared_network = None,
+            r1_conv = None,
+            r1_network = None,
+            q_conv = None,
+            q_network = None,
+            r2_conv = None,
+            r2_network = None,
             dropout = 0.0,
             initial_learning_rate = 1e-4,
             logvarmin = False,
@@ -97,14 +97,14 @@ class CVAE(nn.Module):
 
         for key, val in kwargs.items():
             if key in default_kwargs.keys():
-                if key == "shared_network":
+                if key == "shared_network" and type(key) == list:
                     new_val = []
                     for ln in val:
                         new_ln = ln[7:].strip(")").split(",")
                         if not new_ln[0] == "":
                             new_val.append((int(new_ln[0]), int(new_ln[1]), 1, int(new_ln[2])))
                     val = new_val
-                if key in ["r1_network", "r2_network", "q_network"]:
+                if key in ["r1_network", "r2_network", "q_network"] and type(key) == list:
                     val = [int(ln[7:].strip(")")) for ln in val]
 
                 setattr(self, key, val)
@@ -151,63 +151,98 @@ class CVAE(nn.Module):
         else:
             t_channels = self.n_channels
 
-        self.net_shared_conv, self.net_shared_lin, shared_out_sizes, shlinout = self.create_network(
-            "sh",
-            self.y_dim, 
-            self.z_dim, 
-            append_dim=0, 
-            fc_layers = self.shared_network, 
-            conv_layers = self.shared_conv,
-            weight = False,
-            mean = False,
-            variance = False,
-            n_modes = self.n_modes,
-            n_channels=t_channels)
-        if self.verbose:
-            print(self.net_shared_conv, self.net_shared_lin)   
+        print(type(self.shared_network))
+        if type(self.shared_network) == list and type(self.shared_conv) == list:
+            self.net_shared_conv, self.net_shared_lin, shared_out_sizes, shlinout = self.create_network(
+                "sh",
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=0, 
+                fc_layers = self.shared_network, 
+                conv_layers = self.shared_conv,
+                weight = False,
+                mean = False,
+                variance = False,
+                n_modes = self.n_modes,
+                n_channels=t_channels)
+            if self.verbose:
+                print(self.net_shared_conv, self.net_shared_lin)   
+        else:
+            self.net_shared_conv = self.shared_conv
+            self.net_shared_lin = self.shared_network
 
-        self.rencoder_conv, self.rencoder_lin, rconvout, rlinout = self.create_network(
-            "r",
-            self.y_dim, 
-            self.z_dim, 
-            append_dim=0, 
-            fc_layers = self.r1_network, 
-            conv_layers = self.r1_conv,
-            weight = True,
-            n_modes = self.n_modes,
-            n_channels=t_channels,
-            layer_out_sizes = shared_out_sizes)
-        if self.verbose:
-            print(self.rencoder_conv, self.rencoder_lin)
+        if type(self.r1_network) == list and type(self.r1_conv) == list:
+            self.rencoder_conv, self.rencoder_lin, rconvout, rlinout = self.create_network(
+                "r",
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=0, 
+                fc_layers = self.r1_network, 
+                conv_layers = self.r1_conv,
+                weight = True,
+                n_modes = self.n_modes,
+                n_channels=t_channels,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.rencoder_conv, self.rencoder_lin)
 
-        # conv layers not used for next two networks, they both use the same rencoder
+        else:
+            self.rencoder_conv = self.r1_conv
+            self.rencoder_lin = self.r1_network
+            for layer in self.r1_network.children():
+                if hasattr(layer, "out_features"):
+                    rlinout = layer.out_features
+            self.make_means("r", rlinout, self.z_dim, self.n_modes, weight=True, mean=True, variance=True)
+
         # encoder q(z|x, y) 
-        self.qencoder_conv, self.qencoder_lin, qconvout, qlinout = self.create_network(
-            "q", 
-            self.y_dim, 
-            self.z_dim, 
-            append_dim=self.x_dim, 
-            fc_layers = self.q_network, 
-            conv_layers = self.q_conv,
-            weight=False,
-            layer_out_sizes = shared_out_sizes)
-        if self.verbose:
-            print(self.qencoder_conv, self.qencoder_lin)
+        if type(self.q_network) == list and type(self.q_conv) == list:
+            self.qencoder_conv, self.qencoder_lin, qconvout, qlinout = self.create_network(
+                "q", 
+                self.y_dim, 
+                self.z_dim, 
+                append_dim=self.x_dim, 
+                fc_layers = self.q_network, 
+                conv_layers = self.q_conv,
+                weight=False,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.qencoder_conv, self.qencoder_lin)
+        else:
+            self.qencoder_conv = self.q_conv
+            self.qencoder_lin = self.q_network
+            for layer in self.q_network.children():
+                if hasattr(layer, "out_features"):
+                    qlinout = layer.out_features
+            self.make_means("q", qlinout, self.z_dim, 0, weight=False, mean=True, variance=True)
 
         # decoder r2(x|z, y) 
-        self.decoder_conv, self.decoder_lin, dconvout, dlinout = self.create_network(
-            "d", 
-            self.y_dim, 
-            self.x_dim, 
-            append_dim=self.z_dim, 
-            fc_layers = self.r2_network, 
-            conv_layers = self.r2_conv, 
-            mean = False,
-            variance = False,
-            layer_out_sizes = shared_out_sizes)
-        if self.verbose:
-            print(self.decoder_conv, self.decoder_lin)
+        if type(self.r2_network) == list and type(self.r2_conv) == list:
+            self.decoder_conv, self.decoder_lin, dconvout, dlinout = self.create_network(
+                "d", 
+                self.y_dim, 
+                self.x_dim, 
+                append_dim=self.z_dim, 
+                fc_layers = self.r2_network, 
+                conv_layers = self.r2_conv, 
+                mean = False,
+                variance = False,
+                layer_out_sizes = shared_out_sizes)
+            if self.verbose:
+                print(self.decoder_conv, self.decoder_lin)
+        else:
 
+            self.decoder_conv = self.r2_conv
+            self.decoder_lin = self.r2_network
+
+            for layer in self.r2_network.children():
+                if hasattr(layer, "out_features"):
+                    dlinout = layer.out_features
+
+            self.make_means("d", dlinout, self.x_dim, 0, weight=False, mean=False, variance=False)
+
+
+        # extra optional network (intent was to learn a reparameterisation)
+        # this does not work in its current form
         if self.include_parameter_network:
             print("including parameter network")
             self.par_encode_network = nn.Sequential(
@@ -237,6 +272,7 @@ class CVAE(nn.Module):
             )
 
 
+        # setup the output distributions for the predictive parameters
         outputs = []
         self.group_par_sizes = []
         self.group_output_sizes = []
@@ -257,6 +293,7 @@ class CVAE(nn.Module):
         scale_pars = self.par_decode_network(par)#*0.9 + 0.1
         #return torch.divide(par,scale_pars)
         return scale_pars
+
         
     def create_network(self, name, y_dim, output_dim, append_dim=0, mean=True, variance=True, weight = False,fc_layers=[], conv_layers=[], meansize = None, n_modes = 1, layer_out_sizes=[], n_channels=3):
         """ Generate arbritrary network, with convolutional layers or not
@@ -296,7 +333,7 @@ class CVAE(nn.Module):
                 maxpool = nn.MaxPool1d(conv_layers[i][3]) #define max pooling for this layer
                 # add convolutional/activation/maxpooling layers
                 conv_network.add_module("r_conv{}".format(i), module = nn.Conv1d(n_channels, conv_layers[i][0], conv_layers[i][1], stride = 1,padding=padding, dilation = conv_layers[i][2]))    
-                #conv_network.add_module("batch_norm_conv{}".format(i), module = nn.BatchNorm1d(conv_layers[i][0]))
+                conv_network.add_module("batch_norm_conv{}".format(i), module = nn.BatchNorm1d(conv_layers[i][0]))
                 conv_network.add_module("act_r_conv{}".format(i), module = nn.ReLU())
                 conv_network.add_module("pool_r_conv{}".format(i), module = maxpool)
                 # define the output size of the layer
@@ -319,7 +356,7 @@ class CVAE(nn.Module):
             # hidden layers
             for i in range(num_fc):
                 lin_network.add_module("r_lin{}".format(i),module=nn.Linear(layer_size, fc_layers[i]))
-                #lin_network.add_module("batch_norm_lin{}".format(i), module = nn.BatchNorm1d(fc_layers[i]))
+                lin_network.add_module("batch_norm_lin{}".format(i), module = nn.BatchNorm1d(fc_layers[i]))
                 lin_network.add_module("r_drop{}".format(i),module=self.drop)
                 lin_network.add_module("act_r_lin{}".format(i),module=nn.ReLU())
                 layer_size = fc_layers[i]
@@ -327,31 +364,34 @@ class CVAE(nn.Module):
 
             lin_out_size = layer_size
 
-            if mean:
-                if meansize is None:
-                    meansize = output_dim
-                if weight:
-                    setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize*n_modes))
-                    #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
-                    getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
-                else:
-                    setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
-                    #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
-                    getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
-            if variance:
-                if weight:
-                    setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
-                    #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
-                    getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
-                else:
-                    setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
-                    #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
-                    getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
-
-            if weight:
-                setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
+            self.make_means(name, layer_size, output_dim, n_modes, weight, mean, variance, meansize=meansize)
 
         return conv_network, lin_network, layer_out_sizes, lin_out_size
+
+    def make_means(self, name, layer_size, output_dim, n_modes, weight, mean, variance, meansize=None):
+        if mean:
+            if meansize is None:
+                meansize = output_dim
+            if weight:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize*n_modes))
+                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+            else:
+                setattr(self,"mu_{}".format(name[0]),nn.Linear(layer_size, meansize))
+                #torch.nn.init.xavier_uniform_(getattr(self,"mu_{}".format(name[0])).weight)
+                getattr(self,"mu_{}".format(name[0])).bias.data.uniform_(-1.0, 1.0)
+        if variance:
+            if weight:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim*n_modes))
+                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+            else:
+                setattr(self,"log_var_{}".format(name[0]),nn.Linear(layer_size, output_dim))
+                #getattr(self,"log_var_{}".format(name[0])).weight.data.fill_(1.0)
+                getattr(self,"log_var_{}".format(name[0])).bias.data.fill_(0.0)
+
+        if weight:
+            setattr(self,"cat_weight_{}".format(name[0]),nn.Linear(layer_size, n_modes))
 
     def conv_out_size(self, in_dim, padding, dilation, kernel, stride):
         """ Get output size of a convolutional layer (or one filter from that layer)"""
@@ -373,14 +413,16 @@ class CVAE(nn.Module):
             if self.separate_channels:
                 for i in range(self.n_channels):
                     #print(outputs.shape)
-                    ch_out = self.net_shared_conv(torch.reshape(y[:,i:i+1], (y.size(0), 1, self.y_dim))) #if self.num_conv > 0 else outputs[:,i:i+1]
+                    ch_out = self.net_shared_conv(y[:,i:i+1]) #if self.num_conv > 0 else outputs[:,i:i+1]
+                    #ch_out = self.net_shared_conv(torch.reshape(y[:,i:i+1], (y.size(0), 1, self.y_dim))) #if self.num_conv > 0 else outputs[:,i:i+1]
                     #print(ch_out.shape)
                     if i==0:
                         outputs = ch_out
                     else:
                         torch.cat([outputs, ch_out], dim = 1)
             else:
-                outputs = self.net_shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) #if self.num_conv > 0 else y
+                outputs = self.net_shared_conv(y) #if self.num_conv > 0 else y
+                #outputs = self.net_shared_conv(torch.reshape(y, (y.size(0), self.n_channels, self.y_dim))) #if self.num_conv > 0 else y
             outputs = torch.flatten(outputs, start_dim = 1)
 
         if self.net_shared_lin is not None:
@@ -542,8 +584,8 @@ class CVAE(nn.Module):
         kl_loss: Tensor
             KL divergence between the q and r1 distributions
         """
-        if y[0].shape != (self.n_channels, self.y_dim):
-            raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")
+        #if y[0].shape != (self.n_channels, self.y_dim):
+        #    raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")
             
         self.ramp = ramp
         self.r2_ramp = r2_ramp
@@ -712,8 +754,8 @@ class CVAE(nn.Module):
             parameter for each injection, used if returning the latent space samples (return_latent=True)
         """
         num_data = y.size(0)    
-        if y[0].shape != (self.n_channels, self.y_dim):
-            raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")                                                                                                                                                 
+        #if y[0].shape != (self.n_channels, self.y_dim):
+        #    raise Exception(f"input wrong shape: {y.shape} nut should be (N, {self.n_channels}, {self.y_dim})")                                                                                                                                                 
         transformed_samples = []
         net_samples = []
         if return_latent:
