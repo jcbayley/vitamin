@@ -108,6 +108,7 @@ class GWInputParser(InputParser):
 
         # if the geocent time is fixed, i.e. a delta function then shift its peak
         if "DeltaFunction" in priors["geocent_time"].__class__.__name__:
+            #print(f'fixed geocent, adding {self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2}')
             priors['geocent_time'].peak += self.config["data"]["ref_geocent_time"] - self.config["data"]["duration"]/2
 
         #priors['geocent_time'] = bilby.core.prior.Uniform(

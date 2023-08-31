@@ -17,7 +17,8 @@ import natsort
 from scipy.spatial.distance import jensenshannon
 import scipy.stats as st
 import pandas
-import seaborn
+import seaborn as sns
+import pandas as pd
 
 
 
@@ -133,9 +134,9 @@ def plot_KL(KL_samples, step, run='testing'):
     plt.close()
 
 def plot_JS_div(par_vals, labels):
-    seaborn.set(font_scale=1.5)
+    sns.set(font_scale=1.5)
     fig, ax = plt.subplots(figsize = (14,8))
-    hm = seaborn.heatmap(np.array(par_vals)*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
+    hm = sns.heatmap(np.array(par_vals)*1e3, annot=True, fmt='0.1f', annot_kws = {"fontsize":11}, cmap="cividis", cbar_kws={'label': 'JS divergence ($10^{-3}$)'}, linewidths=0.05)
     ax.set_xticks(np.arange(len(labels)) + 0.5,labels=labels, rotation=50)
     ax.set_ylabel("Injection", fontsize=20)
     ax.collections[0].colorbar.set_label('JS divergence ($10^{-3}$)', fontsize=20)
@@ -166,6 +167,41 @@ def compute_JS_div(vitamin_samples, sampler_samples, Nsamp=5000, nstep=100, ntes
             kde_q = st.gaussian_kde(kdsampq)(eval_points)
             current_JS = np.power(jensenshannon(kde_p, kde_q),2)
             temp_JS[n][pr] = current_JS
+
+    temp_JS = np.mean(temp_JS, axis = 0)
+
+    return temp_JS
+
+def compute_JS_div_dict(vitamin_samples, sampler_samples, Nsamp=5000, nstep=100, ntest=100):
+    """compute KL estimate
+        take the mean JS divergence of {nstep} random draws of {Nsamp} samples from each of the sets of samples
+        samples should be of shape (nsampes, nparameters)
+    """
+    temp_JS = np.zeros((ntest, len(vitamin_samples.keys()) - 1))
+    #if np.shape(vitamin_samples)[1] != np.shape(sampler_samples)[1]:
+    #    raise Exception("Samples should have the same number of parameters")
+    SMALL_CONST = 1e-162
+    def my_kde_bandwidth(obj, fac=1.0):
+        """We use Scott's Rule, multiplied by a constant factor."""
+        return np.power(obj.n, -1./(obj.d+4)) * fac
+    
+    if Nsamp > len(vitamin_samples[list(vitamin_samples.keys())[0]]):
+        ntest = 1
+        Nsamp = len(vitamin_samples[list(vitamin_samples.keys())[0]])
+        
+    for n in range(ntest):
+        idx1 = np.random.randint(0,len(vitamin_samples[list(vitamin_samples.keys())[0]]),Nsamp)
+        idx2 = np.random.randint(0,len(sampler_samples[list(vitamin_samples.keys())[0]]),Nsamp)
+        for i, key in enumerate(vitamin_samples.keys()):
+            if key == "sampler":
+                continue
+            kdsampp = vitamin_samples[key][idx1][~np.isnan(vitamin_samples[key][idx1])].flatten()
+            kdsampq = sampler_samples[key][idx2][~np.isnan(sampler_samples[key][idx2])].flatten()
+            eval_points = np.linspace(np.min([np.min(kdsampp), np.min(kdsampq)]), np.max([np.max(kdsampp), np.max(kdsampq)]), nstep)
+            kde_p = st.gaussian_kde(kdsampp)(eval_points)
+            kde_q = st.gaussian_kde(kdsampq)(eval_points)
+            current_JS = np.power(jensenshannon(kde_p, kde_q),2)
+            temp_JS[n][i] = current_JS
 
     temp_JS = np.mean(temp_JS, axis = 0)
 
@@ -294,7 +330,8 @@ def plot_posterior(
     config=None, 
     scale_other_samples = True, 
     unconvert_parameters = None,
-    compute_JS=True):
+    compute_JS=True,
+    grid_points=None):
     """
     plots the posteriors
     """
@@ -446,6 +483,164 @@ def plot_posterior(
             plt.savefig(os.path.join(directories["full_posterior"],'full_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
         plt.close()
         return -1.0, -1.0
+
+def plot_posterior_seaborn(
+    save_dir,
+    samples,
+    x_truth,
+    epoch,
+    idx,
+    all_other_samples=None, 
+    config=None, 
+    scale_other_samples = True, 
+    unconvert_parameters = None,
+    compute_JS=True,
+    grid_points=None,
+    sampler_names=["s1","s2","s3"]):
+    """
+    plots the posteriors
+    """
+    # samples shape [numsamples, numpar]
+    # all other shape [numsamplers, numsamples, numpar]
+
+    config["data"]['corner_labels'] = config["data"]["prior_pars"]
+
+    # make save directories
+    directories = {}
+    for dname in ["comparison_posteriors", "full_posteriors","JS_divergence","samples"]:
+        directories[dname] = os.path.join(save_dir, dname)
+        if not os.path.isdir(directories[dname]):
+            os.makedirs(directories[dname])
+    
+    # trim samples from outside the cube
+    mask = []
+    for s in samples:
+        if (np.all(s>=0.0) and np.all(s<=1.0)):
+            mask.append(True)
+        else:
+            mask.append(False)
+
+    print("SAmple shapes", torch.Tensor(samples).shape, torch.BoolTensor(mask).shape)
+    #samples = torch.masked_select(torch.Tensor(samples),torch.BoolTensor(mask))
+    samples = torch.Tensor(np.array(samples)[mask])
+    print('identified {} good samples'.format(samples.shape[0]))
+
+    if samples.shape[0]<100:
+        print('... Bad run, not doing posterior plotting.')
+        return None, None
+    # make numpy arrays
+    samples = samples.numpy()
+    #print(np.min(samples, axis=0), np.max(samples, axis = 0))
+    #samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_normed.txt'.format(epoch,idx))
+    #np.savetxt(samples_file,samples)
+
+    # convert vitamin sample and true parameter back to truths
+    if unconvert_parameters is not None:
+        vit_samples = unconvert_parameters(samples)
+    else:
+        vit_samples = samples
+        
+    # define general plotting arguments
+    defaults_kwargs = dict(
+                    bins=50, smooth=0.9, label_kwargs=dict(fontsize=16),
+                    title_kwargs=dict(fontsize=16),
+                    truth_color='tab:orange', quantiles=[0.16, 0.84],
+                    levels=(0.68,0.90,0.95), density=True,
+                    plot_density=False, plot_datapoints=True,
+                    max_n_ticks=3)
+
+    # 1-d hist kwargs for normalisation
+    hist_kwargs = dict(density=True,color='tab:red')
+    hist_kwargs_other = dict(density=True,color='tab:blue')
+    hist_kwargs_other2 = dict(density=True,color='tab:green')
+
+
+    dataframe_list = []
+    vitamin_dict = {}
+    true_params = {}
+    ol_pars = []
+    for inf_idx, bilby_idx in config["masks"]["inf_bilby_idx"]:
+        inf_par = config["model"]['inf_pars_list'][inf_idx]
+        bilby_par = config["testing"]['bilby_pars'][bilby_idx]
+        #print(inf_par, np.min(vit_samples[:, inf_idx]), np.max(vit_samples[:,inf_idx]))
+        if inf_par == "geocent_time":
+            vitamin_dict[inf_par] = vit_samples[:,inf_idx]- config["data"]["ref_geocent_time"]
+            true_params[inf_par] = x_truth[inf_idx] - config["data"]["ref_geocent_time"]
+        #elif inf_par == "phase":
+        #    continue
+        else:
+            vitamin_dict[inf_par] = vit_samples[:,inf_idx]
+            true_params[inf_par] = x_truth[inf_idx]
+        ol_pars.append(inf_par) 
+
+    #samples_file = os.path.join(directories["samples"],'vitamin_posterior_samples_epoch_{}_event_{}.txt'.format(epoch,idx))
+    #np.savetxt(samples_file,vitamin_samples)
+    vitamin_dict["sampler"] = ["vitamin"] * len(vitamin_dict[list(vitamin_dict.keys())[0]])
+    vitamin_df = pd.DataFrame(vitamin_dict)
+    dataframe_list.append(vitamin_df)
+
+    JS_est = [-1]
+    if all_other_samples is not None:
+        JS_est = []
+        for i, other_samples in enumerate(all_other_samples):
+            if np.all(other_samples) == 0:
+                continue
+            #sampler_samples = np.zeros([other_samples.shape[0],config["masks"]["bilby_ol_len"]])
+            #true_params = np.zeros(config["masks"]["inf_ol_len"])
+            #vitamin_samples = np.zeros([vit_samples.shape[0],config["masks"]["inf_ol_len"]])
+            sampler_dict = {}
+            #for inf_idx,bilby_idx in zip(config["masks"]["inf_ol_idx"],config["masks"]["bilby_ol_idx"]):
+            for inf_idx, bilby_idx in config["masks"]["inf_bilby_idx"]:
+                inf_par = config["model"]['inf_pars_list'][inf_idx]
+                bilby_par = config["testing"]['bilby_pars'][bilby_idx]
+                #print(inf_par, np.min(vit_samples[:, inf_idx]), np.max(vit_samples[:,inf_idx]))
+                if inf_par == "geocent_time":
+                    sampler_dict[inf_par] = other_samples[:,bilby_idx]- config["data"]["ref_geocent_time"]
+                #elif inf_par == "phase":
+                #    continue
+                else:
+                    sampler_dict[inf_par] = other_samples[:,bilby_idx]    
+
+            temp_JS = compute_JS_div_dict(vitamin_dict, sampler_dict)
+            JS_est.append(temp_JS)
+
+            sampler_dict["sampler"] = [sampler_names[i]] * len(sampler_dict[list(sampler_dict.keys())[0]])
+            sampler_df = pd.DataFrame(sampler_dict)
+            dataframe_list.append(sampler_df)
+
+            #other_samples_file = os.path.join(directories["samples"],'posterior_samples_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
+            #np.savetxt(other_samples_file,sampler_samples)
+
+        JS_file = os.path.join(directories["JS_divergence"],'JS_divergence_epoch_{}_event_{}_{}.txt'.format(epoch,idx,i))
+        np.savetxt(JS_file,JS_est)
+
+
+
+    dataframe = pd.concat(dataframe_list)
+
+    fig = sns.PairGrid(dataframe, hue="sampler")
+    if grid_points is not None:
+        fig.axes[1,0].contour(grid_points[0][1], grid_points[0][0], grid_points[1])
+        key1, key2 = list(true_params.keys())[0], list(true_params.keys())[1]
+        fig.axes[1,0].set_ylim([dataframe.min()[key1], dataframe.max()[key1]])
+        fig.axes[1,0].set_xlim([dataframe.min()[key2], dataframe.max()[key2]])
+    fig.map_lower(sns.histplot)
+    fig.map_upper(sns.kdeplot, levels=4, fill=True)
+    fig.map_diag(sns.histplot)
+    for i, par in enumerate(list(true_params.keys())):
+        fig.axes[i, i].axvline(true_params[par], color="k")
+        for j, par2 in enumerate(list(true_params.keys())):
+            if i != j:
+                fig.axes[i,j].axhline(true_params[par], color="k")
+                fig.axes[i,j].axvline(true_params[par2], color="k")
+
+
+    print('Saved output to ', os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
+    plt.savefig(os.path.join(directories["comparison_posteriors"],'comp_posterior_epoch_{}_event_{}.png'.format(epoch,idx)))
+    plt.close()
+    return JS_est, ol_pars
+
+
 
 def plot_latent(mu_r1, z_r1, mu_q, z_q, epoch, idx, run='testing'):
 

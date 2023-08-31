@@ -12,7 +12,6 @@ import bilby
 from gwpy.timeseries import TimeSeries
 import copy 
 from gwdatafind import find_urls
-from scipy.stats import gaussian_kde
 #from ..group_inference_parameters import group_outputs
 
 class DataSet(torch.utils.data.Dataset):
@@ -51,6 +50,8 @@ class DataSet(torch.utils.data.Dataset):
         self.epoch_iter = 0
         # will addthis to init files eventually
         self.channel_name = channel_name
+        self.unconvert_parameters = unconvert_parameters
+        self.convert_parameters = convert_parameters
         self.verbose = False
 
         if self.config['training']['make_sig']:
@@ -74,77 +75,24 @@ class DataSet(torch.utils.data.Dataset):
 
     def __len__(self):
         """ number of batches per epoch"""
-        print(int(self.chunk_batch))
         return(int(self.chunk_batch))
         #return int(np.floor(len(self.filenames)*self.params["tset_split"]/self.batch_size))
 
-    def convert_parameters(self, x_data):
-
-        convpars = convert_parameters(self.config, x_data)
-
-        if self.config["data"]["perform_parameter_pca"]:
-            if not hasattr(self, "parameter_pca"):
-                self.setup_pca(x_data, datatype="parameter")
-                with open(os.path.join(config["output"]["output_directory"]), "parameter_pca_weights.pkl") as f:
-                    pickle.dump(getattr(self, f"parameter_pca"), f)
-            x_data = self.pca_transform(x_data, datatype="parameter")
-
-        return x_data
-
-    def unconvert_parameters(self, x_data):
-
-        if self.config["data"]["perform_parameter_pca"]:
-            x_data = self.pca_reconstruction(x_data, datatype="parameter")
-
-        x_data = unconvert_parameters(self.config, x_data)
-        return x_data
-
-    def load_next_chunk(self):
+    def __getitem__(self):
         """
         Loads in one chunk of data where the size if set by chunk_size
         """
-        if self.test_set:
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.truths, self.psds = self.load_waveforms(self.filenames, None)
-        else:
 
-            if self.chunk_iter >= self.max_chunk_num:
-                print("Reached maximum number of chunks, restarting index and shuffling files")
-                self.chunk_iter = 0
-                np.random.shuffle(self.filenames)
-                
-            start_load = time.time()
-            #print("Loading data from chunk {}".format(self.chunk_iter))
-            # get the data indices for given chunk
-            temp_chunk_indices = self.indices[self.chunk_iter*self.chunk_size:(self.chunk_iter + 1)*self.chunk_size]
-            # get the filenames which these data indices live, take set to get single file index
-            temp_filename_indices = np.array(list(set(np.floor(temp_chunk_indices/self.config["data"]["file_split"])))).astype(int)
-            # rewrite the data indices as the index within each file
-            temp_chunk_indices = np.array(temp_chunk_indices % self.config["data"]["file_split"]).astype(int)
-            # if the index falls to zero then split as the file is the next one 
-            temp_chunk_indices_split = np.split(temp_chunk_indices, np.where(np.diff(temp_chunk_indices) < 0)[0] + 1)
+        X, Y_noisefree, Y_noisy, snrs, truths, psds = self.load_waveforms(self.filenames, None)
+        if np.any(np.isnan(X)) or not np.all(np.isfinite(self.X)):
+            print("NaN of Inf in parameters")
+            failed = True
+        elif np.any(np.isnan(Y_noisefree)) or not np.all(np.isfinite(Y_noisefree)):
+            print("NaN or Inf in y data")
+            failed = True
 
-            self.X, self.Y_noisefree, self.Y_noisy, self.snrs, self.Y_noise, self.psds = self.load_waveforms(self.filenames[temp_filename_indices], temp_chunk_indices_split)
-
-            self.chunk_size = len(self.X)
-            self.chunk_batch = np.floor(self.chunk_size/self.batch_size)
-            end_load = time.time()
-            print("load_time chunk {}: {}".format(self.chunk_iter, end_load - start_load))
-
-            # check for infs or nans in training data
-            failed = False
-            if np.any(np.isnan(self.X)) or not np.all(np.isfinite(self.X)):
-                print("NaN of Inf in parameters")
-                failed = True
-            elif np.any(np.isnan(self.Y_noisefree)) or not np.all(np.isfinite(self.Y_noisefree)):
-                print("NaN or Inf in y data")
-                failed = True
-
-            if failed is True:
-                # if infs or nans are present reload and augment this chunk until there are no nans
-                self.load_next_chunk()
-            else:
-                # otherwise iterate to next chunk
-                self.chunk_iter += 1
+        return np.array(Y_noisefree), np.array(X)
+            
         
 
     def __getitem__(self, index = 0):
@@ -242,14 +190,7 @@ class DataSet(torch.utils.data.Dataset):
         
 
     def get_whitened_signal_response(self, data):
-        """ get the response of th detector to given polarisations
 
-        Args:
-            data (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
         stload = time.time()
         ifos = bilby.gw.detector.InterferometerList(self.config["data"]['detectors'])
 
@@ -295,17 +236,18 @@ class DataSet(torch.utils.data.Dataset):
         data["y_data_noisefree"] = np.transpose(all_signals, [0,2,1])
                
         #data["x_data"], time_correction = self.randomise_time(data["x_data"])
-        #data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
-        #data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
-
-        #y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
+        data["x_data"], distance_correction = self.randomise_distance(data["x_data"], data["y_data_noisefree"])
+        data["x_data"], phase_correction = self.randomise_phase(data["x_data"], data["y_data_noisefree"])
         
-        #data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
+
+        y_temp_fft = np.fft.rfft(np.transpose(data["y_data_noisefree"], [0,2,1]))*phase_correction
+        
+        data["y_data_noisefree"] = np.transpose(np.fft.irfft(y_temp_fft),[0,2,1])*distance_correction
 
         if self.verbose:
             print("Rand phase/dist setup", time.time() - stload)
 
-        #del y_temp_fft
+        del y_temp_fft
         return data
 
     def get_whitened_signal(self, data):
@@ -425,45 +367,6 @@ class DataSet(torch.utils.data.Dataset):
 
         del y_temp_fft
         return data
-
-
-    def setup_pca(self, data, datatype="data"):
-        """trains the PCA on the data or the parameters depending on the data type
-
-        Args:
-            data (_type_): _description_
-            datatype (str, optional): _description_. Defaults to "data". other alternative is the parameters 
-        """
-        if datatype == "data":
-            n_components = self.config["data"]["n_data_pca_components"]
-        elif datatype == "parameter":
-            n_components = par_data.shape[1]
-
-        setattr(self, f"{datatype}_pca", PCA(n_components=n_components))
-
-        if datatype == "data":
-            setattr(self, f"{datatype}_features",self.parameter_pca.fit_transform(data))
-        elif datatype == "parameter":
-            setattr(self, f"{datatype}_features",self.parameter_pca.fit_transform(data))
-
-    def pca_transform(self, data, datatype="data"):
-        if not hasattr(f"{datatype}_pca"):
-            raise Exception("Please train the PCA first")
-        if datatype == "data":
-            trans_data = getattr(self, f"{datatype}_pca").transform(data)
-        elif datatype == "parameter":
-            trans_data = getattr(self, f"{datatype}_pca").transform(data)
-        return trans_data
-
-    def pca_reconstruction(self, data, datatype="data"):
-        if not hasattr(f"{datatype}_pca"):
-            raise Exception("Please train the PCA first")
-        if datatype == "data":
-            recon_data = getattr(self, f"{datatype}_pca").inverse_transform(data)
-        elif datatype == "parameter":
-            recon_data = getattr(self, f"{datatype}_pca").inverse_transform(data)
-        return recon_data
-        
 
     def get_real_noise(self, segment_duration, segment_range, num_segments):
 
@@ -760,16 +663,6 @@ class DataSet(torch.utils.data.Dataset):
             data["y_data_noisy"] = np.array(real_det_noise)
             np.swapaxes(data["y_data_noisy"], 1,2)
 
-        if self.config["data"]["perform_data_pca"]:
-            if not hasattr(self, "data_pca"):
-                self.setup_pca(data["y_data_noisefree"], datatype="data")
-                with open(os.path.join(config["output"]["output_directory"]), "data_pca_weights.pkl") as f:
-                    pickle.dump(getattr(self, f"data_pca"), f)
-            
-            data["y_data_noisefree"] = self.pca_transform(data["y_data_noisefree"], datatype="data")
-
-
-
         if len(np.shape(data["y_data_noisefree"])) != 3:
             raise Exception(f"data array should have three dimensions, current shape: {np.shape(data['y_data_noisefree'])}")
 
@@ -817,20 +710,13 @@ class DataSet(torch.utils.data.Dataset):
 
 
     def randomise_extrinsic_parameters(self, x):
-        "randomise the extrinsic parameters, this is non normalised parameters"
+        "randomise the extrinsic parameters"
 
-        #new_ra = np.random.uniform(size = len(x), low = self.config["bounds"]["ra_min"], high = self.config["bounds"]["ra_max"])
+        new_ra = np.random.uniform(size = len(x), low = self.config["bounds"]["ra_min"], high = self.config["bounds"]["ra_max"])
         # uniform in the sin of the declination (doesnt yet change if input prior is changed)
-        #new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.config["bounds"]["dec_min"]), high = np.sin(self.config["bounds"]["dec_max"])))
-        #new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
-        #new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
-
-        new_pars = self.config["priors"].sample(np.shape(x)[0])
-
-        new_geocent_time = new_pars["geocent_time"]
-        new_dec = new_pars["dec"]
-        new_ra = new_pars["ra"]
-        new_psi = new_pars["psi"]
+        new_dec = np.arcsin(np.random.uniform(size = len(x), low = np.sin(self.config["bounds"]["dec_min"]), high = np.sin(self.config["bounds"]["dec_max"])))
+        new_psi = np.random.uniform(size = len(x), low = self.config["bounds"]["psi_min"], high = self.config["bounds"]["psi_max"])
+        new_geocent_time = np.random.uniform(size = len(x), low = self.config["bounds"]["geocent_time_min"], high = self.config["bounds"]["geocent_time_max"])
 
         x[:, np.where(np.array(self.injection_parameters)=="geocent_time")[0][0]] = new_geocent_time
         x[:, np.where(np.array(self.injection_parameters)=="ra")[0][0]] = new_ra
@@ -840,52 +726,45 @@ class DataSet(torch.utils.data.Dataset):
         return x
         
     def randomise_phase(self, x, y):
-        """ randomises phase of input parameters x, these are not yet normalised"""
+        """ randomises phase of input parameter x"""
         # get old phase and define new phase
         old_phase = x[:,np.where(np.array(self.injection_parameters)=="phase")[0]]
         new_x = np.random.uniform(size=np.shape(old_phase), low=0.0, high=1.0)
-        #new_phase = self.config["bounds"]['phase_min'] + new_x*(self.config["bounds"]['phase_max'] - self.config["bounds"]['phase_min'])
-        new_phase = self.config["priors"].sample(np.shape(old_phase))["phase"]
+        new_phase = self.config["bounds"]['phase_min'] + new_x*(self.config["bounds"]['phase_max'] - self.config["bounds"]['phase_min'])
+
         # defice 
         x[:, np.where(np.array(self.injection_parameters) == "phase")[0]] = new_phase
-        if np.any(old_phase != new_phase):
-            phase_correction = -1.0*(np.cos(new_phase-old_phase) + 1j*np.sin(new_phase-old_phase))
-            phase_correction = np.tile(np.expand_dims(phase_correction,axis=1),(1,self.num_dets,int(np.shape(y)[1]/2) + 1))
-        else:
-            phase_correction = 1.0
+
+        phase_correction = -1.0*(np.cos(new_phase-old_phase) + 1j*np.sin(new_phase-old_phase))
+        phase_correction = np.tile(np.expand_dims(phase_correction,axis=1),(1,self.num_dets,int(np.shape(y)[1]/2) + 1))
 
         return x, phase_correction
 
     def randomise_time(self, x):
-        """randomises the geocentric time, these are not yet normalised"""
+
         #old_geocent = x[:,np.array(self.config["masks"]["geocent_time_mask"]).astype(np.bool)]
         #print(np.shape(old_geocent))
         old_geocent = x[:,np.where(np.array(self.injection_parameters) == "geocent_time")[0]]
         #print(np.shape(old_geocent))
         #sys.exit()
-        #new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
-        #new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
-        new_geocent = self.config["priors"].sample(np.shape(old_geocent))["geocent_time"]
-        #new_x = (new_geocent - self.config["bounds"]['geocent_time_min']) / (self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
+        new_x = np.random.uniform(size=np.shape(old_geocent), low=0.0, high=1.0)
+        new_geocent = self.config["bounds"]['geocent_time_min'] + new_x*(self.config["bounds"]['geocent_time_max'] - self.config["bounds"]['geocent_time_min'])
 
         x[:, np.where(np.array(self.injection_parameters) == "geocent_time")[0]] = new_geocent
-        if np.any(new_geocent != old_geocent):
-            fvec = np.arange(self.data_length/2 + 1)/self.config["data"]['duration']
+        fvec = np.arange(self.data_length/2 + 1)/self.config["data"]['duration']
 
-            time_correction = -2.0*np.pi*fvec*(new_geocent-old_geocent)
-            time_correction = np.cos(time_correction) + 1j*np.sin(time_correction)
-            time_correction = np.tile(np.expand_dims(time_correction,axis=1),(1,self.num_dets,1))
-        else:
-            time_correction = 1.0
+        time_correction = -2.0*np.pi*fvec*(new_geocent-old_geocent)
+        time_correction = np.cos(time_correction) + 1j*np.sin(time_correction)
+        time_correction = np.tile(np.expand_dims(time_correction,axis=1),(1,self.num_dets,1))
         
         return x, time_correction
         
     def randomise_distance(self,x, y):
-        """randomised the distance to the source, the inputs are not yet normalised"""
         #old_d = x[:, np.array(self.config["masks"]["luminosity_distance_mask"]).astype(np.bool)]
         old_d = x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]]
 
         new_d = self.config["priors"].sample(np.shape(old_d))["luminosity_distance"]
+
         x[:, np.where(np.array(self.injection_parameters) == "luminosity_distance")[0]] = new_d
                                                            
         dist_scale = np.tile(np.expand_dims(old_d/new_d,axis=1),(1,np.shape(y)[1],1))
@@ -909,25 +788,9 @@ class DataSet(torch.utils.data.Dataset):
         got_samples = False
         save_dir = os.path.join(self.config["data"]["data_directory"], "test")
         for sampler in self.config["testing"]['samplers']:
-            sampler_dir = os.path.join(save_dir, "{}".format(sampler))
             if sampler == "vitamin":
                 continue
-            elif sampler == "grid":
-                grid_points = []
-                samples_available_temp = []
-                for idx in range(self.config["data"]["n_test_data"]):
-                    filename = os.path.join(sampler_dir, f"test_outputs_grid_{idx}.h5py")
-                    with h5py.File(filename, 'r') as hf:
-                        grid_values = np.array(hf["grid_posterior"])
-                        grid_params = np.array(hf["grid_parameters"])
-                        temp_grid = [grid_params, grid_values]
-                        grid_points.append(temp_grid)
-                        samples_available_temp.append(idx)
-                self.samples_available["grid"] = samples_available_temp
-                self.sampler_outputs["grid"] = grid_points
-                continue
-                
-            
+            sampler_dir = os.path.join(save_dir, "{}".format(sampler))
             samp_available_temp = []
             XS = np.zeros((self.config["data"]["n_test_data"], self.config["testing"]["n_samples"], len(self.config["testing"]['bilby_pars'])))
             for idx in range(self.config["data"]["n_test_data"]):
@@ -1030,7 +893,6 @@ def convert_parameters(config, x_data):
 def unconvert_parameters(config, x_data):
 
     x_data = np.array(x_data, np.float64)
-
     # unnormalise to bounds
     #min_chirp, minq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_min"],self.config["bounds"]["mass_2_min"])
     #max_chirp, maxq = m1m2_to_chirpmassq(self.config["bounds"]["mass_1_max"],self.config["bounds"]["mass_2_max"])

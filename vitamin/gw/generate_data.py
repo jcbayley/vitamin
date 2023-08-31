@@ -141,29 +141,76 @@ class DataGenerator():
                     hf.close()
 
         if sampler is not None:
-            fname = os.path.join(sampler_dir, "{}_{}.h5py".format("test_outputs",start_ind))
-            signal.run_pe(sampler=sampler, start_ind = start_ind)
-            with h5py.File(fname, 'w') as hf:
-                hf.create_dataset('noisy_waveform', data=signal.whitened_data_td)
-                hf.create_dataset('noisefree_waveform', data=signal.whitened_signals_td)
-                logl = getattr(signal,sampler).log_likelihood_evaluations
-                if logl is not None:
-                    hf.create_dataset('log_like_eval', data=logl) 
+            if sampler == "grid":
+                fname = os.path.join(sampler_dir, f"test_outputs_grid_{start_ind}.h5py")
 
-                # converting masses so have all representations
-                all_posterior_params = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(getattr(signal, sampler).posterior)[0]
-                if "chirp_mass" not in all_posterior_params:
-                    all_posterior_params["chirp_mass"] = bilby.gw.conversion.component_masses_to_chirp_mass(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
-                if "mass_ratio" not in all_posterior_params:
-                    all_posterior_params["mass_ratio"] = bilby.gw.conversion.component_masses_to_mass_ratio(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
+                #initially need to test if dynesty/nessai posterior has been generated
+                if "nessai" in self.config["testing"]["samplers"]:
+                    t_sampler = "nessai"
+                if "dynesty" in self.config["testing"]["samplers"]:
+                    t_sampler = "dynesty"
+
+                t_sampler_dir = os.path.join(save_dir, "{}".format(t_sampler))
+            
+                #filename = '%s/%s_%d.h5py' % (dataLocations,params['bilby_results_label'],i)
+                filename = os.path.join(t_sampler_dir, "{}_{}.h5py".format("test_outputs",start_ind))
+                if os.path.isfile(filename) == False:
+                    raise Exception(f"Samples not available for {t_sampler} for test data index {idx}")
+
+                data_temp = {}
+                inf_pars = list(self.config["inf_pars"].keys())
+                with h5py.File(filename, 'r') as hf:
+                    for q in inf_pars:
+                        p = q + '_post'
+                        data_temp[q] = hf[p][:]
+
+                        if p == 'psi_post':
+                            data_temp[p] = np.remainder(data_temp[q],np.pi)
+
+                        # set min and max ranges for each parameter
+                        minrange = np.min(data_temp[q])
+                        maxrange = np.max(data_temp[q])
+                        data_temp[q] = (minrange, maxrange)
 
 
-                for q,qi in all_posterior_params.items():
-                    name = q + '_post'
-                    print('saving PE samples for parameter {}'.format(q))
-                    hf.create_dataset(name, data=np.array(qi))
-                hf.create_dataset('run_time', data=getattr(signal,"{}_runtime".format(sampler)))
-                hf.close()
+                # set the ranges over which to place the grid based on the posterior from dynesty or nessai
+                infpar1_range = np.linspace(data_temp[inf_pars[0]][0], data_temp[inf_pars[0]][1], self.config["testing"]["n_grid_points"])
+                infpar2_range = np.linspace(data_temp[inf_pars[1]][0], data_temp[inf_pars[1]][1], self.config["testing"]["n_grid_points"])
+
+                #################
+                # compute the posterior grid
+                ################
+                signal.compute_posterior_grid(infpar1_range=infpar1_range, infpar2_range=infpar2_range)
+                with h5py.File(fname, 'w') as hf:
+                    hf.create_dataset('grid_posterior', data=signal.posterior_grid)
+                    hf.create_dataset('grid_parameters', data=signal.posterior_grid_pars)
+                    #hf.create_dataset('grid_prior', data=signal.prior_grid)
+                    #hf.create_dataset('grid_likelihood', data=signal.likelihood_grid)
+                    hf.close()
+            else:
+                fname = os.path.join(sampler_dir, "{}_{}.h5py".format("test_outputs",start_ind))
+                signal.run_pe(sampler=sampler, start_ind = start_ind)
+                with h5py.File(fname, 'w') as hf:
+                    hf.create_dataset('noisy_waveform', data=signal.whitened_data_td)
+                    hf.create_dataset('noisefree_waveform', data=signal.whitened_signals_td)
+                    logl = getattr(signal,sampler).log_likelihood_evaluations
+                    if logl is not None:
+                        hf.create_dataset('log_like_eval', data=logl) 
+
+                    # converting masses so have all representations
+                    all_posterior_params = bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters(getattr(signal, sampler).posterior)[0]
+                    if "chirp_mass" not in all_posterior_params:
+                        all_posterior_params["chirp_mass"] = bilby.gw.conversion.component_masses_to_chirp_mass(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
+                    if "mass_ratio" not in all_posterior_params:
+                        all_posterior_params["mass_ratio"] = bilby.gw.conversion.component_masses_to_mass_ratio(all_posterior_params["mass_1"], all_posterior_params["mass_2"])
+
+
+                    for q,qi in all_posterior_params.items():
+                        name = q + '_post'
+                        print('saving PE samples for parameter {}'.format(q))
+                        hf.create_dataset(name, data=np.array(qi))
+                    hf.create_dataset('run_time', data=getattr(signal,"{}_runtime".format(sampler)))
+                    hf.close()
 
     def create_training_noise_files(self, start_ind=0):
 

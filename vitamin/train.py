@@ -52,7 +52,7 @@ def train_loop(
     train_iterator, 
     validation_iterator = None, 
     save_dir = "./", 
-    continue_train = True,
+    continue_train = False,
     start_epoch = 0,
     num_epoch_load = 1,
     checkpoint_dir=None,
@@ -94,12 +94,18 @@ def train_loop(
             logs["val_losses"] = list(val_losses)
             logs["val_kl_losses"] = list(val_kl_losses)
             logs["val_lik_losses"] = list(val_lik_losses)
-            
+
+        #checkpoint = torch.load(os.path.join(checkpoint_dir,"model.pt"), map_location=device)
+        #model.load_state_dict(checkpoint["model_state_dict"])
+        #optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
+
     start_train_time = time.time()
 
     model_filename = "model.pt"
 
+
     for epoch in range(n_epochs):
+        total_start_time = time.time()
         iteration = epoch*n_batches
 
         if continue_train:
@@ -109,18 +115,20 @@ def train_loop(
         model.device = device
         model.to(device)
 
-
         temp_train_loss = 0
         temp_kl_loss = 0
         temp_lik_loss = 0
         it = 0
         total_time = 0
-
+        load_batch_time = 0
+        
         #for local_batch, local_labels in train_iterator:
         for ind in range(len(train_iterator)):
             # Transfer to GPU            
+            ld_time = time.time()
             local_batch, local_labels = train_iterator[ind]
             local_batch, local_labels = torch.Tensor(local_batch).to(device), torch.Tensor(local_labels).to(device)
+            load_batch_time += time.time() - ld_time
             start_time = time.time()
             train_loss,kl_loss,lik_loss, par_loss, recon_losses = train_batch(epoch, model, optimiser, device, local_batch,local_labels, train=True)
             temp_train_loss += train_loss
@@ -162,6 +170,7 @@ def train_loop(
         temp_kl_loss /= it
         temp_lik_loss /= it
         batch_time = total_time/it
+        load_batch_time = load_batch_time/it
         post_train_time = time.time()
         
         logs["train_losses"].append(temp_train_loss)
@@ -171,8 +180,10 @@ def train_loop(
 
         diff_ep = epoch - prev_save_ep
 
+        total_duration = time.time() - total_start_time
+
         if epoch % 1 == 0:
-            print(f" ------- Epoch: {epoch}, Epoch time: {total_time}, batch time: {batch_time}, ramp: {model.ramp}")
+            print(f" ------- Epoch: {epoch}, Epoch time: {total_duration}, batch time: {batch_time}, load_batch_time: {load_batch_time}, train_time: {total_time}, ramp: {model.ramp}")
             print(f" ------- Train:      Iteration: {iteration}, Training loss: {temp_train_loss}, kl_loss: {temp_kl_loss}, l_loss:{temp_lik_loss}")
             if validation_iterator is not None:
                 print(f" ------- Validation: Iteration: {iteration}, Training loss: {temp_val_loss}, kl_loss: {val_kl_loss}, l_loss:{val_lik_loss}")
@@ -184,7 +195,7 @@ def train_loop(
             #    print(f"Could not run callback {type(callback).__name__}: ")
             #    print(e)
 
-    return train_losses, kl_losses, lik_losses, val_losses, val_kl_losses, val_lik_losses
+    return logs["train_losses"], logs["kl_losses"], logs["lik_losses"], logs["val_losses"], logs["val_kl_losses"], logs["val_lik_losses"]
 
 
 
