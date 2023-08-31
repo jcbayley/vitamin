@@ -131,7 +131,6 @@ setup(
                       'lalsuite',
                       'ligo-gracedb',
                       'ligo-segments',
-                      'ligo.skymap',
                       'ligotimegps',
                       'lscsoft-glue',
                       'Markdown',
